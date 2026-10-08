@@ -23,11 +23,11 @@
 - [x] Fitur Clean Uninstall: Menghapus container sekaligus opsi memusnahkan folder data terkait.
 
 ## Fase 4: Website & Database Management Suite
-- [ ] Integrasi Reverse Proxy internal (Caddy embedded / Traefik ringan) untuk routing port domain.
-- [ ] Wizard pembuatan website: Node.js, PHP/HTML statis dengan auto-assign port bebas.
-- [ ] Deployment container database sentral terisolasi (MariaDB & PostgreSQL).
-- [ ] Integrasi GUI database web instan (Adminer container pada port internal).
-- [ ] Form koneksi database instan untuk website yang dibuat.
+- [x] Integrasi Reverse Proxy internal (Caddy embedded / Traefik ringan) untuk routing port domain.
+- [x] Wizard pembuatan website: Node.js, PHP/HTML statis dengan auto-assign port bebas.
+- [x] Deployment container database sentral terisolasi (MariaDB & PostgreSQL).
+- [x] Integrasi GUI database web instan (Adminer container pada port internal).
+- [x] Form koneksi database instan untuk website yang dibuat.
 
 ## Fase 5: OTA Updater & Production Hardening
 - [ ] Implementasi API updater: Pengecekan rilis GitHub Releases dan penggantian binary mandiri.

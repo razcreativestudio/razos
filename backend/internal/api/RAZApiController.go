@@ -11,10 +11,12 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/razos/razos/internal/database"
 	"github.com/razos/razos/internal/docker"
 	"github.com/razos/razos/internal/store"
 	"github.com/razos/razos/internal/system"
 	"github.com/razos/razos/internal/terminal"
+	"github.com/razos/razos/internal/website"
 )
 
 // RegisterRoutes mendaftarkan seluruh endpoint publik dan privat API ke Gin Engine
@@ -40,6 +42,16 @@ func RegisterRoutes(r *gin.Engine) {
 		v1.GET("/store/apps", handleGetAppCatalog)
 		v1.POST("/store/install", handleInstallApp)
 		v1.DELETE("/store/apps/:slug", handleUninstallApp)
+
+		// Website Suite & Reverse Proxy
+		v1.GET("/websites", handleGetWebsites)
+		v1.POST("/websites", handleCreateWebsite)
+		v1.DELETE("/websites/:id", handleDeleteWebsite)
+
+		// Database Suite
+		v1.GET("/databases", handleGetDatabases)
+		v1.POST("/databases", handleCreateDatabase)
+		v1.POST("/databases/adminer/launch", handleLaunchAdminer)
 
 		// Health Check
 		v1.GET("/health", func(c *gin.Context) {
@@ -166,4 +178,59 @@ func handleUninstallApp(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "uninstalled", "slug": slug, "data_purged": purge})
+}
+
+func handleGetWebsites(c *gin.Context) {
+	c.JSON(http.StatusOK, website.GetWebsites())
+}
+
+func handleCreateWebsite(c *gin.Context) {
+	var req website.CreateWebsiteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	site, err := website.CreateWebsite(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, site)
+}
+
+func handleDeleteWebsite(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid site ID"})
+		return
+	}
+	_ = website.DeleteWebsite(id)
+	c.JSON(http.StatusOK, gin.H{"status": "deleted", "id": id})
+}
+
+func handleGetDatabases(c *gin.Context) {
+	c.JSON(http.StatusOK, database.GetDatabases())
+}
+
+func handleCreateDatabase(c *gin.Context) {
+	var req database.CreateDatabaseRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	db, err := database.CreateDatabase(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, db)
+}
+
+func handleLaunchAdminer(c *gin.Context) {
+	if err := database.EnsureAdminerContainer(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ready", "url": "http://localhost:8088"})
 }
