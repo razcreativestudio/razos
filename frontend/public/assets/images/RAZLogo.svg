@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="razGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  <!-- Background Container -->
+  <rect width="128" height="128" rx="28" fill="#0f172a" stroke="#1e293b" stroke-width="2"/>
+  
+  <!-- Stylized R Glyph -->
+  <g filter="url(#glow)">
+    <path d="M40 32 H76 C88 32 96 40 96 52 C96 64 88 72 76 72 H56 V96 H40 Z" fill="url(#razGrad)" />
+    <path d="M68 68 L94 96 H74 L52 72 Z" fill="#0ea5e9" />
+    <path d="M56 46 H74 C80 46 84 50 84 52 C84 56 80 58 74 58 H56 Z" fill="#0f172a" opacity="0.9" />
+  </g>
+</svg>

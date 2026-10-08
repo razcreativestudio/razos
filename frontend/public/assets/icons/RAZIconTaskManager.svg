@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <!-- Container Background -->
+  <rect width="64" height="64" rx="14" fill="#0f172a" stroke="#1e293b" stroke-width="1.5"/>
+  <rect x="6" y="6" width="52" height="52" rx="10" fill="#020617" stroke="#334155" stroke-width="1"/>
+  <!-- Activity Wave Pulse -->
+  <polyline points="14,34 22,34 27,20 33,46 39,28 44,34 50,34" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,52 @@
+name: RAZOS Build & ARM64 Release
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Frontend & Cross-Compile ARM64
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build Frontend SPA
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: backend/go.sum
+
+      - name: Build Static Binary (ARM64 & AMD64)
+        run: |
+          cd backend
+          go mod download
+          
+          # Cross-compile untuk STB Linux ARM64 (aarch64) target utama
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o ../bin/razos-linux-arm64 cmd/server/RAZMainServer.go
+          
+          # Compile untuk Linux AMD64 (opsional mini VPS x86_64)
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ../bin/razos-linux-amd64 cmd/server/RAZMainServer.go
+
+      - name: Upload Binary Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: razos-binaries
+          path: bin/
