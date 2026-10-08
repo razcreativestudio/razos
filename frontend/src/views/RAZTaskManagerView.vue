@@ -3,15 +3,18 @@
  * RAZOS Task Manager App View
  * Updated: 2026-10-08
  * Deskripsi: Antarmuka pemantauan metrik sistem, konsumsi RAM, Suhu SOC STB,
- * serta daftar container/proses riil yang diambil dinamis dari endpoint backend tanpa dummy data.
+ * manajemen proses riil (Kill PID), status container Docker (Stop/Restart),
+ * serta tombol 1-klik Clean RAM (drop_caches) & Clean Storage (Docker Prune).
  */
 import { ref, onMounted } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
-import { Cpu, HardDrive, Thermometer, Database, Sparkles, Trash2, RefreshCw } from 'lucide-vue-next'
+import { Cpu, HardDrive, Thermometer, Database, Sparkles, Trash2, RefreshCw, XOctagon, RotateCw } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
+const activeTab = ref('processes') // 'processes' | 'containers'
+const processes = ref([])
 const containers = ref([])
-const isLoadingContainers = ref(false)
+const isLoading = ref(false)
 
 function formatBytes(bytes) {
   if (!bytes) return '0 MB'
@@ -22,24 +25,73 @@ function formatBytes(bytes) {
   return mb.toFixed(0) + ' MB'
 }
 
+async function fetchProcesses() {
+  try {
+    const res = await fetch('/api/v1/processes')
+    if (res.ok) {
+      processes.value = await res.json()
+    }
+  } catch (err) {}
+}
+
 async function fetchContainers() {
-  isLoadingContainers.value = true
   try {
     const res = await fetch('/api/v1/containers')
     if (res.ok) {
       containers.value = await res.json()
+    }
+  } catch (err) {}
+}
+
+async function refreshAll() {
+  isLoading.value = true
+  await Promise.all([
+    systemStore.fetchMetrics(),
+    fetchProcesses(),
+    fetchContainers()
+  ])
+  isLoading.value = false
+}
+
+// 1-Klik Kill Process
+async function killProcess(pid) {
+  try {
+    const res = await fetch(`/api/v1/processes/${pid}/kill`, { method: 'POST' })
+    if (res.ok) {
+      systemStore.showNotification('Sukses', `Proses PID ${pid} berhasil dihentikan`, 'success')
+      fetchProcesses()
     } else {
-      containers.value = []
+      systemStore.showNotification('Gagal', `Gagal menghentikan PID ${pid}`, 'error')
     }
   } catch (err) {
-    containers.value = []
-  } finally {
-    isLoadingContainers.value = false
+    systemStore.showNotification('Error', 'Gagal menghubungi server', 'error')
   }
 }
 
+// 1-Klik Stop Container
+async function stopContainer(id) {
+  try {
+    const res = await fetch(`/api/v1/containers/${id}/stop`, { method: 'POST' })
+    if (res.ok) {
+      systemStore.showNotification('Sukses', `Container ${id} dihentikan`, 'success')
+      fetchContainers()
+    }
+  } catch (err) {}
+}
+
+// 1-Klik Restart Container
+async function restartContainer(id) {
+  try {
+    const res = await fetch(`/api/v1/containers/${id}/restart`, { method: 'POST' })
+    if (res.ok) {
+      systemStore.showNotification('Sukses', `Container ${id} dimulai ulang`, 'success')
+      fetchContainers()
+    }
+  } catch (err) {}
+}
+
 onMounted(() => {
-  fetchContainers()
+  refreshAll()
 })
 </script>
 
@@ -81,7 +133,7 @@ onMounted(() => {
       <!-- SOC Temp Card -->
       <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col gap-1">
         <div class="flex items-center justify-between text-slate-400">
-          <span class="font-medium">Suhu SOC</span>
+          <span class="font-medium">Suhu SOC STB</span>
           <Thermometer class="w-4 h-4 text-amber-400" />
         </div>
         <div class="text-xl font-bold text-amber-400">
@@ -110,8 +162,8 @@ onMounted(() => {
     <!-- Maintenance Action Section -->
     <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
       <div>
-        <h4 class="font-semibold text-slate-200">Pemeliharaan Cepat (1-Klik)</h4>
-        <p class="text-xs text-slate-400">Bebaskan cache RAM Linux atau bersihkan sisa container tanpa mematikan host.</p>
+        <h4 class="font-semibold text-slate-200">Pemeliharaan Cepat STB (1-Klik)</h4>
+        <p class="text-xs text-slate-400">Bebaskan cache RAM Linux atau pangkas sampah container Docker.</p>
       </div>
 
       <div class="flex items-center gap-2 w-full sm:w-auto">
@@ -137,49 +189,109 @@ onMounted(() => {
 
         <!-- Refresh -->
         <button
-          @click="() => { systemStore.fetchMetrics(); fetchContainers(); }"
+          @click="refreshAll"
+          :disabled="isLoading"
           class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium flex items-center justify-center gap-2 transition"
           title="Segarkan Metrik"
         >
-          <RefreshCw class="w-4 h-4" />
+          <RefreshCw class="w-4 h-4" :class="isLoading ? 'animate-spin' : ''" />
         </button>
       </div>
     </div>
 
-    <!-- Dynamic Container Table (Zero Dummy Data) -->
-    <div class="flex-1 rounded-xl bg-slate-900/60 border border-slate-800/80 p-3 overflow-auto flex flex-col">
-      <div class="flex items-center justify-between mb-2">
-        <span class="font-semibold text-slate-300">Daftar Service & Container Aktif</span>
-        <span class="text-xs text-slate-400">Total: {{ containers.length }} Service</span>
-      </div>
+    <!-- Tab Selection: Processes vs Containers -->
+    <div class="flex items-center gap-2 border-b border-slate-800 pb-2">
+      <button
+        @click="activeTab = 'processes'"
+        class="px-3 py-1.5 rounded-lg text-xs font-semibold transition"
+        :class="activeTab === 'processes' ? 'bg-sky-500/20 text-sky-400 border border-sky-400/40' : 'text-slate-400 hover:text-slate-200'"
+      >
+        Proses Host (Top PID)
+      </button>
+      <button
+        @click="activeTab = 'containers'"
+        class="px-3 py-1.5 rounded-lg text-xs font-semibold transition"
+        :class="activeTab === 'containers' ? 'bg-sky-500/20 text-sky-400 border border-sky-400/40' : 'text-slate-400 hover:text-slate-200'"
+      >
+        Container Docker (Live)
+      </button>
+    </div>
 
-      <table v-if="containers.length > 0" class="w-full text-left text-xs border-collapse">
+    <!-- Table Section -->
+    <div class="flex-1 rounded-xl bg-slate-900/60 border border-slate-800/80 p-3 overflow-auto flex flex-col">
+      <!-- Tabel Proses Host -->
+      <table v-if="activeTab === 'processes' && processes.length > 0" class="w-full text-left text-xs border-collapse">
         <thead>
           <tr class="border-b border-slate-800 text-slate-400">
-            <th class="py-2 px-2">Nama Service</th>
-            <th class="py-2 px-2">Port Terbuka</th>
+            <th class="py-2 px-2">PID</th>
+            <th class="py-2 px-2">Nama Program</th>
             <th class="py-2 px-2">CPU</th>
             <th class="py-2 px-2">Memori</th>
-            <th class="py-2 px-2">Status</th>
+            <th class="py-2 px-2 text-right">Aksi</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-800/60 text-slate-300">
-          <tr v-for="(item, index) in containers" :key="index">
-            <td class="py-2.5 px-2 font-mono text-sky-400">{{ item.name }}</td>
-            <td class="py-2.5 px-2">{{ item.port }}</td>
-            <td class="py-2.5 px-2">{{ item.cpu }}</td>
-            <td class="py-2.5 px-2">{{ item.memory }}</td>
-            <td class="py-2.5 px-2">
-              <span class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400">{{ item.status }}</span>
+          <tr v-for="proc in processes" :key="proc.pid">
+            <td class="py-2 px-2 font-mono text-sky-400">{{ proc.pid }}</td>
+            <td class="py-2 px-2 font-medium">{{ proc.name }}</td>
+            <td class="py-2 px-2">{{ proc.cpu.toFixed(1) }}%</td>
+            <td class="py-2 px-2">{{ proc.memory.toFixed(1) }}%</td>
+            <td class="py-2 px-2 text-right">
+              <button
+                @click="killProcess(proc.pid)"
+                class="px-2 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 transition inline-flex items-center gap-1 text-[11px]"
+                title="Hentikan Proses (Kill)"
+              >
+                <XOctagon class="w-3 h-3" />
+                <span>Kill</span>
+              </button>
             </td>
           </tr>
         </tbody>
       </table>
 
-      <!-- Empty State jika belum ada container terpasang -->
+      <!-- Tabel Container Docker -->
+      <table v-else-if="activeTab === 'containers' && containers.length > 0" class="w-full text-left text-xs border-collapse">
+        <thead>
+          <tr class="border-b border-slate-800 text-slate-400">
+            <th class="py-2 px-2">Container ID</th>
+            <th class="py-2 px-2">Nama</th>
+            <th class="py-2 px-2">Port</th>
+            <th class="py-2 px-2">Status</th>
+            <th class="py-2 px-2 text-right">Aksi</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/60 text-slate-300">
+          <tr v-for="c in containers" :key="c.id">
+            <td class="py-2 px-2 font-mono text-sky-400">{{ c.id }}</td>
+            <td class="py-2 px-2 font-medium">{{ c.name }}</td>
+            <td class="py-2 px-2">{{ c.ports || '-' }}</td>
+            <td class="py-2 px-2">
+              <span class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400">{{ c.status }}</span>
+            </td>
+            <td class="py-2 px-2 text-right flex items-center justify-end gap-1.5">
+              <button
+                @click="restartContainer(c.id)"
+                class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition text-[11px]"
+                title="Restart"
+              >
+                <RotateCw class="w-3 h-3" />
+              </button>
+              <button
+                @click="stopContainer(c.id)"
+                class="px-2 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 transition text-[11px]"
+                title="Stop"
+              >
+                <XOctagon class="w-3 h-3" />
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Empty State jika belum ada item -->
       <div v-else class="flex-1 flex flex-col items-center justify-center text-slate-500 gap-2 p-6">
-        <p class="text-xs">Belum ada container atau service Docker tambahan yang aktif.</p>
-        <span class="text-[11px] text-slate-600">Pasang container melalui menu App Store.</span>
+        <p class="text-xs">Tidak ada data {{ activeTab === 'processes' ? 'proses aktif' : 'container Docker' }}.</p>
       </div>
     </div>
   </div>

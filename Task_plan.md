@@ -10,11 +10,11 @@
 - [x] Integrasi Fullscreen API dan PWA Web Manifest.
 
 ## Fase 2: Terminal & Task Manager
-- [ ] Integrasi backend PTY WebSocket (`creack/pty`) ke bash shell server.
-- [ ] Pembuatan komponen window terminal menggunakan `xterm.js` dan `xterm-addon-fit`.
-- [ ] Pembuatan Task Manager: Tabel monitoring proses dan container (`docker stats`).
-- [ ] Fitur 1-klik Task Manager: Kill Process dan Stop/Restart Container.
-- [ ] Pembuatan modul Maintenance: RAM Cleaner (`drop_caches`) dan Storage Cleaner (`docker system prune`).
+- [x] Integrasi backend PTY WebSocket (`creack/pty`) ke bash shell server.
+- [x] Pembuatan komponen window terminal menggunakan `xterm.js` dan `xterm-addon-fit`.
+- [x] Pembuatan Task Manager: Tabel monitoring proses dan container (`docker stats`).
+- [x] Fitur 1-klik Task Manager: Kill Process dan Stop/Restart Container.
+- [x] Pembuatan modul Maintenance: RAM Cleaner (`drop_caches`) dan Storage Cleaner (`docker system prune`).
 
 ## Fase 3: App Store & Manajemen Container
 - [ ] Desain skema katalog aplikasi berbasis YAML/JSON.
