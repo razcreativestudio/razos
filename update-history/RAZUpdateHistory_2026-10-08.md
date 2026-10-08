@@ -49,4 +49,20 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - **Initial Mountpoint Auto-Discovery:** Menyesuaikan inisialisasi direktori awal agar secara dinamis membuka partisi fisik pertama yang tersedia jika path default belum terbentuk.
 - **REST API Endpoints Sinkron:** Menambahkan endpoint `/api/v1/files/folder`, `/api/v1/files/item` (delete), dan `/api/v1/files/rename` yang sinkron antara Go backend dan Vite dev server.
 
+---
+
+### Versi: 2.0.0-app-store-mega-suite (520+ Docker Ready-to-Use, README.md Viewer & CasaOS Manual Install)
+**Waktu Eksekusi:** 2026-10-09 00:04 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Katalog Mega 520+ Kontainer Docker Siap Pakai
+- **Ekspansi Katalog:** Mengintegrasikan 525 kontainer Docker siap pakai terkurasi yang mencakup 10 kategori industri: Media & Streaming, File & Cloud Storage, Database & Caching, Development & Git, Home Automation & IoT, Networking & Security, Monitoring & Analytics, Productivity & Office, Downloaders & Torrents, dan AI & Machine Learning.
+- **README.md & Details Modal:** Menyediakan tombol **Detail** pada setiap kartu aplikasi untuk menampilkan dokumentasi lengkap, panduan deployment, spesifikasi image, port default, dan mountpoint penyimpanan.
+- **Pencarian Secepat Kilat (Live Search):** Filter pencarian responsif untuk mencari aplikasi berdasarkan nama, deskripsi, image, maupun kategori.
+
+#### 2. Tombol & Modal "Instal Manual Docker" (Ala CasaOS)
+- **Custom Docker Deployer:** Menambahkan tombol **Instal Manual Docker** dengan form modal kustom yang memungkinkan pengguna memasukkan sembarang Docker image dari Docker Hub/Registry publik, menentukan host port, mengatur path direktori volume host, dan environment variables kustom.
+- **Backend Custom Deployment Engine:** Memperbarui `RAZAppStoreEngine.go` untuk menangani parameter `custom_image`, `container_name`, port, volume, dan limitasi RAM protektif 256 MB.
+
+
 

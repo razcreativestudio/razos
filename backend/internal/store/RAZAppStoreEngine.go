@@ -33,14 +33,18 @@ type AppManifest struct {
 	DefaultVolume string   `json:"default_volume"`
 	Env           []string `json:"env"`
 	Installed     bool     `json:"installed"`
+	Readme        string   `json:"readme,omitempty"`
 }
 
-// DeployRequest payload instalasi aplikasi dengan custom port/volume
+// DeployRequest payload instalasi aplikasi dengan custom port/volume atau manual custom image
 type DeployRequest struct {
-	AppID     string   `json:"app_id"`
-	Port      int      `json:"port"`
-	DataPath  string   `json:"data_path"`
-	ExtraEnvs []string `json:"extra_envs"`
+	AppID         string   `json:"app_id"`
+	Name          string   `json:"name"`
+	CustomImage   string   `json:"custom_image"`
+	ContainerName string   `json:"container_name"`
+	Port          int      `json:"port"`
+	DataPath      string   `json:"data_path"`
+	ExtraEnvs     []string `json:"extra_envs"`
 }
 
 // GetCatalog membaca katalog aplikasi dan mencocokkan status instalasi container
@@ -87,26 +91,63 @@ func DeployApp(req DeployRequest) error {
 		return fmt.Errorf("sumber daya tidak mencukupi: RAM bebas tersisa kurang dari 150 MB")
 	}
 
-	catalog, err := GetCatalog()
-	if err != nil {
-		return err
-	}
+	var targetImage string
+	var containerName string
+	var defaultVol string
+	var defaultPort int
+	var envs []string
+	var slug string
 
-	var targetApp *AppManifest
-	for _, a := range catalog {
-		if a.ID == req.AppID {
-			targetApp = &a
-			break
+	// Jika instalasi manual kustom (Custom Docker Image ala CasaOS)
+	if req.CustomImage != "" {
+		targetImage = req.CustomImage
+		slug = req.AppID
+		if slug == "" {
+			slug = req.ContainerName
 		}
-	}
-	if targetApp == nil {
-		return fmt.Errorf("aplikasi dengan ID %s tidak ditemukan", req.AppID)
+		if slug == "" {
+			slug = "custom-app"
+		}
+		containerName = "razos-" + slug
+		defaultVol = req.DataPath
+		if defaultVol == "" {
+			defaultVol = filepath.Join("/DATA/apps", slug)
+		}
+		defaultPort = req.Port
+		if defaultPort <= 0 {
+			defaultPort = 8080
+		}
+		envs = req.ExtraEnvs
+	} else {
+		// Instalasi dari katalog
+		catalog, err := GetCatalog()
+		if err != nil {
+			return err
+		}
+
+		var targetApp *AppManifest
+		for _, a := range catalog {
+			if a.ID == req.AppID {
+				targetApp = &a
+				break
+			}
+		}
+		if targetApp == nil {
+			return fmt.Errorf("aplikasi dengan ID %s tidak ditemukan", req.AppID)
+		}
+
+		targetImage = targetApp.Image
+		slug = targetApp.Slug
+		containerName = "razos-" + targetApp.Slug
+		defaultVol = targetApp.DefaultVolume
+		defaultPort = targetApp.DefaultPort
+		envs = append(targetApp.Env, req.ExtraEnvs...)
 	}
 
 	// Tentukan folder data di /DATA/apps/
 	dataPath := req.DataPath
 	if dataPath == "" {
-		dataPath = filepath.Join("/DATA/apps", targetApp.Slug)
+		dataPath = filepath.Join("/DATA/apps", slug)
 	}
 	_ = os.MkdirAll(dataPath, 0755)
 
@@ -121,9 +162,9 @@ func DeployApp(req DeployRequest) error {
 	// Setup Port Binding
 	portStr := fmt.Sprintf("%d/tcp", req.Port)
 	if req.Port <= 0 {
-		portStr = fmt.Sprintf("%d/tcp", targetApp.DefaultPort)
+		portStr = fmt.Sprintf("%d/tcp", defaultPort)
 	}
-	natPort, _ := nat.NewPort("tcp", fmt.Sprintf("%d", targetApp.DefaultPort))
+	natPort, _ := nat.NewPort("tcp", fmt.Sprintf("%d", defaultPort))
 
 	hostConfig := &container.HostConfig{
 		PortBindings: nat.PortMap{
@@ -132,7 +173,7 @@ func DeployApp(req DeployRequest) error {
 			},
 		},
 		Binds: []string{
-			fmt.Sprintf("%s:%s", dataPath, targetApp.DefaultVolume),
+			fmt.Sprintf("%s:%s", dataPath, defaultVol),
 		},
 		RestartPolicy: container.RestartPolicy{Name: "always"},
 		// Batasi memori per container di STB agar tidak memicu OOM Killer
@@ -141,13 +182,12 @@ func DeployApp(req DeployRequest) error {
 		},
 	}
 
-	containerName := "razos-" + targetApp.Slug
 	// Hapus jika ada container lama dengan nama sama
 	_ = cli.ContainerRemove(ctx, containerName, types.ContainerRemoveOptions{Force: true})
 
 	resp, err := cli.ContainerCreate(ctx, &container.Config{
-		Image: targetApp.Image,
-		Env:   append(targetApp.Env, req.ExtraEnvs...),
+		Image: targetImage,
+		Env:   envs,
 	}, hostConfig, nil, nil, containerName)
 	if err != nil {
 		return err

@@ -87,6 +87,48 @@ function razosApiPlugin() {
         res.end(JSON.stringify([])) // Dinamis kosong hingga database dibuat
       })
 
+      // 6.1 Endpoint App Store Catalog (/api/v1/store/apps)
+      server.middlewares.use('/api/v1/store/apps', (req, res) => {
+        if (req.method === 'GET') {
+          try {
+            const appsFile = fs.readFileSync('../backend/internal/store/RAZApps.json', 'utf-8')
+            res.setHeader('Content-Type', 'application/json')
+            res.end(appsFile)
+          } catch (e) {
+            try {
+              const appsFile = fs.readFileSync('backend/internal/store/RAZApps.json', 'utf-8')
+              res.setHeader('Content-Type', 'application/json')
+              res.end(appsFile)
+            } catch (err) {
+              res.statusCode = 500
+              res.end(JSON.stringify({ error: err.message }))
+            }
+          }
+        } else if (req.method === 'DELETE') {
+          // Uninstall handler
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ status: 'uninstalled' }))
+        }
+      })
+
+      // 6.2 Endpoint App Store Install / Manual Install (/api/v1/store/install)
+      server.middlewares.use('/api/v1/store/install', (req, res) => {
+        if (req.method === 'POST') {
+          let body = ''
+          req.on('data', chunk => { body += chunk })
+          req.on('end', () => {
+            try {
+              const data = JSON.parse(body)
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ status: 'installed', app: data }))
+            } catch (err) {
+              res.statusCode = 500
+              res.end(JSON.stringify({ error: err.message }))
+            }
+          })
+        }
+      })
+
       // 7. Endpoint Real Storage Devices (/api/v1/storage/devices)
       // Membaca partisi dan disk fisik aktual (Windows wmic / Linux df) tanpa dummy data
       server.middlewares.use('/api/v1/storage/devices', (req, res) => {
