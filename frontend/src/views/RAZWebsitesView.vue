@@ -3,28 +3,33 @@
  * RAZOS Website Manager View
  * Updated: 2026-10-08
  * Deskripsi: Antarmuka pengelolaan website & port reverse proxy.
+ * Zero dummy data: Menampilkan daftar riil dari backend API, dengan empty state elegan jika kosong.
  */
-import { ref } from 'vue'
-import { Globe, Plus, ExternalLink } from 'lucide-vue-next'
+import { ref, onMounted } from 'vue'
+import { Globe, Plus, ExternalLink, Inbox } from 'lucide-vue-next'
 
-const websites = ref([
-  {
-    id: 1,
-    name: 'Portal Perusahaan',
-    domain: 'portal.razos.my.id',
-    port: 8101,
-    runtime: 'Node.js',
-    status: 'Active'
-  },
-  {
-    id: 2,
-    name: 'Blog Utama',
-    domain: 'blog.razos.my.id',
-    port: 8102,
-    runtime: 'PHP 8.2',
-    status: 'Active'
+const websites = ref([])
+const isLoading = ref(false)
+
+async function fetchWebsites() {
+  isLoading.value = true
+  try {
+    const res = await fetch('/api/v1/websites')
+    if (res.ok) {
+      websites.value = await res.json()
+    } else {
+      websites.value = []
+    }
+  } catch (err) {
+    websites.value = []
+  } finally {
+    isLoading.value = false
   }
-])
+}
+
+onMounted(() => {
+  fetchWebsites()
+})
 </script>
 
 <template>
@@ -41,8 +46,8 @@ const websites = ref([
       </button>
     </div>
 
-    <!-- Website List Table -->
-    <div class="flex-1 rounded-xl bg-slate-900/60 border border-slate-800/80 p-3 overflow-auto">
+    <!-- Website List Table (Jika ada website) -->
+    <div v-if="websites.length > 0" class="flex-1 rounded-xl bg-slate-900/60 border border-slate-800/80 p-3 overflow-auto">
       <table class="w-full text-left text-xs border-collapse">
         <thead>
           <tr class="border-b border-slate-800 text-slate-400">
@@ -79,6 +84,17 @@ const websites = ref([
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- Empty State Elegan (Zero Dummy Data) -->
+    <div v-else class="flex-1 rounded-xl bg-slate-900/40 border border-slate-800/60 flex flex-col items-center justify-center text-slate-500 gap-3 p-8">
+      <div class="w-12 h-12 rounded-2xl bg-slate-800/50 flex items-center justify-center text-slate-400">
+        <Inbox class="w-6 h-6" />
+      </div>
+      <div class="text-center">
+        <p class="font-medium text-slate-300">Belum ada website yang dikonfigurasi</p>
+        <p class="text-xs text-slate-500 mt-1">Klik tombol "Tambah Website" di atas untuk membuat situs PHP, Node.js, atau HTML statis baru.</p>
+      </div>
     </div>
   </div>
 </template>

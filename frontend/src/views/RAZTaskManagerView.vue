@@ -3,12 +3,15 @@
  * RAZOS Task Manager App View
  * Updated: 2026-10-08
  * Deskripsi: Antarmuka pemantauan metrik sistem, konsumsi RAM, Suhu SOC STB,
- * serta tombol 1-klik Clean RAM (drop_caches) & Clean Storage (Docker Prune).
+ * serta daftar container/proses riil yang diambil dinamis dari endpoint backend tanpa dummy data.
  */
+import { ref, onMounted } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
 import { Cpu, HardDrive, Thermometer, Database, Sparkles, Trash2, RefreshCw } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
+const containers = ref([])
+const isLoadingContainers = ref(false)
 
 function formatBytes(bytes) {
   if (!bytes) return '0 MB'
@@ -18,6 +21,26 @@ function formatBytes(bytes) {
   }
   return mb.toFixed(0) + ' MB'
 }
+
+async function fetchContainers() {
+  isLoadingContainers.value = true
+  try {
+    const res = await fetch('/api/v1/containers')
+    if (res.ok) {
+      containers.value = await res.json()
+    } else {
+      containers.value = []
+    }
+  } catch (err) {
+    containers.value = []
+  } finally {
+    isLoadingContainers.value = false
+  }
+}
+
+onMounted(() => {
+  fetchContainers()
+})
 </script>
 
 <template>
@@ -27,7 +50,7 @@ function formatBytes(bytes) {
       <!-- CPU Metric Card -->
       <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col gap-1">
         <div class="flex items-center justify-between text-slate-400">
-          <span class="font-medium">Beban CPU</span>
+          <span class="font-medium">Beban CPU Host</span>
           <Cpu class="w-4 h-4 text-sky-400" />
         </div>
         <div class="text-xl font-bold text-sky-400">
@@ -41,7 +64,7 @@ function formatBytes(bytes) {
       <!-- RAM Metric Card -->
       <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col gap-1">
         <div class="flex items-center justify-between text-slate-400">
-          <span class="font-medium">RAM Fisik</span>
+          <span class="font-medium">RAM Fisik Host</span>
           <HardDrive class="w-4 h-4 text-emerald-400" />
         </div>
         <div class="text-xl font-bold text-emerald-400">
@@ -58,7 +81,7 @@ function formatBytes(bytes) {
       <!-- SOC Temp Card -->
       <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col gap-1">
         <div class="flex items-center justify-between text-slate-400">
-          <span class="font-medium">Suhu STB SOC</span>
+          <span class="font-medium">Suhu SOC</span>
           <Thermometer class="w-4 h-4 text-amber-400" />
         </div>
         <div class="text-xl font-bold text-amber-400">
@@ -87,8 +110,8 @@ function formatBytes(bytes) {
     <!-- Maintenance Action Section -->
     <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
       <div>
-        <h4 class="font-semibold text-slate-200">Pemeliharaan Cepat STB (1-Klik)</h4>
-        <p class="text-xs text-slate-400">Bebaskan cache RAM Linux atau bersihkan sampah image Docker tanpa restart server.</p>
+        <h4 class="font-semibold text-slate-200">Pemeliharaan Cepat (1-Klik)</h4>
+        <p class="text-xs text-slate-400">Bebaskan cache RAM Linux atau bersihkan sisa container tanpa mematikan host.</p>
       </div>
 
       <div class="flex items-center gap-2 w-full sm:w-auto">
@@ -114,7 +137,7 @@ function formatBytes(bytes) {
 
         <!-- Refresh -->
         <button
-          @click="systemStore.fetchMetrics"
+          @click="() => { systemStore.fetchMetrics(); fetchContainers(); }"
           class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium flex items-center justify-center gap-2 transition"
           title="Segarkan Metrik"
         >
@@ -123,16 +146,17 @@ function formatBytes(bytes) {
       </div>
     </div>
 
-    <!-- Container / Process Monitoring Placeholder Table -->
+    <!-- Dynamic Container Table (Zero Dummy Data) -->
     <div class="flex-1 rounded-xl bg-slate-900/60 border border-slate-800/80 p-3 overflow-auto flex flex-col">
       <div class="flex items-center justify-between mb-2">
         <span class="font-semibold text-slate-300">Daftar Service & Container Aktif</span>
-        <span class="text-xs text-slate-400">Total: 4 Container</span>
+        <span class="text-xs text-slate-400">Total: {{ containers.length }} Service</span>
       </div>
-      <table class="w-full text-left text-xs border-collapse">
+
+      <table v-if="containers.length > 0" class="w-full text-left text-xs border-collapse">
         <thead>
           <tr class="border-b border-slate-800 text-slate-400">
-            <th class="py-2 px-2">Nama Container</th>
+            <th class="py-2 px-2">Nama Service</th>
             <th class="py-2 px-2">Port Terbuka</th>
             <th class="py-2 px-2">CPU</th>
             <th class="py-2 px-2">Memori</th>
@@ -140,36 +164,23 @@ function formatBytes(bytes) {
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-800/60 text-slate-300">
-          <tr>
-            <td class="py-2.5 px-2 font-mono text-sky-400">razos-core</td>
-            <td class="py-2.5 px-2">8080 (Web UI)</td>
-            <td class="py-2.5 px-2">0.4%</td>
-            <td class="py-2.5 px-2">24 MB</td>
-            <td class="py-2.5 px-2"><span class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400">Running</span></td>
-          </tr>
-          <tr>
-            <td class="py-2.5 px-2 font-mono text-sky-400">razos-mariadb</td>
-            <td class="py-2.5 px-2">3306 (Internal)</td>
-            <td class="py-2.5 px-2">0.2%</td>
-            <td class="py-2.5 px-2">128 MB</td>
-            <td class="py-2.5 px-2"><span class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400">Running</span></td>
-          </tr>
-          <tr>
-            <td class="py-2.5 px-2 font-mono text-sky-400">razos-postgres</td>
-            <td class="py-2.5 px-2">5432 (Internal)</td>
-            <td class="py-2.5 px-2">0.1%</td>
-            <td class="py-2.5 px-2">92 MB</td>
-            <td class="py-2.5 px-2"><span class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400">Running</span></td>
-          </tr>
-          <tr>
-            <td class="py-2.5 px-2 font-mono text-sky-400">razos-adminer</td>
-            <td class="py-2.5 px-2">8088 (Web DB)</td>
-            <td class="py-2.5 px-2">0.0%</td>
-            <td class="py-2.5 px-2">18 MB</td>
-            <td class="py-2.5 px-2"><span class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400">Running</span></td>
+          <tr v-for="(item, index) in containers" :key="index">
+            <td class="py-2.5 px-2 font-mono text-sky-400">{{ item.name }}</td>
+            <td class="py-2.5 px-2">{{ item.port }}</td>
+            <td class="py-2.5 px-2">{{ item.cpu }}</td>
+            <td class="py-2.5 px-2">{{ item.memory }}</td>
+            <td class="py-2.5 px-2">
+              <span class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400">{{ item.status }}</span>
+            </td>
           </tr>
         </tbody>
       </table>
+
+      <!-- Empty State jika belum ada container terpasang -->
+      <div v-else class="flex-1 flex flex-col items-center justify-center text-slate-500 gap-2 p-6">
+        <p class="text-xs">Belum ada container atau service Docker tambahan yang aktif.</p>
+        <span class="text-[11px] text-slate-600">Pasang container melalui menu App Store.</span>
+      </div>
     </div>
   </div>
 </template>
