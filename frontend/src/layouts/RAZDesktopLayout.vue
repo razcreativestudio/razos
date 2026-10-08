@@ -16,11 +16,13 @@ import RAZAppStoreView from '../views/RAZAppStoreView.vue'
 import RAZWebsitesView from '../views/RAZWebsitesView.vue'
 import RAZDatabasesView from '../views/RAZDatabasesView.vue'
 import RAZSettingsView from '../views/RAZSettingsView.vue'
+import RAZFileManagerView from '../views/RAZFileManagerView.vue'
 
 const windowStore = useWindowStore()
 
 // Mapping ID aplikasi ke komponen View
 const viewMap = {
+  'file-manager': RAZFileManagerView,
   'task-manager': RAZTaskManagerView,
   'terminal': RAZTerminalView,
   'app-store': RAZAppStoreView,

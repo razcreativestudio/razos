@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <!-- Container Background -->
+  <rect width="64" height="64" rx="14" fill="#0f172a" stroke="#1e293b" stroke-width="1.5"/>
+  <rect x="6" y="6" width="52" height="52" rx="10" fill="#020617" stroke="#334155" stroke-width="1"/>
+  <!-- Folder Icon -->
+  <path d="M16 22C16 20.3 17.3 19 19 19H27L31 23H45C46.7 23 48 24.3 48 26V43C48 44.7 46.7 46 45 46H19C17.3 46 16 44.7 16 43V22Z" fill="#38bdf8" fill-opacity="0.2" stroke="#38bdf8" stroke-width="2.5" stroke-linejoin="round"/>
+  <!-- Storage Disk Lines -->
+  <line x1="22" y1="35" x2="42" y2="35" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
+  <line x1="22" y1="40" x2="34" y2="40" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
+</svg>

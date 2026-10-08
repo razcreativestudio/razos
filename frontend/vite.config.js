@@ -85,6 +85,111 @@ function razosApiPlugin() {
         res.setHeader('Content-Type', 'application/json')
         res.end(JSON.stringify([])) // Dinamis kosong hingga database dibuat
       })
+
+      // 7. Endpoint Storage Devices (/api/v1/storage/devices)
+      server.middlewares.use('/api/v1/storage/devices', (req, res) => {
+        const total = os.totalmem()
+        const free = os.freemem()
+        const devices = [
+          {
+            device: 'Physical Drive 0',
+            mountpoint: '/',
+            fstype: 'NTFS/EXT4',
+            total: 512000000000,
+            used: 240000000000,
+            free: 272000000000,
+            percent: 46.8,
+            label: 'System Root Host (/)',
+            is_usb: false
+          },
+          {
+            device: '/dev/mmcblk1p1',
+            mountpoint: '/DATA',
+            fstype: 'EXT4',
+            total: 32000000000,
+            used: 8200000000,
+            free: 23800000000,
+            percent: 25.6,
+            label: 'MicroSD Storage (/DATA)',
+            is_usb: false
+          },
+          {
+            device: '/dev/sdb1',
+            mountpoint: '/media/usb_drive',
+            fstype: 'exFAT',
+            total: 128000000000,
+            used: 42000000000,
+            free: 86000000000,
+            percent: 32.8,
+            label: 'External HDD / USB (/media)',
+            is_usb: true
+          }
+        ]
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify(devices))
+      })
+
+      // 8. Endpoint Files List (/api/v1/files/list)
+      server.middlewares.use('/api/v1/files/list', (req, res) => {
+        const urlObj = new URL(req.url, 'http://localhost')
+        const targetPath = urlObj.searchParams.get('path') || '.'
+        try {
+          const dirEntries = fs.readdirSync(targetPath, { withFileTypes: true })
+          const items = dirEntries.map(e => {
+            const full = targetPath + '/' + e.name
+            let size = 0
+            let mtime = new Date()
+            try {
+              const stat = fs.statSync(full)
+              size = stat.size
+              mtime = stat.mtime
+            } catch (stErr) {}
+            return {
+              name: e.name,
+              path: full,
+              is_dir: e.isDirectory(),
+              size: size,
+              mod_time: mtime,
+              extension: e.isDirectory() ? '' : (e.name.includes('.') ? '.' + e.name.split('.').pop() : '')
+            }
+          })
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify(items))
+        } catch (err) {
+          res.statusCode = 500
+          res.end(JSON.stringify({ error: err.message }))
+        }
+      })
+
+      // 9. Endpoint File Content (/api/v1/files/content)
+      server.middlewares.use('/api/v1/files/content', (req, res) => {
+        if (req.method === 'GET') {
+          const urlObj = new URL(req.url, 'http://localhost')
+          const targetPath = urlObj.searchParams.get('path')
+          try {
+            const content = fs.readFileSync(targetPath, 'utf-8')
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ content }))
+          } catch (err) {
+            res.statusCode = 500
+            res.end(JSON.stringify({ error: err.message }))
+          }
+        } else if (req.method === 'POST') {
+          let body = ''
+          req.on('data', chunk => { body += chunk })
+          req.on('end', () => {
+            try {
+              const data = JSON.parse(body)
+              fs.writeFileSync(data.path, data.content, 'utf-8')
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ status: 'saved' }))
+            } catch (err) {
+              res.statusCode = 500
+              res.end(JSON.stringify({ error: err.message }))
+            }
+          })
+        }
+      })
     }
   }
 }

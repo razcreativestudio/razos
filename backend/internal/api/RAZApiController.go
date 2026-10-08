@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/razos/razos/internal/database"
 	"github.com/razos/razos/internal/docker"
+	"github.com/razos/razos/internal/filemanager"
 	"github.com/razos/razos/internal/store"
 	"github.com/razos/razos/internal/system"
 	"github.com/razos/razos/internal/terminal"
@@ -57,6 +58,15 @@ func RegisterRoutes(r *gin.Engine) {
 		// OTA Updater
 		v1.GET("/updater/status", handleGetUpdateStatus)
 		v1.POST("/updater/apply", handleApplyUpdate)
+
+		// Storage & Advanced File Manager
+		v1.GET("/storage/devices", handleGetStorageDevices)
+		v1.GET("/files/list", handleListFiles)
+		v1.POST("/files/folder", handleCreateFolder)
+		v1.DELETE("/files/item", handleDeleteFile)
+		v1.POST("/files/rename", handleRenameFile)
+		v1.GET("/files/content", handleGetFileContent)
+		v1.POST("/files/content", handleSaveFileContent)
 
 		// Health Check
 		v1.GET("/health", func(c *gin.Context) {
@@ -262,4 +272,90 @@ func handleApplyUpdate(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "updated", "message": "Binary berhasil diperbarui. Silakan restart service."})
+}
+
+func handleGetStorageDevices(c *gin.Context) {
+	devices, err := filemanager.GetStorageDevices()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, devices)
+}
+
+func handleListFiles(c *gin.Context) {
+	targetPath := c.Query("path")
+	files, err := filemanager.ListDirectory(targetPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, files)
+}
+
+func handleCreateFolder(c *gin.Context) {
+	var body struct {
+		ParentPath string `json:"parent_path"`
+		FolderName string `json:"folder_name"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+	if err := filemanager.CreateFolder(body.ParentPath, body.FolderName); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "created"})
+}
+
+func handleDeleteFile(c *gin.Context) {
+	targetPath := c.Query("path")
+	if err := filemanager.DeleteFileOrFolder(targetPath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "deleted"})
+}
+
+func handleRenameFile(c *gin.Context) {
+	var body struct {
+		OldPath string `json:"old_path"`
+		NewPath string `json:"new_path"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+	if err := filemanager.RenameFileOrFolder(body.OldPath, body.NewPath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "renamed"})
+}
+
+func handleGetFileContent(c *gin.Context) {
+	targetPath := c.Query("path")
+	content, err := filemanager.ReadFileContent(targetPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"content": content})
+}
+
+func handleSaveFileContent(c *gin.Context) {
+	var body struct {
+		Path    string `json:"path"`
+		Content string `json:"content"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+	if err := filemanager.SaveFileContent(body.Path, body.Content); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "saved"})
 }

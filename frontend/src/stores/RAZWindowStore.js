@@ -11,6 +11,15 @@ export const useWindowStore = defineStore('window', () => {
   // Daftar aplikasi yang terdaftar
   const apps = ref([
     {
+      id: 'file-manager',
+      title: 'Files & Storage',
+      icon: '/assets/icons/RAZIconFileManager.svg',
+      width: 820,
+      height: 520,
+      minWidth: 480,
+      minHeight: 340,
+    },
+    {
       id: 'task-manager',
       title: 'Task Manager',
       icon: '/assets/icons/RAZIconTaskManager.svg',
