@@ -1,0 +1,20 @@
+[Unit]
+Description=RAZOS - Web-based Cloud OS
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/DATA/razos
+ExecStart=/DATA/razos/bin/razos
+Restart=always
+RestartSec=3
+LimitNOFILE=65535
+
+# Proteksi memori & batasan OOM untuk STB ARM64
+MemoryHigh=1500M
+MemoryMax=1700M
+
+[Install]
+WantedBy=multi-user.target

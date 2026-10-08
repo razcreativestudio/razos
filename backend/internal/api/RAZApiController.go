@@ -16,6 +16,7 @@ import (
 	"github.com/razos/razos/internal/store"
 	"github.com/razos/razos/internal/system"
 	"github.com/razos/razos/internal/terminal"
+	"github.com/razos/razos/internal/updater"
 	"github.com/razos/razos/internal/website"
 )
 
@@ -52,6 +53,10 @@ func RegisterRoutes(r *gin.Engine) {
 		v1.GET("/databases", handleGetDatabases)
 		v1.POST("/databases", handleCreateDatabase)
 		v1.POST("/databases/adminer/launch", handleLaunchAdminer)
+
+		// OTA Updater
+		v1.GET("/updater/status", handleGetUpdateStatus)
+		v1.POST("/updater/apply", handleApplyUpdate)
 
 		// Health Check
 		v1.GET("/health", func(c *gin.Context) {
@@ -233,4 +238,28 @@ func handleLaunchAdminer(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "ready", "url": "http://localhost:8088"})
+}
+
+func handleGetUpdateStatus(c *gin.Context) {
+	status, err := updater.CheckUpdate()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, status)
+}
+
+func handleApplyUpdate(c *gin.Context) {
+	var body struct {
+		DownloadURL string `json:"download_url"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Download URL required"})
+		return
+	}
+	if err := updater.PerformSelfUpdate(body.DownloadURL); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "updated", "message": "Binary berhasil diperbarui. Silakan restart service."})
 }

@@ -32,7 +32,7 @@
 Jalankan perintah berikut di terminal SSH STB Anda:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/username/razos/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/razcreative/razos/main/scripts/install.sh | bash
 ```
 
 Setelah instalasi selesai, buka peramban Anda di:

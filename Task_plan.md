@@ -30,6 +30,6 @@
 - [x] Form koneksi database instan untuk website yang dibuat.
 
 ## Fase 5: OTA Updater & Production Hardening
-- [ ] Implementasi API updater: Pengecekan rilis GitHub Releases dan penggantian binary mandiri.
-- [ ] Pembuatan systemd unit file `/etc/systemd/system/razos.service`.
-- [ ] Skrip pembersihan total sistem lama STB sebelum instalasi bersih.
+- [x] Implementasi API updater: Pengecekan rilis GitHub Releases dan penggantian binary mandiri.
+- [x] Pembuatan systemd unit file `/etc/systemd/system/razos.service`.
+- [x] Skrip pembersihan total sistem lama STB sebelum instalasi bersih.
