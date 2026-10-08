@@ -34,6 +34,8 @@ type AppManifest struct {
 	Env           []string `json:"env"`
 	Installed     bool     `json:"installed"`
 	Readme        string   `json:"readme,omitempty"`
+	Icon          string   `json:"icon,omitempty"`
+	Thumbnail     string   `json:"thumbnail,omitempty"`
 }
 
 // DeployRequest payload instalasi aplikasi dengan custom port/volume atau manual custom image

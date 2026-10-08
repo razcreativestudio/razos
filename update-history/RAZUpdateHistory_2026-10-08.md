@@ -64,5 +64,23 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - **Custom Docker Deployer:** Menambahkan tombol **Instal Manual Docker** dengan form modal kustom yang memungkinkan pengguna memasukkan sembarang Docker image dari Docker Hub/Registry publik, menentukan host port, mengatur path direktori volume host, dan environment variables kustom.
 - **Backend Custom Deployment Engine:** Memperbarui `RAZAppStoreEngine.go` untuk menangani parameter `custom_image`, `container_name`, port, volume, dan limitasi RAM protektif 256 MB.
 
+---
+
+### Versi: 2.1.0-app-store-visual-page (Official Docker Logos, Full Page Details View & Visual Markdown Preview)
+**Waktu Eksekusi:** 2026-10-09 00:11 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Full Page App Details View (Bukan Modal Dialog)
+- **Halaman Penuh Detail Aplikasi:** Mengubah alur interaksi sehingga mengklik kartu aplikasi di katalog langsung membuka Halaman Penuh (*Full Page App View*) lengkap dengan header navigasi "Kembali", thumbnail banner resolusi tinggi, ikhtisar fungsi, dan sidebar spesifikasi hardware.
+- **Action Buttons Terintegrasi:** Tombol **Pasang Aplikasi**, **Status Container Aktif**, dan **Uninstall** tersedia langsung di dalam Halaman Detail maupun di kartu katalog.
+
+#### 2. Logo Resmi Masing-Masing Docker & Banner Thumbnail
+- **Iconic Brand Logos:** Menambahkan logo resmi SVG/PNG untuk aplikasi populer (*Plex, Jellyfin, Nextcloud, MariaDB, PostgreSQL, Redis, VS Code, Ollama, Home Assistant, Pi-hole, Uptime Kuma, qBittorrent, dll.*) serta identicon dinamis untuk seluruh microservice.
+- **Banner Pratinjau Gambar:** Menyertakan banner visual fotografi dan ilustrasi dashboard yang relevan di setiap kategori aplikasi.
+
+#### 3. Visual Markdown README.md Previewer (Bukan Text Editor)
+- **Render Engine `marked`:** Mengintegrasikan library `marked` untuk menyajikan dokumentasi `README.md` dalam bentuk preview Markdown interaktif yang bersih dan terformat rapi (judul, gambar banner pratinjau, blok kode sintaks, daftar peluru, kutipan).
+
+
 
 

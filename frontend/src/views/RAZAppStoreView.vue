@@ -1,19 +1,22 @@
 <script setup>
 /**
- * RAZOS App Store View - 500+ Apps & CasaOS-Style Custom Manual Install
+ * RAZOS App Store View - 520+ Apps, Full Page App Details View & CasaOS-Style Custom Manual Install
  * Updated: 2026-10-09
- * Deskripsi: Antarmuka App Store lengkap dengan katalog 520+ kontainer Docker siap pakai:
- * - Details & Readme.md Viewer untuk setiap aplikasi.
- * - Tombol Pasang 1-klik dengan custom port & volume bindings.
- * - Tombol "Instal Manual" (Custom Docker App) ala CasaOS (Image, Port, Web UI, Volume, Env).
- * - Kategori komprehensif (Media, Cloud, Database, Dev, IoT, Networking, Monitoring, dll).
- * - Live Search secepat kilat untuk 500+ aplikasi.
+ * Deskripsi:
+ * - Logo resmi/identicon & thumbnail banner untuk setiap aplikasi Docker.
+ * - Klik kartu aplikasi langsung membuka "Halaman Penuh Detail Aplikasi" (Full Page Detail View, BUKAN modal!).
+ * - Halaman Detail merender README.md dalam mode preview Markdown visual kaya (dengan banner image, formatting typography, tag port, volume, dll).
+ * - Tombol Pasang / Pasang Ulang / Uninstall langsung di dalam Halaman Detail dan di kartu katalog.
+ * - Tombol "Instal Manual Docker" ala CasaOS untuk deployment custom image.
+ * - Live Search secepat kilat untuk 525 aplikasi.
  */
 import { ref, onMounted, computed } from 'vue'
+import { marked } from 'marked'
 import { useSystemStore } from '../stores/RAZSystemStore'
 import {
   Download, Check, Box, Trash2, Settings2, X, AlertTriangle,
-  Search, BookOpen, PlusCircle, ExternalLink, HardDrive, Cpu, Terminal
+  Search, BookOpen, PlusCircle, ArrowLeft, ExternalLink, HardDrive,
+  Cpu, Terminal, Layers, Globe, Shield, Activity, RefreshCw
 } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
@@ -22,15 +25,15 @@ const isLoading = ref(false)
 const selectedCategory = ref('All')
 const searchQuery = ref('')
 
+// State Halaman: 'catalog' | 'detail'
+const currentView = ref('catalog')
+const selectedApp = ref(null)
+
 // State Modal Pasang Aplikasi (Custom Port & Volume)
 const showInstallModal = ref(false)
 const activeAppToInstall = ref(null)
 const customPort = ref('')
 const customVolume = ref('')
-
-// State Modal Details & Readme.md
-const showDetailModal = ref(false)
-const activeAppDetail = ref(null)
 
 // State Modal Custom Manual Install (CasaOS Style)
 const showManualModal = ref(false)
@@ -87,12 +90,31 @@ const filteredApps = computed(() => {
   })
 })
 
-function openDetailDialog(app) {
-  activeAppDetail.value = app
-  showDetailModal.value = true
+// Buka Halaman Penuh Detail Aplikasi (Bukan Modal!)
+function openAppDetail(app) {
+  selectedApp.value = app
+  currentView.value = 'detail'
 }
 
-function openInstallDialog(app) {
+function backToCatalog() {
+  currentView.value = 'catalog'
+  selectedApp.value = null
+}
+
+// Render Markdown README.md ke HTML Preview
+const renderedReadmeHtml = computed(() => {
+  if (!selectedApp.value || !selectedApp.value.readme) {
+    return '<p class="text-slate-400">Tidak ada dokumentasi README.md yang disertakan.</p>'
+  }
+  try {
+    return marked.parse(selectedApp.value.readme)
+  } catch (e) {
+    return `<pre class="text-rose-400">${selectedApp.value.readme}</pre>`
+  }
+})
+
+function openInstallDialog(app, e) {
+  e?.stopPropagation()
   activeAppToInstall.value = app
   customPort.value = app.default_port
   customVolume.value = app.default_volume
@@ -116,7 +138,9 @@ async function confirmInstall() {
     if (res.ok) {
       systemStore.showNotification('Sukses', `Container ${activeAppToInstall.value.name} berhasil dipasang!`, 'success')
       showInstallModal.value = false
-      if (showDetailModal.value) showDetailModal.value = false
+      if (selectedApp.value && selectedApp.value.id === activeAppToInstall.value.id) {
+        selectedApp.value.installed = true
+      }
       fetchApps()
     } else {
       const errData = await res.json().catch(() => ({}))
@@ -173,7 +197,8 @@ async function submitManualInstall() {
   isDeployingManual.value = false
 }
 
-function openUninstallDialog(app) {
+function openUninstallDialog(app, e) {
+  e?.stopPropagation()
   activeAppToUninstall.value = app
   purgeDataChecked.value = true
   showUninstallModal.value = true
@@ -188,7 +213,9 @@ async function confirmUninstall() {
     if (res.ok) {
       systemStore.showNotification('Sukses', `Aplikasi ${activeAppToUninstall.value.name} telah di-uninstall!`, 'success')
       showUninstallModal.value = false
-      if (showDetailModal.value) showDetailModal.value = false
+      if (selectedApp.value && selectedApp.value.id === activeAppToUninstall.value.id) {
+        selectedApp.value.installed = false
+      }
       fetchApps()
     } else {
       systemStore.showNotification('Gagal', 'Gagal meng-uninstall container', 'error')
@@ -204,193 +231,304 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="h-full flex flex-col gap-3 text-xs sm:text-sm select-none">
-    <!-- Header App Store & Action Buttons -->
-    <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
-      <div>
-        <div class="flex items-center gap-2">
-          <h3 class="font-bold text-slate-100 text-base">App Store RAZOS</h3>
-          <span class="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-400 text-[11px] font-mono font-bold">
-            {{ apps.length }} Siap Pakai
-          </span>
-        </div>
-        <p class="text-xs text-slate-400 mt-0.5">Katalog Docker siap pakai 1-klik terisolasi di MicroSD (/DATA/apps) & Custom Install.</p>
-      </div>
-
-      <!-- Action: Manual Install Button (CasaOS Style) -->
-      <button
-        @click="showManualModal = true"
-        class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-slate-950 font-bold flex items-center gap-2 shadow-lg transition active:scale-95 text-xs"
-      >
-        <PlusCircle class="w-4 h-4" />
-        <span>Instal Manual Docker</span>
-      </button>
-    </div>
-
-    <!-- Search Bar & Category Navigation -->
-    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-      <!-- Search Input -->
-      <div class="flex-1 relative">
-        <Search class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Cari dari 500+ aplikasi Docker (Plex, Jellyfin, MySQL, Nextcloud, Ollama, Nginx...)"
-          class="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 outline-none focus:border-sky-400 transition"
-        />
-      </div>
-
-      <span class="text-[11px] text-slate-500 font-mono hidden md:inline shrink-0">
-        Menampilkan: {{ filteredApps.length }} aplikasi
-      </span>
-    </div>
-
-    <!-- Horizontal Category Filter Bar -->
-    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 shrink-0 scrollbar-none">
-      <button
-        v-for="cat in categories"
-        :key="cat"
-        @click="selectedCategory = cat"
-        class="px-3 py-1.5 rounded-xl text-xs font-medium transition whitespace-nowrap"
-        :class="selectedCategory === cat ? 'bg-sky-500/20 text-sky-400 border border-sky-400/40 font-bold shadow' : 'text-slate-400 hover:text-slate-200 bg-slate-900/60 border border-slate-800/60'"
-      >
-        {{ cat }}
-      </button>
-    </div>
-
-    <!-- App Cards Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 overflow-auto flex-1 pr-1">
-      <div
-        v-for="app in filteredApps"
-        :key="app.id"
-        class="p-3.5 rounded-2xl bg-slate-900/70 border border-slate-800/80 hover:border-slate-700/80 flex flex-col justify-between gap-3 transition group relative"
-      >
-        <div class="flex items-start gap-3">
-          <div class="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
-            <Box class="w-5 h-5" />
+  <div class="h-full flex flex-col text-xs sm:text-sm select-none bg-slate-950 text-slate-100">
+    <!-- VIEW 1: KATALOG UTAMA (525+ APPS) -->
+    <div v-if="currentView === 'catalog'" class="h-full flex flex-col gap-3 p-4 overflow-hidden animate-in fade-in">
+      <!-- Header App Store & Action Buttons -->
+      <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 class="font-bold text-slate-100 text-lg">App Store RAZOS</h3>
+            <span class="px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-400 text-xs font-mono font-bold">
+              {{ apps.length }} Docker Siap Pakai
+            </span>
           </div>
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center justify-between gap-1">
-              <h4 class="font-bold text-slate-200 text-xs truncate" :title="app.name">{{ app.name }}</h4>
-              <span class="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 shrink-0 font-medium">
-                {{ app.category }}
-              </span>
+          <p class="text-xs text-slate-400 mt-0.5">
+            Pilih aplikasi apa pun untuk melihat detail & dokumentasi, atau deploy container kustom.
+          </p>
+        </div>
+
+        <!-- Action: Manual Install Button (CasaOS Style) -->
+        <button
+          @click="showManualModal = true"
+          class="px-4 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-slate-950 font-bold flex items-center gap-2 shadow-lg transition active:scale-95 text-xs"
+        >
+          <PlusCircle class="w-4 h-4" />
+          <span>Instal Manual Docker</span>
+        </button>
+      </div>
+
+      <!-- Search Bar & Statistics -->
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+        <div class="flex-1 relative">
+          <Search class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Cari dari 500+ aplikasi Docker (Plex, Jellyfin, MySQL, Nextcloud, Ollama, Nginx, qBittorrent...)"
+            class="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 outline-none focus:border-sky-400 transition"
+          />
+        </div>
+
+        <span class="text-[11px] text-slate-500 font-mono hidden md:inline shrink-0">
+          Menampilkan: {{ filteredApps.length }} aplikasi
+        </span>
+      </div>
+
+      <!-- Horizontal Category Filter Bar -->
+      <div class="flex items-center gap-1.5 overflow-x-auto pb-1 shrink-0 scrollbar-none">
+        <button
+          v-for="cat in categories"
+          :key="cat"
+          @click="selectedCategory = cat"
+          class="px-3 py-1.5 rounded-xl text-xs font-medium transition whitespace-nowrap"
+          :class="selectedCategory === cat ? 'bg-sky-500/20 text-sky-400 border border-sky-400/40 font-bold shadow' : 'text-slate-400 hover:text-slate-200 bg-slate-900/60 border border-slate-800/60'"
+        >
+          {{ cat }}
+        </button>
+      </div>
+
+      <!-- App Cards Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 overflow-y-auto flex-1 pr-1">
+        <div
+          v-for="app in filteredApps"
+          :key="app.id"
+          @click="openAppDetail(app)"
+          class="p-4 rounded-2xl bg-slate-900/70 border border-slate-800/80 hover:border-sky-500/50 hover:bg-slate-900/90 flex flex-col justify-between gap-3.5 transition-all cursor-pointer group relative shadow-sm hover:shadow-xl hover:-translate-y-0.5"
+        >
+          <!-- Card Top: Logo Resmi/Identicon & Meta -->
+          <div class="flex items-start gap-3.5">
+            <!-- App Logo Image -->
+            <div class="w-12 h-12 rounded-2xl bg-slate-950 border border-slate-800/80 p-1 flex items-center justify-center shrink-0 overflow-hidden shadow-inner group-hover:border-sky-400/40 transition">
+              <img
+                v-if="app.icon"
+                :src="app.icon"
+                :alt="app.name"
+                class="w-full h-full object-contain rounded-xl"
+                loading="lazy"
+                @error="(e) => e.target.src = `https://api.dicebear.com/7.x/identicon/svg?seed=${app.slug}`"
+              />
+              <Box v-else class="w-6 h-6 text-sky-400" />
             </div>
-            <p class="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-relaxed">{{ app.description }}</p>
+
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between gap-1">
+                <h4 class="font-bold text-slate-100 text-sm truncate group-hover:text-sky-300 transition" :title="app.name">
+                  {{ app.name }}
+                </h4>
+                <span class="text-[9px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 shrink-0 font-medium border border-slate-700/60">
+                  {{ app.category }}
+                </span>
+              </div>
+              <p class="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                {{ app.description }}
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div class="flex items-center justify-between border-t border-slate-800/60 pt-2 text-[11px]">
-          <div class="text-slate-500 font-mono flex items-center gap-1.5">
-            <span>Port:</span>
-            <span class="text-sky-400 font-bold">{{ app.default_port }}</span>
-          </div>
+          <!-- Card Bottom: Ports & Action Buttons -->
+          <div class="flex items-center justify-between border-t border-slate-800/60 pt-2.5 text-xs">
+            <div class="text-slate-500 font-mono flex items-center gap-1.5">
+              <span>Port:</span>
+              <span class="text-sky-400 font-bold">{{ app.default_port }}</span>
+            </div>
 
-          <div class="flex items-center gap-1.5">
-            <!-- Tombol Details / Readme.md -->
-            <button
-              @click="openDetailDialog(app)"
-              class="px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 font-medium flex items-center gap-1 transition"
-              title="Lihat Details / README.md"
-            >
-              <BookOpen class="w-3.5 h-3.5 text-slate-400" />
-              <span>Detail</span>
-            </button>
+            <div class="flex items-center gap-2">
+              <!-- Jika Terpasang -->
+              <template v-if="app.installed">
+                <span class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 font-bold flex items-center gap-1 text-[11px]">
+                  <Check class="w-3.5 h-3.5" />
+                  <span>Aktif</span>
+                </span>
+                <button
+                  @click="(e) => openUninstallDialog(app, e)"
+                  class="p-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 transition"
+                  title="Hapus / Uninstall Bersih"
+                >
+                  <Trash2 class="w-3.5 h-3.5" />
+                </button>
+              </template>
 
-            <!-- Jika Terpasang -->
-            <template v-if="app.installed">
-              <span class="px-2 py-1 rounded-md bg-emerald-500/20 text-emerald-400 font-bold flex items-center gap-1">
-                <Check class="w-3.5 h-3.5" />
-                <span>Aktif</span>
-              </span>
+              <!-- Jika Belum Terpasang -->
               <button
-                @click="openUninstallDialog(app)"
-                class="p-1.5 rounded-md bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 transition"
-                title="Uninstall Bersih"
+                v-else
+                @click="(e) => openInstallDialog(app, e)"
+                class="px-3.5 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold flex items-center gap-1.5 text-xs transition shadow active:scale-95"
               >
-                <Trash2 class="w-3.5 h-3.5" />
+                <Download class="w-3.5 h-3.5" />
+                <span>Pasang</span>
               </button>
-            </template>
-
-            <!-- Jika Belum Terpasang -->
-            <button
-              v-else
-              @click="openInstallDialog(app)"
-              class="px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold flex items-center gap-1 transition shadow active:scale-95"
-            >
-              <Download class="w-3.5 h-3.5" />
-              <span>Pasang</span>
-            </button>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 1. CUSTOM MODAL: Details / README.md Viewer -->
-    <div
-      v-if="showDetailModal"
-      class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in"
-    >
-      <div class="w-full max-w-2xl max-h-[85vh] raz-glass rounded-2xl border border-slate-700/80 p-5 shadow-2xl flex flex-col gap-4">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+    <!-- VIEW 2: HALAMAN PENUH DETAIL APLIKASI (FULL PAGE DETAIL VIEW) -->
+    <div v-else-if="currentView === 'detail' && selectedApp" class="h-full flex flex-col overflow-hidden animate-in fade-in">
+      <!-- Top Navigation & Action Header -->
+      <div class="p-4 border-b border-slate-800/80 bg-slate-900/60 flex items-center justify-between gap-3 shrink-0">
+        <div class="flex items-center gap-3">
+          <button
+            @click="backToCatalog"
+            class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition flex items-center gap-1.5 text-xs font-bold"
+            title="Kembali ke Katalog"
+          >
+            <ArrowLeft class="w-4 h-4" />
+            <span class="hidden sm:inline">Kembali</span>
+          </button>
+
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center font-bold">
-              <Box class="w-6 h-6" />
+            <div class="w-11 h-11 rounded-2xl bg-slate-950 border border-slate-800 p-1 flex items-center justify-center overflow-hidden">
+              <img
+                :src="selectedApp.icon"
+                :alt="selectedApp.name"
+                class="w-full h-full object-contain rounded-xl"
+                @error="(e) => e.target.src = `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedApp.slug}`"
+              />
             </div>
             <div>
-              <h3 class="font-bold text-slate-100 text-base">{{ activeAppDetail?.name }}</h3>
-              <span class="text-xs text-sky-400 font-mono">{{ activeAppDetail?.image }}</span>
-            </div>
-          </div>
-          <button @click="showDetailModal = false" class="p-1 text-slate-400 hover:text-white">
-            <X class="w-5 h-5" />
-          </button>
-        </div>
-
-        <!-- Konten Markdown README.md Terformat -->
-        <div class="flex-1 overflow-y-auto p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-slate-300 text-xs leading-relaxed space-y-3 font-sans">
-          <div class="p-3 bg-sky-500/10 border border-sky-500/30 rounded-xl text-sky-200">
-            <h5 class="font-bold mb-1">Deskripsi Singkat:</h5>
-            <p>{{ activeAppDetail?.description }}</p>
-          </div>
-
-          <div class="space-y-2">
-            <h5 class="font-bold text-slate-200 text-sm border-b border-slate-800 pb-1">Dokumentasi & Spesifikasi README.md:</h5>
-            <pre class="font-mono text-emerald-400 whitespace-pre-wrap bg-black/60 p-3 rounded-lg border border-slate-800/80">{{ activeAppDetail?.readme || 'Tidak ada file README.md spesifik.' }}</pre>
-          </div>
-
-          <div class="grid grid-cols-2 gap-2 pt-2">
-            <div class="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
-              <span class="text-[10px] text-slate-500 block">Port Akses:</span>
-              <span class="font-mono text-slate-200 font-bold">{{ activeAppDetail?.default_port }}</span>
-            </div>
-            <div class="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
-              <span class="text-[10px] text-slate-500 block">Kategori Aplikasi:</span>
-              <span class="text-slate-200 font-medium">{{ activeAppDetail?.category }}</span>
+              <div class="flex items-center gap-2">
+                <h2 class="text-base font-bold text-slate-100">{{ selectedApp.name }}</h2>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-400 font-medium">
+                  {{ selectedApp.category }}
+                </span>
+              </div>
+              <span class="text-xs text-slate-400 font-mono">{{ selectedApp.image }}</span>
             </div>
           </div>
         </div>
 
-        <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+        <!-- Tombol Aksi Pasang / Status di Header Detail -->
+        <div class="flex items-center gap-2">
+          <template v-if="selectedApp.installed">
+            <span class="px-3 py-2 rounded-xl bg-emerald-500/20 text-emerald-400 font-bold flex items-center gap-1.5 text-xs">
+              <Check class="w-4 h-4" />
+              <span>Container Aktif</span>
+            </span>
+            <button
+              @click="(e) => openUninstallDialog(selectedApp, e)"
+              class="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 font-bold flex items-center gap-1.5 text-xs transition"
+            >
+              <Trash2 class="w-4 h-4" />
+              <span>Uninstall</span>
+            </button>
+          </template>
+
           <button
-            @click="showDetailModal = false"
-            class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs"
-          >
-            Tutup
-          </button>
-          <button
-            v-if="!activeAppDetail?.installed"
-            @click="() => { showDetailModal = false; openInstallDialog(activeAppDetail); }"
-            class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow"
+            v-else
+            @click="(e) => openInstallDialog(selectedApp, e)"
+            class="px-5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg transition active:scale-95"
           >
             <Download class="w-4 h-4" />
-            <span>Pasang Sekarang</span>
+            <span>Pasang Aplikasi</span>
           </button>
+        </div>
+      </div>
+
+      <!-- Main Detail Layout (Sidebar Metadata + Markdown Documentation) -->
+      <div class="flex-1 flex overflow-hidden">
+        <!-- Main Content: Markdown README.md Visual Preview -->
+        <div class="flex-1 p-6 overflow-y-auto space-y-6">
+          <!-- Thumbnail Banner Preview -->
+          <div v-if="selectedApp.thumbnail" class="w-full h-64 rounded-2xl overflow-hidden border border-slate-800 bg-slate-900 shadow-xl relative">
+            <img
+              :src="selectedApp.thumbnail"
+              alt="App Preview"
+              class="w-full h-full object-cover"
+            />
+            <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent flex items-end p-5">
+              <div>
+                <span class="text-xs font-mono text-sky-400 uppercase tracking-widest block font-bold">Katalog Resmi STB</span>
+                <h3 class="text-xl font-bold text-white">{{ selectedApp.name }}</h3>
+              </div>
+            </div>
+          </div>
+
+          <!-- Ringkasan Singkat -->
+          <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 text-slate-300 leading-relaxed text-sm">
+            <h4 class="font-bold text-slate-100 mb-1">Ikhtisar:</h4>
+            <p>{{ selectedApp.description }}</p>
+          </div>
+
+          <!-- README.md Rendered Markdown Preview -->
+          <div class="p-6 rounded-2xl bg-slate-900/60 border border-slate-800/80 space-y-4">
+            <div class="flex items-center gap-2 border-b border-slate-800 pb-3 text-slate-200 font-bold text-sm">
+              <BookOpen class="w-4 h-4 text-sky-400" />
+              <span>Dokumentasi Resmi & Panduan (README.md)</span>
+            </div>
+
+            <!-- Prosedur Typography Markdown Preview -->
+            <div
+              class="prose prose-invert max-w-none text-slate-300 text-xs sm:text-sm leading-relaxed
+                     [&_h1]:text-lg [&_h1]:font-bold [&_h1]:text-slate-100 [&_h1]:mb-3
+                     [&_h2]:text-base [&_h2]:font-bold [&_h2]:text-slate-200 [&_h2]:mt-4 [&_h2]:mb-2
+                     [&_h3]:text-sm [&_h3]:font-bold [&_h3]:text-sky-300 [&_h3]:mt-3 [&_h3]:mb-1.5
+                     [&_p]:mb-3 [&_p]:text-slate-300
+                     [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1.5 [&_ul]:mb-3
+                     [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:space-y-1.5 [&_ol]:mb-3
+                     [&_li]:text-slate-300
+                     [&_code]:bg-slate-950 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-emerald-400 [&_code]:font-mono [&_code]:text-xs
+                     [&_pre]:bg-slate-950 [&_pre]:p-4 [&_pre]:rounded-xl [&_pre]:border [&_pre]:border-slate-800 [&_pre]:overflow-x-auto
+                     [&_img]:rounded-xl [&_img]:max-h-72 [&_img]:w-full [&_img]:object-cover [&_img]:my-4 [&_img]:border [&_img]:border-slate-800
+                     [&_blockquote]:border-l-4 [&_blockquote]:border-sky-500 [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:text-slate-400"
+              v-html="renderedReadmeHtml"
+            ></div>
+          </div>
+        </div>
+
+        <!-- Right Properties Sidebar -->
+        <div class="w-72 border-l border-slate-800/80 bg-slate-900/50 p-5 flex flex-col justify-between hidden lg:flex shrink-0 space-y-4">
+          <div class="space-y-4">
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Spesifikasi Container</span>
+
+            <div class="space-y-3">
+              <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                <span class="text-[10px] text-slate-500 block">Docker Image:</span>
+                <span class="font-mono text-slate-200 text-xs break-all">{{ selectedApp.image }}</span>
+              </div>
+
+              <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                <span class="text-[10px] text-slate-500 block">Port Akses Bawaan:</span>
+                <span class="font-mono text-sky-400 text-sm font-bold">{{ selectedApp.default_port }}</span>
+              </div>
+
+              <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                <span class="text-[10px] text-slate-500 block">Mountpoint MicroSD:</span>
+                <span class="font-mono text-slate-300 text-xs break-all">{{ selectedApp.default_volume }}</span>
+              </div>
+
+              <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                <span class="text-[10px] text-slate-500 block">Batas Memori RAM:</span>
+                <span class="font-mono text-emerald-400 text-xs font-bold">256 MB (Hemat Daya STB)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tombol Pasang di Bawah Sidebar Detail -->
+          <div class="pt-4 border-t border-slate-800">
+            <button
+              v-if="!selectedApp.installed"
+              @click="(e) => openInstallDialog(selectedApp, e)"
+              class="w-full py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg"
+            >
+              <Download class="w-4 h-4" />
+              <span>Pasang Aplikasi</span>
+            </button>
+            <button
+              v-else
+              @click="(e) => openUninstallDialog(selectedApp, e)"
+              class="w-full py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 font-bold text-xs flex items-center justify-center gap-2"
+            >
+              <Trash2 class="w-4 h-4" />
+              <span>Hapus Aplikasi</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- 2. CUSTOM MODAL: Manual Install Docker (CasaOS Style) -->
+    <!-- CUSTOM MODAL 1: Manual Install Docker (CasaOS Style) -->
     <div
       v-if="showManualModal"
       class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in"
@@ -480,7 +618,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 3. CUSTOM MODAL: Form Konfigurasi Pasang Aplikasi Katalog -->
+    <!-- CUSTOM MODAL 2: Form Konfigurasi Pasang Aplikasi Katalog -->
     <div
       v-if="showInstallModal"
       class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in"
@@ -536,7 +674,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 4. CUSTOM MODAL: Konfirmasi Clean Uninstall -->
+    <!-- CUSTOM MODAL 3: Konfirmasi Clean Uninstall -->
     <div
       v-if="showUninstallModal"
       class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in"
