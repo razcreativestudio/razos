@@ -17,10 +17,10 @@
 - [x] Pembuatan modul Maintenance: RAM Cleaner (`drop_caches`) dan Storage Cleaner (`docker system prune`).
 
 ## Fase 3: App Store & Manajemen Container
-- [ ] Desain skema katalog aplikasi berbasis YAML/JSON.
-- [ ] Implementasi App Store UI (kategori, deskripsi, form port/volume kustom).
-- [ ] Engine deploy aplikasi berbasis Docker Compose / Docker Container API ke `/DATA/apps/`.
-- [ ] Fitur Clean Uninstall: Menghapus container sekaligus opsi memusnahkan folder data terkait.
+- [x] Desain skema katalog aplikasi berbasis YAML/JSON.
+- [x] Implementasi App Store UI (kategori, deskripsi, form port/volume kustom).
+- [x] Engine deploy aplikasi berbasis Docker Compose / Docker Container API ke `/DATA/apps/`.
+- [x] Fitur Clean Uninstall: Menghapus container sekaligus opsi memusnahkan folder data terkait.
 
 ## Fase 4: Website & Database Management Suite
 - [ ] Integrasi Reverse Proxy internal (Caddy embedded / Traefik ringan) untuk routing port domain.

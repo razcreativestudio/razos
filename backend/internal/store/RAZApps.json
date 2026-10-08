@@ -1,0 +1,74 @@
+[
+  {
+    "id": "caddy",
+    "name": "Caddy Reverse Proxy",
+    "slug": "caddy",
+    "category": "Network",
+    "description": "Web server ringan dan reverse proxy otomatis dengan sertifikat HTTPS internal/eksternal.",
+    "image": "caddy:2.7-alpine",
+    "default_port": 80,
+    "default_volume": "/DATA/apps/caddy/data",
+    "env": ["CADDY_INGRESS=1"],
+    "installed": false
+  },
+  {
+    "id": "mariadb",
+    "name": "MariaDB Server",
+    "slug": "mariadb",
+    "category": "Database",
+    "description": "Database relasional SQL performa tinggi yang dioptimalkan untuk memori terbatas.",
+    "image": "mariadb:10.11",
+    "default_port": 3306,
+    "default_volume": "/DATA/apps/mariadb/data",
+    "env": ["MYSQL_ROOT_PASSWORD=razos_root", "MYSQL_DATABASE=razos"],
+    "installed": false
+  },
+  {
+    "id": "postgres",
+    "name": "PostgreSQL Enterprise",
+    "slug": "postgres",
+    "category": "Database",
+    "description": "Sistem basis data objek-relasional kelas enterprise dengan integritas data tinggi.",
+    "image": "postgres:16-alpine",
+    "default_port": 5432,
+    "default_volume": "/DATA/apps/postgres/data",
+    "env": ["POSTGRES_PASSWORD=razos_pg", "POSTGRES_DB=razos"],
+    "installed": false
+  },
+  {
+    "id": "adminer",
+    "name": "Adminer Web GUI",
+    "slug": "adminer",
+    "category": "Database",
+    "description": "Alat manajemen database tunggal berbasis web super ringan (< 500 KB binary footprint).",
+    "image": "adminer:latest",
+    "default_port": 8088,
+    "default_volume": "/DATA/apps/adminer",
+    "env": [],
+    "installed": false
+  },
+  {
+    "id": "uptime-kuma",
+    "name": "Uptime Kuma",
+    "slug": "uptime-kuma",
+    "category": "Monitoring",
+    "description": "Tool pemantauan status website, port, dan ping server dengan tampilan UI modern.",
+    "image": "louislam/uptime-kuma:1",
+    "default_port": 3001,
+    "default_volume": "/DATA/apps/uptime-kuma/data",
+    "env": [],
+    "installed": false
+  },
+  {
+    "id": "filebrowser",
+    "name": "FileBrowser STB",
+    "slug": "filebrowser",
+    "category": "Storage",
+    "description": "Pengelola berkas web browser yang memberikan akses penuh ke penyimpanan /DATA.",
+    "image": "filebrowser/filebrowser:v2-s6",
+    "default_port": 8082,
+    "default_volume": "/DATA",
+    "env": [],
+    "installed": false
+  }
+]

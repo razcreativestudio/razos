@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/razos/razos/internal/docker"
+	"github.com/razos/razos/internal/store"
 	"github.com/razos/razos/internal/system"
 	"github.com/razos/razos/internal/terminal"
 )
@@ -34,6 +35,11 @@ func RegisterRoutes(r *gin.Engine) {
 		v1.POST("/containers/:id/restart", handleRestartContainer)
 		v1.GET("/processes", handleGetProcesses)
 		v1.POST("/processes/:pid/kill", handleKillProcess)
+
+		// App Store & Deployment Suite
+		v1.GET("/store/apps", handleGetAppCatalog)
+		v1.POST("/store/install", handleInstallApp)
+		v1.DELETE("/store/apps/:slug", handleUninstallApp)
 
 		// Health Check
 		v1.GET("/health", func(c *gin.Context) {
@@ -128,4 +134,36 @@ func handleKillProcess(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "killed", "pid": pid})
+}
+
+func handleGetAppCatalog(c *gin.Context) {
+	apps, err := store.GetCatalog()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, apps)
+}
+
+func handleInstallApp(c *gin.Context) {
+	var req store.DeployRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := store.DeployApp(req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "installed", "app_id": req.AppID})
+}
+
+func handleUninstallApp(c *gin.Context) {
+	slug := c.Param("slug")
+	purge := c.Query("purge_data") == "true"
+	if err := store.CleanUninstall(slug, purge); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "uninstalled", "slug": slug, "data_purged": purge})
 }
