@@ -65,13 +65,13 @@ func GetStorageDevices() ([]StorageDevice, error) {
 
 		label := p.Mountpoint
 		isUSB := false
-		if strings.Contains(p.Mountpoint, "media") || strings.Contains(p.Mountpoint, "usb") || strings.Contains(p.Device, "sd") {
+		if strings.Contains(strings.ToLower(p.Mountpoint), "media") || strings.Contains(strings.ToLower(p.Mountpoint), "usb") || strings.Contains(strings.ToLower(p.Device), "sd") {
 			isUSB = true
 			label = "External Storage (" + p.Mountpoint + ")"
-		} else if p.Mountpoint == "/DATA" {
-			label = "MicroSD Primary (/DATA)"
-		} else if p.Mountpoint == "/" {
-			label = "System Root eMMC (/)"
+		} else if p.Mountpoint == "/DATA" || p.Mountpoint == "C:\\DATA" {
+			label = "Primary Storage (/DATA)"
+		} else if p.Mountpoint == "/" || strings.HasPrefix(strings.ToUpper(p.Mountpoint), "C:") {
+			label = "System Root Disk (" + p.Mountpoint + ")"
 		}
 
 		devices = append(devices, StorageDevice{
@@ -93,8 +93,11 @@ func GetStorageDevices() ([]StorageDevice, error) {
 // ListDirectory membaca isi direktori target dengan proteksi path sanitization
 func ListDirectory(targetPath string) ([]FileItem, error) {
 	if targetPath == "" {
-		targetPath = "/DATA"
-		if _, err := os.Stat(targetPath); os.IsNotExist(err) {
+		if _, err := os.Stat("C:\\DATA"); err == nil {
+			targetPath = "C:\\DATA"
+		} else if _, err := os.Stat("/DATA"); err == nil {
+			targetPath = "/DATA"
+		} else {
 			targetPath = "."
 		}
 	}

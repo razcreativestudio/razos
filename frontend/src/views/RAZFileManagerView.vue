@@ -92,10 +92,34 @@ async function fetchDevices() {
   try {
     const res = await fetch('/api/v1/storage/devices')
     if (res.ok) {
-      storageDevices.value = await res.json()
+      const data = await res.json()
+      storageDevices.value = data
+      if (data.length > 0) {
+        // Cari /DATA jika ada, atau gunakan drive fisik pertama
+        const dataDev = data.find(d => d.mountpoint === '/DATA' || d.label.includes('DATA'))
+        const defaultDev = dataDev ? dataDev : data[0]
+        if (!currentPath.value || currentPath.value === '/DATA') {
+          currentPath.value = defaultDev.mountpoint
+          fetchFiles(defaultDev.mountpoint)
+        }
+      }
     }
   } catch (err) {}
 }
+
+// Komputasi Total Penyimpanan Riil dari seluruh Disk/Partisi yang terbaca
+const totalStorageBytes = computed(() => {
+  return storageDevices.value.reduce((acc, dev) => acc + (dev.total || 0), 0)
+})
+
+const usedStorageBytes = computed(() => {
+  return storageDevices.value.reduce((acc, dev) => acc + (dev.used || 0), 0)
+})
+
+const storageUsagePercent = computed(() => {
+  if (totalStorageBytes.value === 0) return 0
+  return parseFloat(((usedStorageBytes.value / totalStorageBytes.value) * 100).toFixed(1))
+})
 
 // Fetch Daftar Berkas
 async function fetchFiles(targetPath = currentPath.value) {
@@ -163,24 +187,45 @@ const filteredFiles = computed(() => {
 
 // Breadcrumbs Navigasi
 const breadcrumbs = computed(() => {
-  const parts = currentPath.value.split(/[\\/]/).filter(p => p.length > 0)
-  const result = [{ name: 'My Drive', path: currentPath.value.startsWith('/') ? '/' : '.' }]
-  let acc = ''
-  parts.forEach(part => {
-    acc += (currentPath.value.startsWith('/') ? '/' : '\\') + part
-    result.push({ name: part, path: acc })
+  const norm = currentPath.value.replace(/\\/g, '/')
+  const isDriveRoot = norm.match(/^[a-zA-Z]:\/?$/) || norm === '/'
+  
+  const parts = norm.split('/').filter(p => p.length > 0)
+  const result = []
+
+  let accumulated = ''
+  parts.forEach((part, idx) => {
+    if (idx === 0 && part.includes(':')) {
+      accumulated = part + '/'
+      result.push({ name: part, path: accumulated })
+    } else {
+      accumulated = (accumulated.endsWith('/') ? accumulated : accumulated + '/') + part
+      result.push({ name: part, path: accumulated })
+    }
   })
+
+  if (result.length === 0) {
+    result.push({ name: 'Root', path: currentPath.value })
+  }
   return result
 })
 
 function navigateUp() {
-  const parts = currentPath.value.split(/[\\/]/).filter(p => p.length > 0)
-  if (parts.length <= 1) {
-    fetchFiles('/')
+  const norm = currentPath.value.replace(/\\/g, '/').replace(/\/$/, '')
+  // Cek apakah sudah di root drive C: atau /
+  if (norm.match(/^[a-zA-Z]:$/) || norm === '' || norm === '/') {
     return
   }
-  parts.pop()
-  const up = (currentPath.value.startsWith('/') ? '/' : '') + parts.join(currentPath.value.startsWith('/') ? '/' : '\\')
+  const lastSlash = norm.lastIndexOf('/')
+  if (lastSlash <= 0) {
+    if (norm.includes(':')) {
+      fetchFiles(norm.substring(0, 2) + '/')
+    } else {
+      fetchFiles('/')
+    }
+    return
+  }
+  const up = norm.substring(0, lastSlash)
   fetchFiles(up)
 }
 
@@ -352,12 +397,12 @@ onMounted(() => {
         <!-- Navigation Links -->
         <div class="flex flex-col gap-1 text-xs">
           <button
-            @click="() => { activeSidebarSection = 'drive'; fetchFiles('/DATA'); }"
+            @click="() => { activeSidebarSection = 'drive'; const primary = storageDevices[0]?.mountpoint || '/DATA'; fetchFiles(primary); }"
             class="px-3 py-2.5 rounded-xl flex items-center gap-3 transition font-medium text-left"
             :class="activeSidebarSection === 'drive' ? 'bg-sky-500/20 text-sky-400 font-bold' : 'text-slate-300 hover:bg-slate-800/60'"
           >
             <Folder class="w-4 h-4 text-sky-400 fill-sky-400/20" />
-            <span>My Drive (/DATA)</span>
+            <span>My Storage</span>
           </button>
 
           <button
@@ -396,16 +441,18 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Bottom Cloud Storage Meter -->
+      <!-- Bottom Cloud Storage Meter (100% Real Capacity dari Hardware Host) -->
       <div class="p-3 rounded-2xl bg-slate-950/70 border border-slate-800/80 flex flex-col gap-2">
         <div class="flex items-center justify-between text-[11px]">
           <span class="text-slate-400">Total Digunakan</span>
-          <span class="text-sky-400 font-bold font-mono">25.6%</span>
+          <span class="text-sky-400 font-bold font-mono">{{ storageUsagePercent }}%</span>
         </div>
         <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-          <div class="bg-sky-400 h-full w-[25.6%]"></div>
+          <div class="bg-sky-400 h-full transition-all duration-500" :style="{ width: `${Math.min(100, Math.max(0, storageUsagePercent))}%` }"></div>
         </div>
-        <span class="text-[10px] text-slate-500">8.2 GB dari 32 GB terpakai</span>
+        <span class="text-[10px] text-slate-500 font-mono">
+          {{ formatBytes(usedStorageBytes) }} dari {{ formatBytes(totalStorageBytes) }} terpakai
+        </span>
       </div>
     </div>
 

@@ -33,3 +33,20 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - **Binary Streaming Backend Route:** Mendaftarkan endpoint `/api/v1/files/raw` di `backend/internal/api/RAZApiController.go` dan dev server Vite `frontend/vite.config.js` untuk melayani streaming berkas media secara langsung tanpa buffer lambat.
 - **Clean Build:** Terverifikasi `npm run build` sukses 100%.
 
+---
+
+### Versi: 1.9.0-real-disk-hardware-fix (Penghapusan Total Disk Mocking & Deteksi Disk Fisik Riil)
+**Waktu Eksekusi:** 2026-10-08 23:54 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Real Hardware Storage Inspection (Zero Dummy Data)
+- **Eliminasi Mock Hardcoded Devices:** Mengganti seluruh data hardcoded storage di backend dan dev middleware dengan inspeksi disk fisik aktual sistem.
+- **Deteksi Partisi Windows & Linux:** Mengintegrasikan `wmic logicaldisk` untuk Windows dan `df -k -P` untuk Linux ARM64 STB. Device, ukuran total byte, ruang terpakai, ruang bebas, persentase, dan nama volume disk (misal `C: Local Disk`, `Primary Storage`) dibaca secara langsung dari host fisik.
+- **Dynamic Cloud Storage Meter:** Pengukur penyimpanan di sidebar kiri kini menghitung total kumulatif dari seluruh partisi fisik yang aktif, menggantikan persentase hardcode sebelumnya.
+
+#### 2. Perbaikan Navigasi & File System Explorer
+- **Breadcrumbs & Up Navigation Fix:** Mengatasi pemotongan path Windows (`C:/`, `C:\`) dan Linux (`/DATA`, `/`) sehingga navigasi hierarki direktori dan naik satu tingkat berfungsi secara akurat tanpa error string indexing.
+- **Initial Mountpoint Auto-Discovery:** Menyesuaikan inisialisasi direktori awal agar secara dinamis membuka partisi fisik pertama yang tersedia jika path default belum terbentuk.
+- **REST API Endpoints Sinkron:** Menambahkan endpoint `/api/v1/files/folder`, `/api/v1/files/item` (delete), dan `/api/v1/files/rename` yang sinkron antara Go backend dan Vite dev server.
+
+
