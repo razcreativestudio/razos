@@ -67,6 +67,7 @@ func RegisterRoutes(r *gin.Engine) {
 		v1.POST("/files/rename", handleRenameFile)
 		v1.GET("/files/content", handleGetFileContent)
 		v1.POST("/files/content", handleSaveFileContent)
+		v1.GET("/files/raw", handleGetRawFile)
 
 		// Health Check
 		v1.GET("/health", func(c *gin.Context) {
@@ -359,3 +360,15 @@ func handleSaveFileContent(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "saved"})
 }
+
+// handleGetRawFile melayani binary stream untuk file gambar, audio, video, dan PDF
+func handleGetRawFile(c *gin.Context) {
+	targetPath := c.Query("path")
+	if targetPath == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Path file wajib disertakan"})
+		return
+	}
+	// Langsung stream file menggunakan File responder bawaan Gin
+	c.File(targetPath)
+}
+

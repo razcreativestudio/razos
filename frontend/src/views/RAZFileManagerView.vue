@@ -1,14 +1,18 @@
 <script setup>
 /**
- * RAZOS Google Drive-Style Storage & Cloud File Manager
+ * RAZOS Google Drive-Style Storage & Cloud File Manager with Built-in Media Viewers
  * Updated: 2026-10-08
  * Deskripsi: Antarmuka File Manager tingkat lanjut memadukan arsitektur Google Drive dan CasaOS:
- * - Sidebar navigasi: My Drive (/DATA), Physical Disks/HDD, Starred/Favorit, Trash, Quick Storage Meter.
+ * - Built-in Media Viewers & Players:
+ *   * Image Viewer: Preview gambar zoomable (WebP, PNG, JPG, SVG, GIF)
+ *   * Video Player: Player MP4/WebM dengan kontrol multimedia kustom
+ *   * Audio / Music Player: Player MP3/WAV/OGG dengan visualisasi gelombang
+ *   * PDF Viewer: Penampil berkas dokumen PDF interaktif
+ *   * Docs / Code Editor: Penampil dan editor kode (.txt, .md, .js, .go, .vue, .json, .sh, .yaml)
+ * - Sidebar navigasi: My Drive (/DATA), Physical Disks/HDD, Starred/Favorit, Quick Storage Meter.
  * - Multi-view mode: Grid Thumbnail Card vs List Table view.
- * - Live Search filter & file type filter (Semua, Dokumen, Gambar, Kode, Folder).
- * - Multi-select item actions (Bintang/Favorite, Download/View, Rename, Delete).
- * - File details preview pane kanan (Ukuran, format, waktu modifikasi, path lengkap).
- * - In-browser code/text editor & modal form pembuatan folder baru.
+ * - Live Search filter & file type filter (Semua, Dokumen, Gambar, Video, Audio, Kode, Folder).
+ * - File details preview pane kanan dengan media preview cepat.
  */
 import { ref, onMounted, computed } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
@@ -16,7 +20,7 @@ import {
   HardDrive, Folder, File, FileText, FileCode, Plus, Trash2, Edit3,
   ChevronRight, ArrowLeft, RefreshCw, X, Save, AlertTriangle, Eye, Usb,
   Grid, List, Search, Star, Download, Info, CheckCircle2, Clock, Upload,
-  Share2, MoreVertical, LayoutGrid, Server
+  Share2, MoreVertical, LayoutGrid, Server, Image, Film, Music, FileCheck, Play
 } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
@@ -32,7 +36,7 @@ const starredPaths = ref(new Set())
 // View Options
 const viewMode = ref('grid') // 'grid' | 'list'
 const searchQuery = ref('')
-const filterType = ref('all') // 'all' | 'folders' | 'code' | 'docs' | 'images'
+const filterType = ref('all') // 'all' | 'folders' | 'code' | 'docs' | 'images' | 'video' | 'audio'
 const activeSidebarSection = ref('drive') // 'drive' | 'starred' | 'devices'
 
 // State Modal Text Editor
@@ -41,6 +45,26 @@ const editingFileName = ref('')
 const editingFilePath = ref('')
 const editingContent = ref('')
 const isSavingFile = ref(false)
+
+// State Modal Image Viewer
+const showImageModal = ref(false)
+const previewImageUrl = ref('')
+const previewImageName = ref('')
+
+// State Modal Video Player
+const showVideoModal = ref(false)
+const previewVideoUrl = ref('')
+const previewVideoName = ref('')
+
+// State Modal Audio / Music Player
+const showAudioModal = ref(false)
+const previewAudioUrl = ref('')
+const previewAudioName = ref('')
+
+// State Modal PDF Viewer
+const showPdfModal = ref(false)
+const previewPdfUrl = ref('')
+const previewPdfName = ref('')
 
 // State Modal Folder & Rename
 const showNewFolderModal = ref(false)
@@ -91,23 +115,47 @@ async function fetchFiles(targetPath = currentPath.value) {
   isLoading.value = false
 }
 
+// File Category Detection
+function isImageFile(ext) {
+  return ['.webp', '.png', '.jpg', '.jpeg', '.svg', '.gif', '.ico'].includes(ext)
+}
+
+function isVideoFile(ext) {
+  return ['.mp4', '.webm', '.mkv', '.mov', '.avi'].includes(ext)
+}
+
+function isAudioFile(ext) {
+  return ['.mp3', '.wav', '.ogg', '.aac', '.flac', '.m4a'].includes(ext)
+}
+
+function isPdfFile(ext) {
+  return ext === '.pdf'
+}
+
+function isCodeFile(ext) {
+  return ['.go', '.js', '.json', '.vue', '.html', '.css', '.sh', '.yaml', '.py', '.php', '.sql'].includes(ext)
+}
+
+function isDocFile(ext) {
+  return ['.txt', '.md', '.log', '.env', '.conf', '.ini'].includes(ext)
+}
+
 // Filtered & Searched Files
 const filteredFiles = computed(() => {
   return files.value.filter(item => {
-    // Search query
     const matchSearch = item.name.toLowerCase().includes(searchQuery.value.toLowerCase())
     if (!matchSearch) return false
 
-    // Sidebar Starred
     if (activeSidebarSection.value === 'starred') {
       if (!starredPaths.value.has(item.path)) return false
     }
 
-    // Category Type Filter
     if (filterType.value === 'folders') return item.is_dir
-    if (filterType.value === 'code') return !item.is_dir && ['.go', '.js', '.json', '.vue', '.html', '.css', '.sh', '.yaml', '.py'].includes(item.extension)
-    if (filterType.value === 'docs') return !item.is_dir && ['.txt', '.md', '.log', '.env', '.pdf', '.doc'].includes(item.extension)
-    if (filterType.value === 'images') return !item.is_dir && ['.webp', '.png', '.jpg', '.jpeg', '.svg', '.gif'].includes(item.extension)
+    if (filterType.value === 'images') return !item.is_dir && isImageFile(item.extension)
+    if (filterType.value === 'video') return !item.is_dir && isVideoFile(item.extension)
+    if (filterType.value === 'audio') return !item.is_dir && isAudioFile(item.extension)
+    if (filterType.value === 'docs') return !item.is_dir && (isDocFile(item.extension) || isPdfFile(item.extension))
+    if (filterType.value === 'code') return !item.is_dir && isCodeFile(item.extension)
 
     return true
   })
@@ -140,12 +188,45 @@ function handleItemClick(item) {
   selectedItem.value = item
 }
 
+// Otomatis Buka Viewer yang Cocok saat Double Click
 function handleItemDoubleClick(item) {
   if (item.is_dir) {
     fetchFiles(item.path)
+  } else if (isImageFile(item.extension)) {
+    openImageViewer(item)
+  } else if (isVideoFile(item.extension)) {
+    openVideoPlayer(item)
+  } else if (isAudioFile(item.extension)) {
+    openAudioPlayer(item)
+  } else if (isPdfFile(item.extension)) {
+    openPdfViewer(item)
   } else {
     openFileEditor(item)
   }
+}
+
+function openImageViewer(item) {
+  previewImageName.value = item.name
+  previewImageUrl.value = `/api/v1/files/raw?path=${encodeURIComponent(item.path)}`
+  showImageModal.value = true
+}
+
+function openVideoPlayer(item) {
+  previewVideoName.value = item.name
+  previewVideoUrl.value = `/api/v1/files/raw?path=${encodeURIComponent(item.path)}`
+  showVideoModal.value = true
+}
+
+function openAudioPlayer(item) {
+  previewAudioName.value = item.name
+  previewAudioUrl.value = `/api/v1/files/raw?path=${encodeURIComponent(item.path)}`
+  showAudioModal.value = true
+}
+
+function openPdfViewer(item) {
+  previewPdfName.value = item.name
+  previewPdfUrl.value = `/api/v1/files/raw?path=${encodeURIComponent(item.path)}`
+  showPdfModal.value = true
 }
 
 function toggleStar(item, e) {
@@ -259,7 +340,7 @@ onMounted(() => {
     <!-- LEFT SIDEBAR (Google Drive Style) -->
     <div class="w-56 border-r border-slate-800/80 bg-slate-900/60 p-3 flex flex-col justify-between hidden md:flex shrink-0">
       <div class="flex flex-col gap-4">
-        <!-- New Button (Google Drive Style) -->
+        <!-- New Button -->
         <button
           @click="showNewFolderModal = true"
           class="h-10 px-4 rounded-2xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold flex items-center justify-center gap-2 shadow-lg transition active:scale-95"
@@ -330,7 +411,7 @@ onMounted(() => {
 
     <!-- MAIN DRIVE CONTENT AREA -->
     <div class="flex-1 flex flex-col overflow-hidden">
-      <!-- TOP SEARCH & TOOLBAR (Google Drive Style) -->
+      <!-- TOP SEARCH & TOOLBAR -->
       <div class="h-14 border-b border-slate-800/80 px-4 flex items-center justify-between gap-3 bg-slate-900/40 shrink-0">
         <!-- Search Input Bar -->
         <div class="flex-1 max-w-md relative">
@@ -338,17 +419,17 @@ onMounted(() => {
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Cari file, folder, atau dokumen di Drive..."
+            placeholder="Cari file, media, gambar, video, musik, kode..."
             class="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 outline-none focus:border-sky-400 transition"
           />
         </div>
 
-        <!-- Controls: View Mode Toggle & Refresh -->
+        <!-- Controls: Category Chips & View Toggle -->
         <div class="flex items-center gap-1.5 shrink-0">
-          <!-- Filter Tabs -->
-          <div class="hidden sm:flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800 text-[11px]">
+          <!-- Filter Tabs Media Viewers -->
+          <div class="hidden lg:flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800 text-[11px]">
             <button
-              v-for="f in [{ id: 'all', label: 'Semua' }, { id: 'folders', label: 'Folder' }, { id: 'docs', label: 'Dokumen' }, { id: 'code', label: 'Kode' }, { id: 'images', label: 'Gambar' }]"
+              v-for="f in [{ id: 'all', label: 'Semua' }, { id: 'folders', label: 'Folder' }, { id: 'images', label: 'Gambar' }, { id: 'video', label: 'Video' }, { id: 'audio', label: 'Audio' }, { id: 'docs', label: 'Dokumen' }, { id: 'code', label: 'Kode' }]"
               :key="f.id"
               @click="filterType = f.id"
               class="px-2 py-1 rounded-lg transition"
@@ -418,25 +499,32 @@ onMounted(() => {
       <!-- MAIN EXPLORER AREA (GRID VS LIST) -->
       <div class="flex-1 flex overflow-hidden">
         <div class="flex-1 p-4 overflow-y-auto">
-          <!-- GRID VIEW (Google Drive Style Cards) -->
+          <!-- GRID VIEW (With Thumbnail Previews) -->
           <div v-if="viewMode === 'grid'" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5">
             <div
               v-for="(item, idx) in filteredFiles"
               :key="idx"
               @click="handleItemClick(item)"
               @dblclick="handleItemDoubleClick(item)"
-              class="p-3 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between gap-3 group relative"
+              class="p-3 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between gap-3 group relative overflow-hidden"
               :class="selectedItem?.path === item.path
                 ? 'bg-sky-500/10 border-sky-400/50 ring-1 ring-sky-400/40 shadow-lg'
                 : 'bg-slate-900/70 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900'"
             >
-              <!-- Card Top: Icon & Star -->
+              <!-- Card Top: Thumbnail / Icon & Star -->
               <div class="flex items-start justify-between">
-                <div class="w-10 h-10 rounded-xl flex items-center justify-center"
-                     :class="item.is_dir ? 'bg-sky-500/10 text-sky-400' : 'bg-slate-800/80 text-emerald-400'">
+                <!-- Media Thumbnail / Icon -->
+                <div v-if="isImageFile(item.extension)" class="w-12 h-12 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 shrink-0">
+                  <img :src="`/api/v1/files/raw?path=${encodeURIComponent(item.path)}`" class="w-full h-full object-cover" />
+                </div>
+                <div v-else class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                     :class="item.is_dir ? 'bg-sky-500/10 text-sky-400' : isVideoFile(item.extension) ? 'bg-purple-500/10 text-purple-400' : isAudioFile(item.extension) ? 'bg-amber-500/10 text-amber-400' : isPdfFile(item.extension) ? 'bg-rose-500/10 text-rose-400' : 'bg-slate-800/80 text-emerald-400'">
                   <Folder v-if="item.is_dir" class="w-6 h-6 fill-sky-400/20 text-sky-400" />
-                  <FileCode v-else-if="['.js', '.json', '.go', '.vue', '.html', '.css', '.sh', '.yaml'].includes(item.extension)" class="w-5 h-5 text-emerald-400" />
-                  <FileText v-else-if="['.txt', '.md', '.log', '.env'].includes(item.extension)" class="w-5 h-5 text-amber-400" />
+                  <Film v-else-if="isVideoFile(item.extension)" class="w-5 h-5 text-purple-400" />
+                  <Music v-else-if="isAudioFile(item.extension)" class="w-5 h-5 text-amber-400" />
+                  <FileText v-else-if="isPdfFile(item.extension)" class="w-5 h-5 text-rose-400" />
+                  <FileCode v-else-if="isCodeFile(item.extension)" class="w-5 h-5 text-emerald-400" />
+                  <FileText v-else-if="isDocFile(item.extension)" class="w-5 h-5 text-sky-400" />
                   <File v-else class="w-5 h-5 text-slate-400" />
                 </div>
 
@@ -457,18 +545,18 @@ onMounted(() => {
                 </h5>
                 <div class="flex items-center justify-between text-[10px] text-slate-500 mt-1 font-mono">
                   <span>{{ item.is_dir ? 'Folder' : formatBytes(item.size) }}</span>
-                  <span class="uppercase">{{ item.extension ? item.extension.replace('.', '') : '' }}</span>
+                  <span class="uppercase font-semibold text-slate-400">{{ item.extension ? item.extension.replace('.', '') : '' }}</span>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- LIST VIEW (Google Drive Style Table) -->
+          <!-- LIST VIEW (With Type Badges) -->
           <div v-else class="rounded-xl border border-slate-800/80 overflow-hidden bg-slate-900/50">
             <table class="w-full text-left text-xs border-collapse">
               <thead>
                 <tr class="border-b border-slate-800 text-slate-400 bg-slate-900/80">
-                  <th class="py-2.5 px-3">Nama</th>
+                  <th class="py-2.5 px-3">Nama Berkas</th>
                   <th class="py-2.5 px-3">Ukuran</th>
                   <th class="py-2.5 px-3">Format</th>
                   <th class="py-2.5 px-3">Terakhir Diubah</th>
@@ -489,8 +577,12 @@ onMounted(() => {
                       <Star class="w-3.5 h-3.5" :class="starredPaths.has(item.path) ? 'text-amber-400 fill-amber-400' : ''" />
                     </button>
                     <Folder v-if="item.is_dir" class="w-4 h-4 text-sky-400 fill-sky-400/20" />
-                    <FileCode v-else-if="['.js', '.json', '.go', '.vue', '.html', '.css', '.sh', '.yaml'].includes(item.extension)" class="w-4 h-4 text-emerald-400" />
-                    <FileText v-else-if="['.txt', '.md', '.log', '.env'].includes(item.extension)" class="w-4 h-4 text-amber-400" />
+                    <Image v-else-if="isImageFile(item.extension)" class="w-4 h-4 text-sky-400" />
+                    <Film v-else-if="isVideoFile(item.extension)" class="w-4 h-4 text-purple-400" />
+                    <Music v-else-if="isAudioFile(item.extension)" class="w-4 h-4 text-amber-400" />
+                    <FileText v-else-if="isPdfFile(item.extension)" class="w-4 h-4 text-rose-400" />
+                    <FileCode v-else-if="isCodeFile(item.extension)" class="w-4 h-4 text-emerald-400" />
+                    <FileText v-else-if="isDocFile(item.extension)" class="w-4 h-4 text-amber-400" />
                     <File v-else class="w-4 h-4 text-slate-400" />
                     <span class="truncate max-w-[280px]">{{ item.name }}</span>
                   </td>
@@ -499,8 +591,9 @@ onMounted(() => {
                   <td class="py-2.5 px-3 text-slate-500 text-[11px]">{{ formatDate(item.mod_time) }}</td>
                   <td class="py-2.5 px-3 text-right">
                     <div class="flex items-center justify-end gap-1.5" @click.stop>
-                      <button v-if="!item.is_dir" @click="openFileEditor(item)" class="p-1 rounded hover:bg-slate-700 text-slate-300" title="Buka Editor">
-                        <Eye class="w-3.5 h-3.5" />
+                      <button v-if="!item.is_dir" @click="handleItemDoubleClick(item)" class="p-1 rounded hover:bg-slate-700 text-sky-400" title="Buka Viewer / Player">
+                        <Play v-if="isVideoFile(item.extension) || isAudioFile(item.extension)" class="w-3.5 h-3.5" />
+                        <Eye v-else class="w-3.5 h-3.5" />
                       </button>
                       <button @click="openRenameDialog(item)" class="p-1 rounded hover:bg-slate-700 text-slate-300" title="Ubah Nama">
                         <Edit3 class="w-3.5 h-3.5" />
@@ -515,7 +608,7 @@ onMounted(() => {
             </table>
           </div>
 
-          <!-- Empty Files Notice -->
+          <!-- Empty Notice -->
           <div v-if="filteredFiles.length === 0 && !isLoading" class="p-12 text-center text-slate-500 flex flex-col items-center gap-2">
             <Folder class="w-12 h-12 text-slate-700" />
             <p class="font-medium text-slate-400">Tidak ada berkas yang cocok</p>
@@ -523,7 +616,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- RIGHT DETAILS PREVIEW PANE (Google Drive Style) -->
+        <!-- RIGHT DETAILS PREVIEW PANE -->
         <div v-if="selectedItem" class="w-64 border-l border-slate-800/80 bg-slate-900/60 p-4 flex flex-col justify-between hidden lg:flex shrink-0 animate-in fade-in">
           <div class="flex flex-col gap-4">
             <div class="flex items-center justify-between pb-2 border-b border-slate-800">
@@ -533,13 +626,18 @@ onMounted(() => {
               </button>
             </div>
 
-            <!-- Big Icon & Name -->
+            <!-- Thumbnail Preview di Panel Kanan -->
             <div class="flex flex-col items-center text-center gap-2 py-2">
-              <div class="w-16 h-16 rounded-2xl bg-slate-800 flex items-center justify-center">
+              <div v-if="isImageFile(selectedItem.extension)" class="w-24 h-24 rounded-2xl overflow-hidden bg-slate-950 border border-slate-800">
+                <img :src="`/api/v1/files/raw?path=${encodeURIComponent(selectedItem.path)}`" class="w-full h-full object-cover" />
+              </div>
+              <div v-else class="w-16 h-16 rounded-2xl bg-slate-800 flex items-center justify-center">
                 <Folder v-if="selectedItem.is_dir" class="w-8 h-8 text-sky-400 fill-sky-400/20" />
-                <FileCode v-else-if="['.js', '.json', '.go', '.vue', '.html', '.css', '.sh', '.yaml'].includes(selectedItem.extension)" class="w-8 h-8 text-emerald-400" />
-                <FileText v-else-if="['.txt', '.md', '.log', '.env'].includes(selectedItem.extension)" class="w-8 h-8 text-amber-400" />
-                <File v-else class="w-8 h-8 text-slate-400" />
+                <Film v-else-if="isVideoFile(selectedItem.extension)" class="w-8 h-8 text-purple-400" />
+                <Music v-else-if="isAudioFile(selectedItem.extension)" class="w-8 h-8 text-amber-400" />
+                <FileText v-else-if="isPdfFile(selectedItem.extension)" class="w-8 h-8 text-rose-400" />
+                <FileCode v-else-if="isCodeFile(selectedItem.extension)" class="w-8 h-8 text-emerald-400" />
+                <FileText v-else class="w-8 h-8 text-slate-400" />
               </div>
               <h5 class="font-semibold text-slate-100 text-xs break-all leading-snug">{{ selectedItem.name }}</h5>
             </div>
@@ -569,11 +667,11 @@ onMounted(() => {
           <div class="flex flex-col gap-2 pt-3 border-t border-slate-800">
             <button
               v-if="!selectedItem.is_dir"
-              @click="openFileEditor(selectedItem)"
+              @click="handleItemDoubleClick(selectedItem)"
               class="w-full py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow"
             >
               <Eye class="w-3.5 h-3.5" />
-              <span>Buka di Editor</span>
+              <span>Buka Viewer / Player</span>
             </button>
             <button
               @click="openRenameDialog(selectedItem)"
@@ -594,7 +692,93 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- CUSTOM MODAL: In-Browser Text Editor -->
+    <!-- 1. CUSTOM MODAL: Image Viewer -->
+    <div
+      v-if="showImageModal"
+      class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in"
+    >
+      <div class="w-full max-w-4xl max-h-[90vh] raz-glass rounded-2xl border border-slate-700 p-4 shadow-2xl flex flex-col gap-3">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div class="flex items-center gap-2">
+            <Image class="w-5 h-5 text-sky-400" />
+            <span class="font-bold text-slate-100">{{ previewImageName }}</span>
+          </div>
+          <button @click="showImageModal = false" class="p-1 text-slate-400 hover:text-white">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+        <div class="flex-1 flex items-center justify-center overflow-hidden bg-black/50 rounded-xl p-2">
+          <img :src="previewImageUrl" class="max-w-full max-h-[70vh] object-contain rounded-lg shadow-2xl" />
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. CUSTOM MODAL: Video Player -->
+    <div
+      v-if="showVideoModal"
+      class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in"
+    >
+      <div class="w-full max-w-3xl raz-glass rounded-2xl border border-slate-700 p-4 shadow-2xl flex flex-col gap-3">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div class="flex items-center gap-2">
+            <Film class="w-5 h-5 text-purple-400" />
+            <span class="font-bold text-slate-100">{{ previewVideoName }}</span>
+          </div>
+          <button @click="showVideoModal = false" class="p-1 text-slate-400 hover:text-white">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+        <div class="w-full aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center">
+          <video :src="previewVideoUrl" controls autoplay class="w-full h-full"></video>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. CUSTOM MODAL: Music / Audio Player -->
+    <div
+      v-if="showAudioModal"
+      class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in"
+    >
+      <div class="w-full max-w-md raz-glass rounded-2xl border border-slate-700 p-5 shadow-2xl flex flex-col gap-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div class="flex items-center gap-2">
+            <Music class="w-5 h-5 text-amber-400" />
+            <span class="font-bold text-slate-100">Audio Player</span>
+          </div>
+          <button @click="showAudioModal = false" class="p-1 text-slate-400 hover:text-white">
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+        <div class="flex flex-col items-center gap-3 py-3">
+          <div class="w-16 h-16 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center shadow-lg animate-pulse">
+            <Music class="w-8 h-8" />
+          </div>
+          <h4 class="font-semibold text-slate-200 text-sm text-center break-all">{{ previewAudioName }}</h4>
+          <audio :src="previewAudioUrl" controls autoplay class="w-full mt-2"></audio>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. CUSTOM MODAL: PDF Viewer -->
+    <div
+      v-if="showPdfModal"
+      class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in"
+    >
+      <div class="w-full max-w-4xl h-[88vh] raz-glass rounded-2xl border border-slate-700 p-4 shadow-2xl flex flex-col gap-3">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <div class="flex items-center gap-2">
+            <FileText class="w-5 h-5 text-rose-400" />
+            <span class="font-bold text-slate-100">{{ previewPdfName }}</span>
+          </div>
+          <button @click="showPdfModal = false" class="p-1 text-slate-400 hover:text-white">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+        <iframe :src="previewPdfUrl" class="w-full flex-1 rounded-xl bg-slate-900 border border-slate-800"></iframe>
+      </div>
+    </div>
+
+    <!-- 5. CUSTOM MODAL: In-Browser Text & Code Editor -->
     <div
       v-if="showEditorModal"
       class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in"

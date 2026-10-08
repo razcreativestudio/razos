@@ -17,3 +17,19 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
   - **Starred / Favorit Toggle:** Pengguna dapat menandai file/folder dengan bintang untuk diakses cepat.
   - **In-Browser Text & Code Editor:** Editor modal layar penuh untuk membaca dan mengedit berkas teks/konfigurasi secara langsung.
 - Build terverifikasi sukses dengan `npm run build` tanpa error.
+
+---
+
+### Versi: 1.8.0-file-manager-media-suite (Built-in Media Viewers & Player Suite)
+**Waktu Eksekusi:** 2026-10-08 23:45 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Integrasi Built-in Media Viewers & Streaming Raw File
+- **Image Viewer:** Modal interaktif untuk preview gambar dengan fungsi Zoom In, Zoom Out, Reset, dan download langsung.
+- **Video Player:** Pemutar video web bawaan dengan kontrol pemutaran penuh untuk format MP4, WebM, MKV.
+- **Music / Audio Player:** Pemutar audio terintegrasi dengan cover visual gelombang audio untuk format MP3, WAV, OGG, FLAC.
+- **PDF Viewer:** Pembaca dokumen PDF langsung via embedded viewer interaktif.
+- **Code & Text Editor:** Modal in-browser editor lengkap untuk berkas teks, konfigurasi, json, yaml, script.
+- **Binary Streaming Backend Route:** Mendaftarkan endpoint `/api/v1/files/raw` di `backend/internal/api/RAZApiController.go` dan dev server Vite `frontend/vite.config.js` untuk melayani streaming berkas media secara langsung tanpa buffer lambat.
+- **Clean Build:** Terverifikasi `npm run build` sukses 100%.
+

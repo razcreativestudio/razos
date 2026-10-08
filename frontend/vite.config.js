@@ -190,6 +190,38 @@ function razosApiPlugin() {
           })
         }
       })
+
+      // 10. Endpoint File Raw Stream untuk Media Viewers (/api/v1/files/raw)
+      server.middlewares.use('/api/v1/files/raw', (req, res) => {
+        const urlObj = new URL(req.url, 'http://localhost')
+        const targetPath = urlObj.searchParams.get('path')
+        try {
+          if (!fs.existsSync(targetPath)) {
+            res.statusCode = 404
+            return res.end('File not found')
+          }
+          const ext = targetPath.split('.').pop().toLowerCase()
+          let mime = 'application/octet-stream'
+          if (['jpg', 'jpeg'].includes(ext)) mime = 'image/jpeg'
+          else if (ext === 'png') mime = 'image/png'
+          else if (ext === 'webp') mime = 'image/webp'
+          else if (ext === 'svg') mime = 'image/svg+xml'
+          else if (ext === 'gif') mime = 'image/gif'
+          else if (ext === 'mp4') mime = 'video/mp4'
+          else if (ext === 'webm') mime = 'video/webm'
+          else if (ext === 'mp3') mime = 'audio/mpeg'
+          else if (['wav', 'ogg'].includes(ext)) mime = 'audio/' + ext
+          else if (ext === 'pdf') mime = 'application/pdf'
+          else if (['txt', 'md', 'json', 'log', 'env'].includes(ext)) mime = 'text/plain; charset=utf-8'
+
+          res.setHeader('Content-Type', mime)
+          const stream = fs.createReadStream(targetPath)
+          stream.pipe(res)
+        } catch (err) {
+          res.statusCode = 500
+          res.end(err.message)
+        }
+      })
     }
   }
 }
