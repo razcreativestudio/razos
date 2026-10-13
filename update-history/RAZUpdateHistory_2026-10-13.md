@@ -456,5 +456,29 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - Build produksi Vite frontend (`npm run build`) sukses 100% (*1578 modules transformed*).
 - Tampilan jendela Music Player kini lega, elegan, bebas dari pemotongan elemen, dan seluruh fungsi tombol bekerja responsif.
 
+---
+
+### Versi: 2.4.8-window-titlebar-truncate-fix (Title Bar Single-Line Anti-Wrap & Ellipsis Truncation)
+**Waktu Eksekusi:** 2026-10-13 13:25 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Masalah Utama yang Teridentifikasi
+- **Line-Wrapping Judul Jendela:**
+  - Pada jendela dengan nama berkas atau judul aplikasi yang panjang (misalnya nama lagu atau file dokumen teks yang panjang), teks judul di title bar membungkus (*word-wrap*) menjadi 2 hingga 3 baris.
+  - Hal ini menyebabkan teks meluber turun ke bawah menabrak garis batas header dan menutupi area konten jendela teratas.
+  - Tombol kontrol jendela (Minimize, Maximize, Close) di sisi kanan juga berisiko terdesak jika judul terlalu panjang.
+
+#### 2. Solusi & Peningkatan yang Diterapkan
+- **Penguncian Flexbox Single-Line & Truncate ([`RAZWindowFrame.vue`](file:///c:/laragon/www/razos/frontend/src/components/RAZWindowFrame.vue)):**
+  - Menambahkan `min-w-0 flex-1 mr-2 overflow-hidden` pada container judul agar CSS Flexbox mengizinkan penyusutan teks secara tepat tanpa overflow.
+  - Menerapkan class `truncate whitespace-nowrap` pada elemen `<span>` teks judul sehingga judul panjang otomatis terpotong rapi dengan elipsis tiga titik (`...`) dalam satu baris.
+  - Mempertahankan aksesibilitas dan keterbacaan penuh dengan menyematkan atribut native tooltip `:title="win.title"`. Ketika pengguna mengarahkan kursor mouse ke judul, nama lengkap berkas/jendela akan langsung ditampilkan.
+  - Mengamankan kontainer tombol aksi kanan (Minimize, Maximize, Close) dengan utility `shrink-0` agar tombol selalu memiliki lebar konsisten dan tidak pernah tergeser atau terhimpit.
+
+#### 3. Verifikasi & Definisi Selesai (DoD)
+- Build produksi Vite frontend (`npm run build`) sukses 100% (*1578 modules transformed*).
+- Judul jendela kini selalu terkunci 1 baris rapi dan estetik pada seluruh resolusi layar dan ukuran jendela desktop RAZOS.
+
+
 
 

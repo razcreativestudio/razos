@@ -150,14 +150,14 @@ function stopResize() {
       @mousedown="startDrag"
       class="h-10 bg-slate-900/90 border-b border-slate-700/50 flex items-center justify-between px-3 cursor-move"
     >
-      <!-- Title & Icon -->
-      <div class="flex items-center gap-2 text-sm font-medium text-slate-200">
-        <img :src="win.icon" :alt="win.title" class="w-4 h-4" />
-        <span>{{ win.title }}</span>
+      <!-- Title & Icon (Truncate Single Line Anti-Wrap) -->
+      <div class="flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-200 min-w-0 flex-1 mr-2 overflow-hidden">
+        <img :src="win.icon" :alt="win.title" class="w-4 h-4 shrink-0" />
+        <span class="truncate whitespace-nowrap font-medium" :title="win.title">{{ win.title }}</span>
       </div>
 
       <!-- Action Buttons -->
-      <div class="flex items-center gap-1.5" @mousedown.stop>
+      <div class="flex items-center gap-1.5 shrink-0" @mousedown.stop>
         <!-- Minimize -->
         <button
           @click="windowStore.minimizeWindow(win.id)"
