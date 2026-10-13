@@ -1,9 +1,9 @@
 <script setup>
 /**
  * RAZOS Desktop Layout Component
- * Updated: 2026-10-08
+ * Updated: 2026-10-13 (v2.5.5 - Floating Window Dialog Modals without Background Blur)
  * Deskripsi: Layout Desktop mode untuk breakpoint > 768px, memadukan desktop icon shortcuts,
- * window manager frame, dan taskbar bawah dengan wallpaper WebP teroptimasi.
+ * window manager frame, dan taskbar bawah dengan dialog modal bergaya floating window tanpa blur.
  */
 import { ref } from 'vue'
 import { useWindowStore } from '../stores/RAZWindowStore'
@@ -261,40 +261,45 @@ function handleDesktopIconContextMenu(e, app) {
     <!-- Bottom Desktop Taskbar -->
     <RAZTaskbar />
 
-    <!-- Custom Modal Konfirmasi Uninstall Aplikasi (Glassmorphism Slate-900) -->
+    <!-- Custom Modal Konfirmasi Uninstall Aplikasi (Floating Window Dialog) -->
     <div
       v-if="showUninstallModal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 animate-in fade-in"
     >
-      <div class="w-full max-w-md rounded-2xl bg-slate-900/90 border border-rose-500/30 p-6 shadow-2xl flex flex-col gap-4 text-slate-100">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-          <div class="flex items-center gap-2 text-rose-400">
-            <AlertTriangle class="w-5 h-5" />
+      <div class="w-full max-w-md rounded-2xl bg-slate-900 border border-rose-500/40 shadow-2xl shadow-black ring-1 ring-rose-500/20 flex flex-col overflow-hidden text-slate-100">
+        <!-- Window Titlebar -->
+        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-5 py-3 select-none">
+          <div class="flex items-center gap-2.5 text-rose-400">
+            <div class="w-7 h-7 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
+              <AlertTriangle class="w-4 h-4" />
+            </div>
             <h3 class="font-bold text-sm">Konfirmasi Uninstall Aplikasi</h3>
           </div>
-          <button @click="showUninstallModal = false" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200">
+          <button @click="showUninstallModal = false" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95" title="Tutup Jendela">
             <X class="w-4 h-4" />
           </button>
         </div>
 
-        <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800">
-          <img :src="appToUninstall?.icon" :alt="appToUninstall?.title" class="w-10 h-10 object-contain rounded-lg" />
-          <div class="min-w-0 flex-1">
-            <h4 class="font-bold text-sm text-slate-100 truncate">{{ appToUninstall?.title }}</h4>
-            <span class="text-xs text-slate-400 font-mono">Port: :{{ appToUninstall?.port }}</span>
+        <div class="p-5 flex flex-col gap-3.5">
+          <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+            <img :src="appToUninstall?.icon" :alt="appToUninstall?.title" class="w-10 h-10 object-contain rounded-lg" />
+            <div class="min-w-0 flex-1">
+              <h4 class="font-bold text-sm text-slate-100 truncate">{{ appToUninstall?.title }}</h4>
+              <span class="text-xs text-slate-400 font-mono">Port: :{{ appToUninstall?.port }}</span>
+            </div>
           </div>
+
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Apakah Anda yakin ingin menghentikan dan menghapus container aplikasi ini dari sistem?
+          </p>
+
+          <label class="flex items-center gap-2.5 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer text-xs text-rose-300">
+            <input type="checkbox" v-model="purgeDataChecked" class="accent-rose-500 rounded" />
+            <span>Hapus juga seluruh direktori data permanen container di storage</span>
+          </label>
         </div>
 
-        <p class="text-xs text-slate-300 leading-relaxed">
-          Apakah Anda yakin ingin menghentikan dan menghapus container aplikasi ini dari sistem?
-        </p>
-
-        <label class="flex items-center gap-2.5 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 cursor-pointer text-xs text-rose-300">
-          <input type="checkbox" v-model="purgeDataChecked" class="accent-rose-500 rounded" />
-          <span>Hapus juga seluruh direktori data permanen container di storage</span>
-        </label>
-
-        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+        <div class="flex items-center justify-end gap-2 bg-slate-950/75 border-t border-slate-800 px-5 py-3">
           <button
             @click="showUninstallModal = false"
             class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"

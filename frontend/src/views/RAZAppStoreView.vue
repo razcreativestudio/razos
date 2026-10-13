@@ -1,7 +1,7 @@
 <script setup>
 /**
  * RAZOS App Store View - 525+ Apps Catalog, Installed Apps Management & CasaOS-Style YAML Docker Compose Suite
- * Updated: 2026-10-13 (v2.4.5)
+ * Updated: 2026-10-13 (v2.5.5 - Floating Window Dialog Modals without Background Blur)
  * Deskripsi:
  * - 3 Tab Navigasi Utama:
  *   1. "Katalog Aplikasi (525+)" - Jelajah katalog lengkap dengan filter kategori & live search.
@@ -9,7 +9,7 @@
  *   3. "Instal via YAML (Docker Compose)" - Editor YAML ala CasaOS dengan live parse syntax, drag-and-drop / upload file .yaml/.yml, template preset cepat, dan direct deployment.
  * - Halaman Penuh Detail Aplikasi (Full Page Markdown README.md).
  * - Integrasi mulus dengan RAZWindowStore untuk sinkronisasi ikon Desktop & Start Menu secara instan.
- * - Modal kustom Glassmorphism Slate-900 tanpa browser native alert/confirm.
+ * - Window Dialog Modals (Tanpa Blur background, visual jendela independen OS).
  */
 import { ref, onMounted, computed, watch } from 'vue'
 import { marked } from 'marked'
@@ -1121,26 +1121,29 @@ onMounted(async () => {
 
     <!-- ================= CUSTOM MODALS ================= -->
 
-    <!-- CUSTOM MODAL 1: Manual Install Docker Cepat -->
+    <!-- CUSTOM MODAL 1: Manual Install Docker Cepat (Floating Window Dialog) -->
     <div
       v-if="showManualModal"
-      class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in"
+      class="fixed inset-0 bg-black/35 z-50 flex items-center justify-center p-4 animate-in fade-in"
     >
-      <div class="w-full max-w-lg raz-glass rounded-2xl border border-slate-700/80 p-5 shadow-2xl flex flex-col gap-4">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-          <div class="flex items-center gap-2">
-            <PlusCircle class="w-5 h-5 text-sky-400" />
+      <div class="w-full max-w-lg bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black ring-1 ring-white/10 rounded-2xl flex flex-col overflow-hidden">
+        <!-- Window Titlebar -->
+        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-5 py-3 select-none">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
+              <PlusCircle class="w-4 h-4" />
+            </div>
             <div>
-              <h4 class="font-bold text-slate-100">Instal Cepat Docker Container</h4>
+              <h4 class="font-bold text-slate-100 text-sm">Instal Cepat Docker Container</h4>
               <p class="text-[11px] text-slate-400">Deploy container mandiri dengan parameter cepat.</p>
             </div>
           </div>
-          <button @click="showManualModal = false" class="p-1 text-slate-400 hover:text-white">
-            <X class="w-5 h-5" />
+          <button @click="showManualModal = false" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95" title="Tutup Jendela">
+            <X class="w-4 h-4" />
           </button>
         </div>
 
-        <div class="space-y-3">
+        <div class="p-5 space-y-3.5">
           <div>
             <label class="block text-xs font-medium text-slate-300 mb-1">Nama Aplikasi / Container</label>
             <input
@@ -1193,17 +1196,17 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+        <div class="flex items-center justify-end gap-2 bg-slate-950/75 border-t border-slate-800 px-5 py-3">
           <button
             @click="showManualModal = false"
-            class="px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300 font-medium text-xs hover:bg-slate-700"
+            class="px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300 font-semibold text-xs hover:bg-slate-700 transition"
           >
             Batal
           </button>
           <button
             @click="submitManualInstall"
             :disabled="isDeployingManual"
-            class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow"
+            class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow active:scale-95 disabled:opacity-50"
           >
             <span>{{ isDeployingManual ? 'Memasang Container...' : 'Pasang Sekarang' }}</span>
           </button>
@@ -1211,23 +1214,26 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- CUSTOM MODAL 2: Form Konfigurasi Pasang Aplikasi Katalog -->
+    <!-- CUSTOM MODAL 2: Form Konfigurasi Pasang Aplikasi Katalog (Floating Window Dialog) -->
     <div
       v-if="showInstallModal"
-      class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in"
+      class="fixed inset-0 bg-black/35 z-50 flex items-center justify-center p-4 animate-in fade-in"
     >
-      <div class="w-full max-w-md raz-glass rounded-2xl border border-slate-700/80 p-5 shadow-2xl flex flex-col gap-4">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-          <div class="flex items-center gap-2">
-            <Settings2 class="w-5 h-5 text-sky-400" />
-            <h4 class="font-bold text-slate-100">Pasang {{ activeAppToInstall?.name }}</h4>
+      <div class="w-full max-w-md bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black ring-1 ring-white/10 rounded-2xl flex flex-col overflow-hidden">
+        <!-- Window Titlebar -->
+        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-5 py-3 select-none">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
+              <Settings2 class="w-4 h-4" />
+            </div>
+            <h4 class="font-bold text-slate-100 text-sm">Pasang {{ activeAppToInstall?.name }}</h4>
           </div>
-          <button @click="showInstallModal = false" class="p-1 text-slate-400 hover:text-slate-200">
-            <X class="w-5 h-5" />
+          <button @click="showInstallModal = false" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95" title="Tutup Jendela">
+            <X class="w-4 h-4" />
           </button>
         </div>
 
-        <div class="space-y-3">
+        <div class="p-5 space-y-3.5">
           <div>
             <label class="block text-xs font-medium text-slate-300 mb-1">Port Akses Host (Container Port)</label>
             <input
@@ -1250,17 +1256,17 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+        <div class="flex items-center justify-end gap-2 bg-slate-950/75 border-t border-slate-800 px-5 py-3">
           <button
             @click="showInstallModal = false"
-            class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs transition"
+            class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition"
           >
             Batal
           </button>
           <button
             @click="confirmInstall"
             :disabled="isInstalling"
-            class="px-4 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition shadow"
+            class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition shadow active:scale-95 disabled:opacity-50"
           >
             <span>{{ isInstalling ? 'Sedang Memasang...' : 'Mulai Deployment' }}</span>
           </button>
@@ -1268,45 +1274,60 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- CUSTOM MODAL 3: Konfirmasi Clean Uninstall -->
+    <!-- CUSTOM MODAL 3: Konfirmasi Clean Uninstall (Floating Window Dialog) -->
     <div
       v-if="showUninstallModal"
-      class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in"
+      class="fixed inset-0 bg-black/35 z-50 flex items-center justify-center p-4 animate-in fade-in"
     >
-      <div class="w-full max-w-md raz-glass rounded-2xl border border-rose-500/30 p-5 shadow-2xl flex flex-col gap-4">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0">
-            <AlertTriangle class="w-5 h-5" />
+      <div class="w-full max-w-md bg-slate-900 border border-rose-500/40 shadow-2xl shadow-black ring-1 ring-rose-500/20 rounded-2xl flex flex-col overflow-hidden">
+        <!-- Window Titlebar -->
+        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-5 py-3 select-none">
+          <div class="flex items-center gap-2.5 text-rose-400">
+            <div class="w-7 h-7 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
+              <AlertTriangle class="w-4 h-4" />
+            </div>
+            <h4 class="font-bold text-slate-100 text-sm">Konfirmasi Uninstall Aplikasi</h4>
           </div>
-          <div>
-            <h4 class="font-bold text-slate-100">Uninstall {{ activeAppToUninstall?.name }}?</h4>
-            <p class="text-xs text-slate-400 mt-0.5">Tindakan ini akan menghentikan dan menghapus container Docker terkait.</p>
-          </div>
+          <button @click="showUninstallModal = false" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95" title="Tutup Jendela">
+            <X class="w-4 h-4" />
+          </button>
         </div>
 
-        <label class="flex items-center gap-2 p-3 rounded-xl bg-slate-900/80 border border-slate-800 cursor-pointer">
-          <input
-            v-model="purgeDataChecked"
-            type="checkbox"
-            class="w-4 h-4 rounded text-rose-500 focus:ring-0 bg-slate-950 border-slate-700"
-          />
-          <div class="text-xs">
-            <span class="font-medium text-slate-200 block">Musnahkan Folder Data Terkait</span>
-            <span class="text-[10px] text-slate-400">Hapus permanen berkas data di /DATA/apps/{{ activeAppToUninstall?.slug }}</span>
+        <div class="p-5 flex flex-col gap-3.5">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0">
+              <AlertTriangle class="w-5 h-5" />
+            </div>
+            <div>
+              <h4 class="font-bold text-slate-100 text-sm">Uninstall {{ activeAppToUninstall?.name }}?</h4>
+              <p class="text-xs text-slate-400 mt-0.5">Tindakan ini akan menghentikan dan menghapus container Docker terkait.</p>
+            </div>
           </div>
-        </label>
 
-        <div class="flex items-center justify-end gap-2 pt-2">
+          <label class="flex items-center gap-2.5 p-3 rounded-xl bg-slate-950 border border-slate-800 cursor-pointer">
+            <input
+              v-model="purgeDataChecked"
+              type="checkbox"
+              class="w-4 h-4 rounded text-rose-500 focus:ring-0 bg-slate-950 border-slate-700"
+            />
+            <div class="text-xs">
+              <span class="font-medium text-slate-200 block">Musnahkan Folder Data Terkait</span>
+              <span class="text-[10px] text-slate-400">Hapus permanen berkas data di /DATA/apps/{{ activeAppToUninstall?.slug }}</span>
+            </div>
+          </label>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 bg-slate-950/75 border-t border-slate-800 px-5 py-3">
           <button
             @click="showUninstallModal = false"
-            class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs transition"
+            class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition"
           >
             Batal
           </button>
           <button
             @click="confirmUninstall"
             :disabled="isUninstalling"
-            class="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition shadow"
+            class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition shadow active:scale-95 disabled:opacity-50"
           >
             <span>{{ isUninstalling ? 'Menghapus...' : 'Ya, Hapus Bersih' }}</span>
           </button>

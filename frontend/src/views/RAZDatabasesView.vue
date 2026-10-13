@@ -1,9 +1,9 @@
 <script setup>
 /**
  * RAZOS Database Manager View
- * Updated: 2026-10-08
+ * Updated: 2026-10-13 (v2.5.5 - Floating Window Dialog Modals without Background Blur)
  * Deskripsi: Antarmuka status database engine MariaDB & PostgreSQL dan shortcut Adminer Web GUI.
- * Dilengkapi dialog modal kustom pembuatan database baru serta peluncuran container Adminer Web.
+ * Dilengkapi dialog modal kustom pembuatan database baru bergaya floating window tanpa efek blur.
  */
 import { ref, onMounted } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
@@ -152,29 +152,32 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- CUSTOM MODAL: Form Buat Database Baru -->
+    <!-- CUSTOM MODAL: Form Buat Database Baru (Floating Window Dialog) -->
     <div
       v-if="showCreateDbModal"
-      class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in"
+      class="fixed inset-0 bg-black/35 z-50 flex items-center justify-center p-4 animate-in fade-in"
     >
-      <div class="w-full max-w-md raz-glass rounded-2xl border border-slate-700/80 p-5 shadow-2xl flex flex-col gap-4">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-          <div class="flex items-center gap-2">
-            <Database class="w-5 h-5 text-amber-400" />
-            <h4 class="font-bold text-slate-100">Buat Database Baru</h4>
+      <div class="w-full max-w-md bg-slate-900 border border-amber-500/40 shadow-2xl shadow-black ring-1 ring-amber-500/20 rounded-2xl flex flex-col overflow-hidden">
+        <!-- Window Titlebar -->
+        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-5 py-3 select-none">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
+              <Database class="w-4 h-4" />
+            </div>
+            <h4 class="font-bold text-slate-100 text-sm">Buat Basis Data Baru</h4>
           </div>
-          <button @click="showCreateDbModal = false" class="p-1 text-slate-400 hover:text-slate-200">
+          <button @click="showCreateDbModal = false" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95" title="Tutup Jendela">
             <X class="w-4 h-4" />
           </button>
         </div>
 
-        <div class="space-y-3">
+        <div class="p-5 space-y-3.5">
           <div>
             <label class="block text-xs font-medium text-slate-300 mb-1">Nama Database</label>
             <input
               v-model="dbName"
               type="text"
-              class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-amber-400"
+              class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-amber-400"
               placeholder="Contoh: my_app_db"
             />
           </div>
@@ -185,7 +188,7 @@ onMounted(() => {
               <button
                 type="button"
                 @click="dbEngine = 'mariadb'"
-                class="py-2 rounded-lg border text-xs font-medium transition"
+                class="py-2 rounded-xl border text-xs font-medium transition"
                 :class="dbEngine === 'mariadb' ? 'bg-amber-500/20 text-amber-300 border-amber-400/50' : 'bg-slate-950 border-slate-800 text-slate-400'"
               >
                 MariaDB (Port 3306)
@@ -193,7 +196,7 @@ onMounted(() => {
               <button
                 type="button"
                 @click="dbEngine = 'postgres'"
-                class="py-2 rounded-lg border text-xs font-medium transition"
+                class="py-2 rounded-xl border text-xs font-medium transition"
                 :class="dbEngine === 'postgres' ? 'bg-amber-500/20 text-amber-300 border-amber-400/50' : 'bg-slate-950 border-slate-800 text-slate-400'"
               >
                 PostgreSQL (Port 5432)
@@ -206,7 +209,7 @@ onMounted(() => {
             <input
               v-model="dbUser"
               type="text"
-              class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-amber-400"
+              class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-amber-400"
               placeholder="Contoh: raz_user"
             />
           </div>
@@ -216,22 +219,22 @@ onMounted(() => {
             <input
               v-model="dbPassword"
               type="password"
-              class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-amber-400"
+              class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-amber-400"
               placeholder="Kata sandi..."
             />
           </div>
         </div>
 
-        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+        <div class="flex items-center justify-end gap-2 bg-slate-950/75 border-t border-slate-800 px-5 py-3">
           <button
             @click="showCreateDbModal = false"
-            class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs transition"
+            class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition"
           >
             Batal
           </button>
           <button
             @click="confirmCreateDatabase"
-            class="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition shadow"
+            class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition shadow active:scale-95"
           >
             Simpan & Aktifkan DB
           </button>

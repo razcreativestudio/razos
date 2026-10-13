@@ -21,6 +21,7 @@
   Dilengkapi alokasi port host anti-tabrakan (8100-8250), isolasi folder `/DATA/apps/websites/<slug>`, resource limit (Memory 32M-512M STB presets & CPU shares), sinkronisasi icon ke desktop, **Action Button Edit** dengan modal konfigurasi 5-tab, serta **Integrasi GitHub Repository & Personal Access Token (PAT)** untuk auto-pull kode terbaru ke root folder secara instan.
 - **Database Suite & Web Manager GUI:** Server MariaDB, PostgreSQL, dan SQLite terpusat dengan Web GUI Adminer (HeidiSQL / phpMyAdmin web style) siap pakai untuk inspeksi visual tabel dan eksekusi query data, terhubung langsung ke Website Manager.
 - **Web Terminal:** Akses SSH/PTY langsung di peramban menggunakan xterm.js.
+- **Floating Window Dialog Modals (Zero Backdrop Blur):** Seluruh modal dialog interaksi (Wizard Pembuatan Website, Edit Konfigurasi, GitHub PAT, Manual Docker Install, Katalog App Config, Konfirmasi Uninstall, Buat Folder, Ubah Nama, Properti Berkas, dan Buat Database) mengadopsi rancangan **Floating Window Dialog OS** independen dengan bingkai solid Slate-900, Window Titlebar header, ikon badge bertema, window controls close `X`, dan bilah footer aksi dialog tanpa efek blur (`backdrop-blur` = 0) sehingga tampilan aplikasi utama di belakangnya tetap 100% jernih, tajam, dan terbaca utuh.
 
 ---
 

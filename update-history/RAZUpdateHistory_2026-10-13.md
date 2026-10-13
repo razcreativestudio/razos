@@ -766,5 +766,59 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - Tampilan kartu website terverifikasi lega, tidak ada teks judul/label yang pecah atau terpotong, dan tata letak tombol rapi sempurna.
 - File backup tersimpan di `backup/RAZWebsitesView_before_ui_overhaul.vue`.
 
+---
+
+### Versi: 2.5.5-floating-window-dialog-modals (Transformasi Seluruh Modal Dialog Menjadi Floating Window OS Tanpa Blur Background)
+**Waktu Eksekusi:** 2026-10-13 15:45 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Masalah & Kebutuhan Pengguna
+- **Instruksi Pengguna:** *"modal modal nya seperti membuat window baru aja, berlaku untuk semua aplikasi, jadi tidak ada blur aplikasi utamanya"*
+- **Kendala Sebelumnya:**
+  - Seluruh modal interaksi di aplikasi menggunakan efek `backdrop-blur-md` / `backdrop-blur-sm` serta overlay gelap pekat (`bg-black/80`).
+  - Hal ini mengaburkan dan menutupi tampilan aplikasi utama di belakangnya, sehingga pengguna kehilangan konteks data saat mengisi form konfigurasi atau dialog konfirmasi.
+  - Tampilan modal dialog sebelumnya belum memiliki identitas bingkai jendela (*window frame*) yang selaras dengan filosofi desktop OS RAZOS.
+
+#### 2. Solusi Arsitektur UI/UX (Floating Window Dialog OS)
+- **Eliminasi Total Efek Blur (Zero Backdrop Blur):**
+  - Menghapus 100% kelas `backdrop-blur-*` di seluruh modal aplikasi.
+  - Mengganti overlay gelap pekat dengan lapisan transparan jernih `bg-black/35` yang mempertahankan ketajaman, kecerahan, dan keterbacaan penuh 100% dari konten aplikasi utama di belakangnya.
+- **Standarisasi Desain Window Dialog OS:**
+  - **Window Titlebar Header:**
+    - Mengintegrasikan bilah judul jendela bergaya desktop (`bg-slate-950/85 border-b border-slate-800 px-5 py-3 select-none flex items-center justify-between`).
+    - Dilengkapi ikon badge dialog bertema, judul jendela dialog tebal, dan tombol penutup jendela `X` independen (`w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95`).
+  - **Window Shell & Frame Solid:**
+    - Menggunakan container solid `bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black ring-1 ring-white/10 rounded-2xl overflow-hidden`.
+  - **Window Body:**
+    - Padding rapi (`p-5`), layout adaptif, dan scrollbar form responsif (`max-h-[92vh] overflow-y-auto`).
+  - **Window Action Footer:**
+    - Bilah aksi dialog terpadu di bagian bawah (`bg-slate-950/75 border-t border-slate-800 px-5 py-3 shrink-0 flex items-center justify-end gap-2`).
+
+#### 3. Cakupan Aplikasi yang Diperbarui
+1. **Website Manager (`frontend/src/views/RAZWebsitesView.vue`):**
+   - Wizard Pembuatan Website Terisolasi 4-Langkah (`showCreateModal`).
+   - Dialog Konfirmasi Hapus Website (`showDeleteModal`).
+   - Dialog Rincian & Kredensial Website (`showDetailModal`).
+   - Dialog Pengaturan GitHub & Git Sync/Pull (`showGitModal`).
+   - Dialog Edit Konfigurasi Multi-Tab Website (`showEditModal`).
+2. **App Store (`frontend/src/views/RAZAppStoreView.vue`):**
+   - Dialog Instal Cepat Docker Container Mandiri (`showManualModal`).
+   - Dialog Form Konfigurasi Pasang Aplikasi Katalog (`showInstallModal`).
+   - Dialog Konfirmasi Clean Uninstall Aplikasi (`showUninstallModal`).
+3. **File Manager (`frontend/src/views/RAZFileManagerView.vue`):**
+   - Dialog Buat Folder Baru (`showNewFolderModal`).
+   - Dialog Ubah Nama Berkas / Folder (`showRenameModal`).
+   - Dialog Informasi & Properti Berkas Lengkap (`showInfoModal`).
+4. **Database Manager (`frontend/src/views/RAZDatabasesView.vue`):**
+   - Dialog Buat Basis Data Baru MariaDB / PostgreSQL (`showCreateDbModal`).
+5. **Desktop Layout (`frontend/src/layouts/RAZDesktopLayout.vue`):**
+   - Dialog Konfirmasi Uninstall Shortcut Desktop (`showUninstallModal`).
+
+#### 4. Verifikasi & Definisi Selesai (DoD)
+- Kompilasi frontend (`npm run build`) sukses 100% (1578 modul tertransformasi tanpa peringatan error).
+- Pengecekan grep codebase memastikan tidak ada sisa `backdrop-blur` pada seluruh modal sistem.
+- Seluruh file backup tersimpan aman di direktori `backup/*.bak_v255`.
+
+
 
 

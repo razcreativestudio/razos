@@ -1,7 +1,7 @@
 <script setup>
 /**
  * RAZOS Google Drive-Style Storage & Windows File Explorer Hybrid File Manager
- * Updated: 2026-10-13 (Windows Explorer-Style Interactive Address Bar & History Navigation)
+ * Updated: 2026-10-13 (v2.5.5 - Floating Window Dialog Modals without Background Blur)
  * Deskripsi: Antarmuka File Manager tingkat lanjut memadukan arsitektur Windows File Explorer dan Google Drive:
  * - Windows Explorer Interactive Address Bar: Bilah alamat dwi-fungsi (Breadcrumbs interaktif & Editable Text Input).
  *   Pengguna dapat mengklik segmen breadcrumb atau mengklik area teks untuk mengetik/paste path langsung (Enter untuk pergi).
@@ -12,7 +12,7 @@
  * - Accurate Navigation & Path Normalization: Penanganan path Windows & Linux STB yang presisi tanpa lompat folder.
  * - Fluid Responsive Grid: Menggunakan auto-fill minmax(140px, 1fr) sehingga kartu folder/file tidak pernah gepeng.
  * - Bottom Status Bar: Menampilkan jumlah item, status item aktif, dan tombol aksi cepat tanpa memeras ruang grid.
- * - Custom Modal Detail & Properti: Dialog modal khusus yang elegan (Glassmorphism) untuk rincian metadata berkas.
+ * - Window Dialog Modals (Tanpa Blur background, visual jendela independen OS).
  */
 import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
@@ -1128,122 +1128,158 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- CUSTOM MODAL: Buat Folder Baru -->
+    <!-- CUSTOM MODAL: Buat Folder Baru (Floating Window Dialog) -->
     <div
       v-if="showNewFolderModal"
-      class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in"
+      class="fixed inset-0 bg-black/35 z-50 flex items-center justify-center p-4 animate-in fade-in"
     >
-      <div class="w-full max-w-sm raz-glass rounded-2xl border border-slate-700 p-4 shadow-2xl flex flex-col gap-3">
-        <h4 class="font-bold text-slate-100">Buat Folder Baru di Drive</h4>
-        <input
-          v-model="newFolderName"
-          @keyup.enter="confirmCreateFolder"
-          type="text"
-          class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 text-xs outline-none focus:border-sky-400"
-          placeholder="Nama folder..."
-        />
-        <div class="flex items-center justify-end gap-2 pt-2">
-          <button @click="showNewFolderModal = false" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs">
+      <div class="w-full max-w-sm bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black ring-1 ring-white/10 rounded-2xl flex flex-col overflow-hidden">
+        <!-- Window Titlebar -->
+        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-4 py-2.5 select-none">
+          <div class="flex items-center gap-2">
+            <div class="w-6 h-6 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
+              <Folder class="w-3.5 h-3.5" />
+            </div>
+            <h4 class="font-bold text-slate-100 text-xs">Buat Folder Baru</h4>
+          </div>
+          <button @click="showNewFolderModal = false" class="w-6 h-6 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95" title="Tutup Jendela">
+            <X class="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div class="p-4 space-y-3">
+          <label class="block text-[11px] font-medium text-slate-300">Nama Folder Baru di Direktori Ini</label>
+          <input
+            v-model="newFolderName"
+            @keyup.enter="confirmCreateFolder"
+            type="text"
+            class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 text-xs outline-none focus:border-sky-400"
+            placeholder="Ketik nama folder..."
+          />
+        </div>
+
+        <div class="flex items-center justify-end gap-2 bg-slate-950/75 border-t border-slate-800 px-4 py-2.5">
+          <button @click="showNewFolderModal = false" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition">
             Batal
           </button>
-          <button @click="confirmCreateFolder" class="px-4 py-1.5 rounded-lg bg-sky-500 text-slate-950 font-bold text-xs">
-            Buat
+          <button @click="confirmCreateFolder" class="px-4 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition shadow active:scale-95">
+            Buat Folder
           </button>
         </div>
       </div>
     </div>
 
-    <!-- CUSTOM MODAL: Rename File -->
+    <!-- CUSTOM MODAL: Rename File (Floating Window Dialog) -->
     <div
       v-if="showRenameModal"
-      class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in"
+      class="fixed inset-0 bg-black/35 z-50 flex items-center justify-center p-4 animate-in fade-in"
     >
-      <div class="w-full max-w-sm raz-glass rounded-2xl border border-slate-700 p-4 shadow-2xl flex flex-col gap-3">
-        <h4 class="font-bold text-slate-100">Ubah Nama Berkas</h4>
-        <input
-          v-model="renameTargetNewName"
-          @keyup.enter="confirmRename"
-          type="text"
-          class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 text-xs outline-none focus:border-sky-400"
-        />
-        <div class="flex items-center justify-end gap-2 pt-2">
-          <button @click="showRenameModal = false" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs">
+      <div class="w-full max-w-sm bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black ring-1 ring-white/10 rounded-2xl flex flex-col overflow-hidden">
+        <!-- Window Titlebar -->
+        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-4 py-2.5 select-none">
+          <div class="flex items-center gap-2">
+            <div class="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
+              <Edit3 class="w-3.5 h-3.5" />
+            </div>
+            <h4 class="font-bold text-slate-100 text-xs">Ubah Nama Berkas</h4>
+          </div>
+          <button @click="showRenameModal = false" class="w-6 h-6 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95" title="Tutup Jendela">
+            <X class="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div class="p-4 space-y-3">
+          <label class="block text-[11px] font-medium text-slate-300">Nama Baru Berkas / Folder</label>
+          <input
+            v-model="renameTargetNewName"
+            @keyup.enter="confirmRename"
+            type="text"
+            class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 text-xs outline-none focus:border-sky-400"
+          />
+        </div>
+
+        <div class="flex items-center justify-end gap-2 bg-slate-950/75 border-t border-slate-800 px-4 py-2.5">
+          <button @click="showRenameModal = false" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition">
             Batal
           </button>
-          <button @click="confirmRename" class="px-4 py-1.5 rounded-lg bg-sky-500 text-slate-950 font-bold text-xs">
-            Simpan
+          <button @click="confirmRename" class="px-4 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition shadow active:scale-95">
+            Simpan Nama
           </button>
         </div>
       </div>
     </div>
 
-    <!-- CUSTOM MODAL: Detail & Properti Berkas (Glassmorphism Slate-900) -->
+    <!-- CUSTOM MODAL: Detail & Properti Berkas (Floating Window Dialog) -->
     <div
       v-if="showInfoModal && selectedItem"
-      class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in"
+      class="fixed inset-0 bg-black/35 z-50 flex items-center justify-center p-4 animate-in fade-in"
     >
-      <div class="w-full max-w-md raz-glass rounded-2xl border border-slate-700/80 p-5 shadow-2xl flex flex-col gap-4 text-xs">
-        <!-- Header Modal -->
-        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+      <div class="w-full max-w-md bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black ring-1 ring-white/10 rounded-2xl flex flex-col overflow-hidden text-xs">
+        <!-- Window Titlebar -->
+        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-5 py-3 select-none">
           <div class="flex items-center gap-2">
-            <Info class="w-4 h-4 text-sky-400" />
+            <div class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
+              <Info class="w-4 h-4" />
+            </div>
             <h4 class="font-bold text-slate-100 text-sm">Informasi & Properti Berkas</h4>
           </div>
-          <button @click="showInfoModal = false" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition">
+          <button @click="showInfoModal = false" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95" title="Tutup Jendela">
             <X class="w-4 h-4" />
           </button>
         </div>
 
         <!-- Preview Ikon & Nama Berkas -->
-        <div class="flex items-center gap-4 p-3.5 bg-slate-950/70 rounded-2xl border border-slate-800/80">
-          <div v-if="isImageFile(selectedItem.extension)" class="w-16 h-16 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 shrink-0 shadow">
-            <RAZThumbnail
-              :path="selectedItem.path"
-              :name="selectedItem.name"
-              :size="selectedItem.size"
-              :extension="selectedItem.extension"
-            />
+        <div class="p-5 flex flex-col gap-4">
+          <div class="flex items-center gap-4 p-3.5 bg-slate-950/70 rounded-2xl border border-slate-800/80">
+            <div v-if="isImageFile(selectedItem.extension)" class="w-16 h-16 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 shrink-0 shadow">
+              <RAZThumbnail
+                :path="selectedItem.path"
+                :name="selectedItem.name"
+                :size="selectedItem.size"
+                :extension="selectedItem.extension"
+              />
+            </div>
+            <div v-else class="w-16 h-16 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 shadow">
+              <Folder v-if="selectedItem.is_dir" class="w-8 h-8 text-sky-400 fill-sky-400/20" />
+              <Film v-else-if="isVideoFile(selectedItem.extension)" class="w-7 h-7 text-purple-400" />
+              <Music v-else-if="isAudioFile(selectedItem.extension)" class="w-7 h-7 text-amber-400" />
+              <FileText v-else-if="isPdfFile(selectedItem.extension)" class="w-7 h-7 text-rose-400" />
+              <FileCode v-else-if="isCodeFile(selectedItem.extension)" class="w-7 h-7 text-emerald-400" />
+              <FileText v-else-if="isDocFile(selectedItem.extension)" class="w-7 h-7 text-sky-400" />
+              <File v-else class="w-7 h-7 text-slate-400" />
+            </div>
+            <div class="min-w-0 flex-1">
+              <h5 class="font-bold text-slate-100 text-sm break-all leading-snug">{{ selectedItem.name }}</h5>
+              <span class="text-[11px] text-slate-400 font-mono block mt-0.5">{{ selectedItem.is_dir ? 'Folder Direktori' : (selectedItem.extension?.toUpperCase() || 'Berkas') }}</span>
+            </div>
           </div>
-          <div v-else class="w-16 h-16 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 shadow">
-            <Folder v-if="selectedItem.is_dir" class="w-8 h-8 text-sky-400 fill-sky-400/20" />
-            <Film v-else-if="isVideoFile(selectedItem.extension)" class="w-7 h-7 text-purple-400" />
-            <Music v-else-if="isAudioFile(selectedItem.extension)" class="w-7 h-7 text-amber-400" />
-            <FileText v-else-if="isPdfFile(selectedItem.extension)" class="w-7 h-7 text-rose-400" />
-            <FileCode v-else-if="isCodeFile(selectedItem.extension)" class="w-7 h-7 text-emerald-400" />
-            <FileText v-else-if="isDocFile(selectedItem.extension)" class="w-7 h-7 text-sky-400" />
-            <File v-else class="w-7 h-7 text-slate-400" />
-          </div>
-          <div class="min-w-0 flex-1">
-            <h5 class="font-bold text-slate-100 text-sm break-all leading-snug">{{ selectedItem.name }}</h5>
-            <span class="text-[11px] text-slate-400 font-mono block mt-0.5">{{ selectedItem.is_dir ? 'Folder Direktori' : (selectedItem.extension?.toUpperCase() || 'Berkas') }}</span>
+
+          <!-- Metadata Properties Grid -->
+          <div class="space-y-2 bg-slate-950/50 p-3.5 rounded-2xl border border-slate-800/80 font-mono text-[11px]">
+            <div class="flex justify-between py-1 border-b border-slate-800/50">
+              <span class="text-slate-400 font-sans">Ukuran:</span>
+              <span class="text-slate-200 font-medium">{{ selectedItem.is_dir ? '-' : formatBytes(selectedItem.size) + ' (' + (selectedItem.size || 0).toLocaleString('id-ID') + ' bytes)' }}</span>
+            </div>
+            <div class="flex justify-between py-1 border-b border-slate-800/50">
+              <span class="text-slate-400 font-sans">Format Ekstensi:</span>
+              <span class="text-slate-200 uppercase">{{ selectedItem.is_dir ? 'Folder' : (selectedItem.extension || 'Tanpa Ekstensi') }}</span>
+            </div>
+            <div class="flex flex-col gap-1 py-1 border-b border-slate-800/50 font-sans">
+              <span class="text-slate-400">Lokasi Path Fisik:</span>
+              <span class="text-slate-300 font-mono text-[11px] bg-slate-900/80 p-2 rounded-lg break-all border border-slate-800">{{ selectedItem.path }}</span>
+            </div>
+            <div class="flex justify-between py-1 font-sans">
+              <span class="text-slate-400">Terakhir Dimodifikasi:</span>
+              <span class="text-slate-300 font-mono text-[11px]">{{ formatDate(selectedItem.mod_time) }}</span>
+            </div>
           </div>
         </div>
 
-        <!-- Metadata Properties Grid -->
-        <div class="space-y-2 bg-slate-950/50 p-3.5 rounded-2xl border border-slate-800/80 font-mono text-[11px]">
-          <div class="flex justify-between py-1 border-b border-slate-800/50">
-            <span class="text-slate-400 font-sans">Ukuran:</span>
-            <span class="text-slate-200 font-medium">{{ selectedItem.is_dir ? '-' : formatBytes(selectedItem.size) + ' (' + (selectedItem.size || 0).toLocaleString('id-ID') + ' bytes)' }}</span>
-          </div>
-          <div class="flex justify-between py-1 border-b border-slate-800/50">
-            <span class="text-slate-400 font-sans">Format Ekstensi:</span>
-            <span class="text-slate-200 uppercase">{{ selectedItem.is_dir ? 'Folder' : (selectedItem.extension || 'Tanpa Ekstensi') }}</span>
-          </div>
-          <div class="flex flex-col gap-1 py-1 border-b border-slate-800/50 font-sans">
-            <span class="text-slate-400">Lokasi Path Fisik:</span>
-            <span class="text-slate-300 font-mono text-[11px] bg-slate-900/80 p-2 rounded-lg break-all border border-slate-800">{{ selectedItem.path }}</span>
-          </div>
-          <div class="flex justify-between py-1 font-sans">
-            <span class="text-slate-400">Terakhir Dimodifikasi:</span>
-            <span class="text-slate-300 font-mono text-[11px]">{{ formatDate(selectedItem.mod_time) }}</span>
-          </div>
-        </div>
-
-        <!-- Modal Footer Actions -->
-        <div class="flex items-center justify-between pt-2">
+        <!-- Window Action Footer -->
+        <div class="flex items-center justify-between bg-slate-950/75 border-t border-slate-800 px-5 py-3">
           <button
             @click="deleteItem(selectedItem); showInfoModal = false;"
-            class="px-3 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 text-xs font-medium flex items-center gap-1.5 transition"
+            class="px-3.5 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
           >
             <Trash2 class="w-3.5 h-3.5" />
             <span>Hapus</span>
@@ -1252,7 +1288,7 @@ onMounted(async () => {
           <div class="flex items-center gap-2">
             <button
               @click="openRenameDialog(selectedItem); showInfoModal = false;"
-              class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 transition"
+              class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
             >
               <Edit3 class="w-3.5 h-3.5" />
               <span>Ubah Nama</span>
@@ -1260,7 +1296,7 @@ onMounted(async () => {
             <button
               v-if="!selectedItem.is_dir"
               @click="handleItemDoubleClick(selectedItem); showInfoModal = false;"
-              class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition shadow"
+              class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition shadow active:scale-95"
             >
               <Eye class="w-3.5 h-3.5" />
               <span>Buka Berkas</span>
@@ -1268,7 +1304,7 @@ onMounted(async () => {
             <button
               v-else
               @click="fetchFiles(selectedItem.path); showInfoModal = false;"
-              class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition shadow"
+              class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition shadow active:scale-95"
             >
               <Folder class="w-3.5 h-3.5" />
               <span>Masuk Folder</span>

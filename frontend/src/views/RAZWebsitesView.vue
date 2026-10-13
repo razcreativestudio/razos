@@ -1,7 +1,7 @@
 <script setup>
 /**
  * RAZOS Website Manager Suite
- * Updated: 2026-10-13
+ * Updated: 2026-10-13 (v2.5.5 - Floating Window Dialog Modal without Background Blur)
  * Deskripsi: Platform pengelolaan multi-website terisolasi berbasis Docker Container.
  * Fitur:
  * 1. Root folder terisolasi di /DATA/apps/websites/<slug>
@@ -11,7 +11,7 @@
  * 5. Link icon kustom untuk launcher Desktop dan Start Menu
  * 6. Resource limits: Memory limit (RAM STB-optimized) & CPU shares
  * 7. Custom container command & Environment variables
- * 8. Zero native alert/confirm - 100% Custom Modals Glassmorphism Slate-900
+ * 8. Window Dialog Modals (Tanpa Blur background, visual jendela independen OS)
  */
 import { ref, onMounted, computed } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
@@ -1150,14 +1150,14 @@ onMounted(() => {
       </button>
     </div>
 
-    <!-- CUSTOM MODAL: Wizard Pembuatan Website Terisolasi -->
+    <!-- CUSTOM MODAL: Wizard Pembuatan Website Terisolasi (Floating Window Dialog) -->
     <div
       v-if="showCreateModal"
-      class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in"
+      class="fixed inset-0 bg-black/35 z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in"
     >
-      <div class="w-full max-w-2xl raz-glass rounded-2xl border border-slate-700/80 p-5 shadow-2xl flex flex-col gap-4 max-h-[92vh] overflow-hidden">
-        <!-- Modal Header -->
-        <div class="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
+      <div class="w-full max-w-2xl bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black ring-1 ring-white/10 rounded-2xl flex flex-col max-h-[92vh] overflow-hidden">
+        <!-- Window Titlebar -->
+        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-5 py-3 shrink-0 select-none">
           <div class="flex items-center gap-2.5">
             <div class="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
               <Layers class="w-4 h-4" />
@@ -1167,10 +1167,13 @@ onMounted(() => {
               <p class="text-[11px] text-slate-400">Atur root folder, port, runtime stack, database link, dan batasan sumber daya.</p>
             </div>
           </div>
-          <button @click="showCreateModal = false" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">
+          <button @click="showCreateModal = false" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95" title="Tutup Jendela">
             <X class="w-4 h-4" />
           </button>
         </div>
+
+        <!-- Window Body Container -->
+        <div class="p-5 flex flex-col gap-4 overflow-hidden flex-1">
 
         <!-- Wizard Steps Indicator -->
         <div class="grid grid-cols-4 gap-1.5 bg-slate-950/80 p-1.5 rounded-xl border border-slate-800/80 text-center text-[11px] shrink-0">
@@ -1616,8 +1619,10 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Wizard Navigation Footer -->
-        <div class="flex items-center justify-between border-t border-slate-800 pt-3 shrink-0">
+        </div>
+
+        <!-- Window Action Footer -->
+        <div class="flex items-center justify-between bg-slate-950/75 border-t border-slate-800 px-5 py-3 shrink-0">
           <button
             v-if="wizardStep > 1"
             type="button"
@@ -1654,43 +1659,50 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- CUSTOM MODAL: Konfirmasi Hapus Website -->
+    <!-- CUSTOM MODAL: Konfirmasi Hapus Website (Floating Window Dialog) -->
     <div
       v-if="showDeleteModal && siteToDelete"
-      class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in"
+      class="fixed inset-0 bg-black/35 z-50 flex items-center justify-center p-4 animate-in fade-in"
     >
-      <div class="w-full max-w-md raz-glass rounded-2xl border border-rose-500/30 p-5 shadow-2xl flex flex-col gap-4">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 border border-rose-500/30">
-            <AlertTriangle class="w-5 h-5" />
+      <div class="w-full max-w-md bg-slate-900 border border-rose-500/40 shadow-2xl shadow-black ring-1 ring-rose-500/20 rounded-2xl flex flex-col overflow-hidden">
+        <!-- Window Titlebar -->
+        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-5 py-3 select-none">
+          <div class="flex items-center gap-2.5 text-rose-400">
+            <div class="w-7 h-7 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
+              <AlertTriangle class="w-4 h-4" />
+            </div>
+            <h4 class="font-bold text-slate-100 text-sm">Konfirmasi Hapus Website</h4>
           </div>
-          <div>
-            <h4 class="font-bold text-slate-100 text-sm sm:text-base">Hapus Website Terisolasi?</h4>
-            <p class="text-xs text-slate-400">Tindakan ini akan menghentikan dan mencabut container dari sistem.</p>
-          </div>
+          <button @click="showDeleteModal = false" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95" title="Tutup Jendela">
+            <X class="w-4 h-4" />
+          </button>
         </div>
 
-        <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1 text-xs">
-          <div class="text-slate-300 font-semibold">{{ siteToDelete.name }}</div>
-          <div class="font-mono text-slate-400 text-[11px]">Container: {{ siteToDelete.container_name }}</div>
-          <div class="font-mono text-amber-400 text-[11px]">Port: :{{ siteToDelete.port }}</div>
+        <div class="p-5 flex flex-col gap-3.5">
+          <p class="text-xs text-slate-400">Tindakan ini akan menghentikan dan mencabut container dari sistem.</p>
+
+          <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1 text-xs">
+            <div class="text-slate-300 font-semibold">{{ siteToDelete.name }}</div>
+            <div class="font-mono text-slate-400 text-[11px]">Container: {{ siteToDelete.container_name }}</div>
+            <div class="font-mono text-amber-400 text-[11px]">Port: :{{ siteToDelete.port }}</div>
+          </div>
+
+          <label class="flex items-center gap-2.5 p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300 cursor-pointer">
+            <input type="checkbox" v-model="purgeRootFolder" class="w-4 h-4 accent-rose-500 rounded" />
+            <span>Hapus juga seluruh berkas di root folder (`{{ siteToDelete.root_folder }}`)</span>
+          </label>
         </div>
 
-        <label class="flex items-center gap-2.5 p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300 cursor-pointer">
-          <input type="checkbox" v-model="purgeRootFolder" class="w-4 h-4 accent-rose-500 rounded" />
-          <span>Hapus juga seluruh berkas di root folder (`{{ siteToDelete.root_folder }}`)</span>
-        </label>
-
-        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+        <div class="flex items-center justify-end gap-2 bg-slate-950/75 border-t border-slate-800 px-5 py-3">
           <button
             @click="showDeleteModal = false"
-            class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+            class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
           >
             Batal
           </button>
           <button
             @click="executeDeleteWebsite"
-            class="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-400 text-white font-bold text-xs transition shadow-lg shadow-rose-500/20 active:scale-95"
+            class="px-4 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-white font-bold text-xs transition shadow-lg shadow-rose-500/20 active:scale-95"
           >
             Hapus Website Sekarang
           </button>
@@ -1698,23 +1710,24 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- CUSTOM MODAL: Rincian & Kredensial Website -->
+    <!-- CUSTOM MODAL: Rincian & Kredensial Website (Floating Window Dialog) -->
     <div
       v-if="showDetailModal && selectedSiteDetail"
-      class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in"
+      class="fixed inset-0 bg-black/35 z-50 flex items-center justify-center p-4 animate-in fade-in"
     >
-      <div class="w-full max-w-lg raz-glass rounded-2xl border border-slate-700/80 p-5 shadow-2xl flex flex-col gap-4">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+      <div class="w-full max-w-lg bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black ring-1 ring-white/10 rounded-2xl flex flex-col overflow-hidden">
+        <!-- Window Titlebar -->
+        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-5 py-3 select-none">
           <div class="flex items-center gap-2.5">
-            <img :src="selectedSiteDetail.icon" class="w-7 h-7 object-contain" @error="$event.target.src = '/assets/icons/RAZIconWebsites.svg'" />
+            <img :src="selectedSiteDetail.icon" class="w-6 h-6 object-contain" @error="$event.target.src = '/assets/icons/RAZIconWebsites.svg'" />
             <h4 class="font-bold text-slate-100 text-sm sm:text-base">{{ selectedSiteDetail.name }}</h4>
           </div>
-          <button @click="showDetailModal = false" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">
+          <button @click="showDetailModal = false" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95" title="Tutup Jendela">
             <X class="w-4 h-4" />
           </button>
         </div>
 
-        <div class="space-y-2.5 text-xs text-slate-300">
+        <div class="p-5 space-y-2.5 text-xs text-slate-300">
           <div class="grid grid-cols-2 gap-2 bg-slate-950 p-3 rounded-xl border border-slate-800">
             <div>
               <span class="text-slate-500 block text-[10px]">CONTAINER NAME</span>
@@ -1788,7 +1801,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+        <div class="flex items-center justify-end gap-2 bg-slate-950/75 border-t border-slate-800 px-5 py-3">
           <button
             @click="showDetailModal = false"
             class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
@@ -1815,17 +1828,17 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- CUSTOM MODAL: Pengaturan GitHub & Git Sync -->
+    <!-- CUSTOM MODAL: Pengaturan GitHub & Git Sync (Floating Window Dialog) -->
     <div
       v-if="showGitModal && gitModalSite"
-      class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in"
+      class="fixed inset-0 bg-black/35 z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in"
     >
-      <div class="w-full max-w-xl raz-glass rounded-2xl border border-sky-500/40 p-5 shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-hidden">
-        <!-- Header -->
-        <div class="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
+      <div class="w-full max-w-xl bg-slate-900 border border-sky-500/40 shadow-2xl shadow-black ring-1 ring-sky-500/20 rounded-2xl flex flex-col max-h-[90vh] overflow-hidden">
+        <!-- Window Titlebar -->
+        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-5 py-3 shrink-0 select-none">
           <div class="flex items-center gap-2.5">
-            <div class="w-9 h-9 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
-              <GitBranch class="w-5 h-5" />
+            <div class="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
+              <GitBranch class="w-4 h-4" />
             </div>
             <div>
               <h4 class="font-bold text-slate-100 text-sm sm:text-base flex items-center gap-2">
@@ -1837,13 +1850,13 @@ onMounted(() => {
               <p class="text-[11px] text-slate-400">Sinkronisasi repositori kode langsung ke root folder website.</p>
             </div>
           </div>
-          <button @click="showGitModal = false" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">
+          <button @click="showGitModal = false" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95" title="Tutup Jendela">
             <X class="w-4 h-4" />
           </button>
         </div>
 
-        <!-- Body Form & Log -->
-        <div class="flex-1 overflow-y-auto space-y-3.5 pr-1 text-xs">
+        <!-- Window Body Container -->
+        <div class="p-5 flex-1 overflow-y-auto space-y-3.5 pr-2 text-xs">
           <!-- Folder Sasaran -->
           <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
             <div class="min-w-0 pr-2">
@@ -1931,8 +1944,8 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Footer Actions -->
-        <div class="flex items-center justify-between border-t border-slate-800 pt-3 shrink-0">
+        <!-- Window Action Footer -->
+        <div class="flex items-center justify-between bg-slate-950/75 border-t border-slate-800 px-5 py-3 shrink-0">
           <button
             @click="showGitModal = false"
             class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
@@ -1961,16 +1974,16 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- CUSTOM MODAL: Edit Konfigurasi Website -->
+    <!-- CUSTOM MODAL: Edit Konfigurasi Website (Floating Window Dialog) -->
     <div
       v-if="showEditModal && editSiteId"
-      class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in"
+      class="fixed inset-0 bg-black/35 z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in"
     >
-      <div class="w-full max-w-2xl raz-glass rounded-2xl border border-amber-500/40 p-5 shadow-2xl flex flex-col gap-4 max-h-[92vh] overflow-hidden">
-        <!-- Header -->
-        <div class="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
+      <div class="w-full max-w-2xl bg-slate-900 border border-amber-500/40 shadow-2xl shadow-black ring-1 ring-amber-500/20 rounded-2xl flex flex-col max-h-[92vh] overflow-hidden">
+        <!-- Window Titlebar -->
+        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-5 py-3 shrink-0 select-none">
           <div class="flex items-center gap-2.5">
-            <div class="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
+            <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
               <Pencil class="w-4 h-4" />
             </div>
             <div>
@@ -1983,10 +1996,13 @@ onMounted(() => {
               <p class="text-[11px] text-slate-400">Perbarui identitas, domain, port, runtime, root folder, database, atau Git.</p>
             </div>
           </div>
-          <button @click="showEditModal = false" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">
+          <button @click="showEditModal = false" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95" title="Tutup Jendela">
             <X class="w-4 h-4" />
           </button>
         </div>
+
+        <!-- Window Body Container -->
+        <div class="p-5 flex flex-col gap-4 overflow-hidden flex-1">
 
         <!-- Navigation Tabs -->
         <div class="flex items-center gap-1 overflow-x-auto bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-[11px] shrink-0">
@@ -2399,8 +2415,10 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Footer -->
-        <div class="flex items-center justify-between border-t border-slate-800 pt-3 shrink-0">
+        </div>
+
+        <!-- Window Action Footer -->
+        <div class="flex items-center justify-between bg-slate-950/75 border-t border-slate-800 px-5 py-3 shrink-0">
           <button
             @click="showEditModal = false"
             class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
