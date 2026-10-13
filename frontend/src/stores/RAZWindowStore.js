@@ -185,10 +185,10 @@ export const useWindowStore = defineStore('window', () => {
       minHeight = 300
     } else if (['.mp3', '.wav', '.ogg', '.aac', '.flac', '.m4a'].includes(ext)) {
       icon = '/assets/icons/RAZIconMusicPlayer.svg'
-      width = 460
-      height = 340
-      minWidth = 360
-      minHeight = 260
+      width = 480
+      height = 520
+      minWidth = 380
+      minHeight = 440
     } else if (ext === '.pdf') {
       icon = '/assets/icons/RAZIconPdfViewer.svg'
       width = 800

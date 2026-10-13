@@ -6,11 +6,11 @@
  * audio/music player, PDF document viewer, dan in-browser code/text editor.
  * Beroperasi di window frame terpisah tanpa mengaburkan atau memblokir File Manager.
  */
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import {
   ZoomIn, ZoomOut, RotateCw, RotateCcw, Maximize2, Download, Play, Pause,
-  Volume2, VolumeX, Save, RefreshCw, CheckCircle2, FileText, Film, Music,
-  FileCode, ExternalLink, Info, ShieldAlert, AlertCircle
+  Volume2, Volume1, VolumeX, Save, RefreshCw, CheckCircle2, FileText, Film, Music,
+  FileCode, ExternalLink, Info, ShieldAlert, AlertCircle, Repeat, SkipBack, SkipForward, Disc
 } from 'lucide-vue-next'
 import { useSystemStore } from '../stores/RAZSystemStore'
 
@@ -53,21 +53,43 @@ function rotateImage() {
   imgRotation.value = (imgRotation.value + 90) % 360
 }
 
-// 2. AUDIO VIEWER STATE
+// 2. AUDIO VIEWER STATE (Modern Music Player Suite)
 const audioRef = ref(null)
 const isAudioPlaying = ref(false)
 const audioCurrentTime = ref(0)
 const audioDuration = ref(0)
 const isAudioMuted = ref(false)
+const audioVolume = ref(1)
+const isAudioLoop = ref(false)
+const prevVolume = ref(1)
 
 function toggleAudioPlay() {
   if (!audioRef.value) return
   if (audioRef.value.paused) {
-    audioRef.value.play()
-    isAudioPlaying.value = true
+    audioRef.value.play().then(() => {
+      isAudioPlaying.value = true
+    }).catch(err => {
+      console.warn('Audio play gagal dipicu:', err)
+      isAudioPlaying.value = false
+    })
   } else {
     audioRef.value.pause()
     isAudioPlaying.value = false
+  }
+}
+
+function seekRelative(secs) {
+  if (!audioRef.value) return
+  const maxDur = audioDuration.value || 9999
+  const target = Math.max(0, Math.min(maxDur, audioRef.value.currentTime + secs))
+  audioRef.value.currentTime = target
+  audioCurrentTime.value = target
+}
+
+function toggleAudioLoop() {
+  isAudioLoop.value = !isAudioLoop.value
+  if (audioRef.value) {
+    audioRef.value.loop = isAudioLoop.value
   }
 }
 
@@ -89,10 +111,29 @@ function onAudioSeek(e) {
   }
 }
 
-function toggleAudioMute() {
+function onAudioVolumeChange(e) {
+  const val = Number(e.target.value)
+  audioVolume.value = val
   if (audioRef.value) {
-    audioRef.value.muted = !audioRef.value.muted
-    isAudioMuted.value = audioRef.value.muted
+    audioRef.value.volume = val
+    audioRef.value.muted = val === 0
+    isAudioMuted.value = val === 0
+  }
+}
+
+function toggleAudioMute() {
+  if (!audioRef.value) return
+  if (isAudioMuted.value || audioVolume.value === 0) {
+    isAudioMuted.value = false
+    audioVolume.value = prevVolume.value > 0 ? prevVolume.value : 0.8
+    audioRef.value.muted = false
+    audioRef.value.volume = audioVolume.value
+  } else {
+    prevVolume.value = audioVolume.value > 0 ? audioVolume.value : 0.8
+    isAudioMuted.value = true
+    audioVolume.value = 0
+    audioRef.value.muted = true
+    audioRef.value.volume = 0
   }
 }
 
@@ -101,6 +142,21 @@ function formatAudioTime(secs) {
   const m = Math.floor(secs / 60)
   const s = Math.floor(secs % 60)
   return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`
+}
+
+function onAudioEnded() {
+  if (!isAudioLoop.value) {
+    isAudioPlaying.value = false
+    audioCurrentTime.value = 0
+  }
+}
+
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
 // 3. CODE & TEXT EDITOR STATE
@@ -167,6 +223,16 @@ function triggerDownload() {
 onMounted(() => {
   if (isCodeOrText.value) {
     loadTextContent()
+  } else if (isAudio.value) {
+    nextTick(() => {
+      if (audioRef.value) {
+        audioRef.value.play().then(() => {
+          isAudioPlaying.value = true
+        }).catch(() => {
+          isAudioPlaying.value = false
+        })
+      }
+    })
   }
 })
 
@@ -174,6 +240,19 @@ watch(() => props.file.path, () => {
   resetImage()
   if (isCodeOrText.value) {
     loadTextContent()
+  } else if (isAudio.value) {
+    isAudioPlaying.value = false
+    audioCurrentTime.value = 0
+    nextTick(() => {
+      if (audioRef.value) {
+        audioRef.value.currentTime = 0
+        audioRef.value.play().then(() => {
+          isAudioPlaying.value = true
+        }).catch(() => {
+          isAudioPlaying.value = false
+        })
+      }
+    })
   }
 })
 </script>
@@ -239,56 +318,154 @@ watch(() => props.file.path, () => {
       </div>
     </template>
 
-    <!-- 3. AUDIO / MUSIC PLAYER -->
+    <!-- 3. AUDIO / MUSIC PLAYER (Enterprise Vinyl & Equalizer Suite) -->
     <template v-else-if="isAudio">
-      <div class="flex-1 flex flex-col items-center justify-center p-6 bg-gradient-to-b from-slate-900 to-slate-950 gap-6">
-        <!-- Visual Vinyl Disc -->
-        <div
-          class="w-36 h-36 rounded-full border-4 border-amber-500/30 shadow-2xl flex items-center justify-center bg-slate-950 relative overflow-hidden"
-          :class="isAudioPlaying ? 'animate-[spin_6s_linear_infinite]' : ''"
-        >
-          <div class="w-20 h-20 rounded-full bg-slate-900 border-2 border-amber-400/50 flex items-center justify-center shadow-inner">
-            <Music class="w-8 h-8 text-amber-400" />
-          </div>
-        </div>
-
-        <div class="text-center max-w-sm px-4">
-          <h4 class="font-bold text-slate-100 text-sm truncate leading-snug">{{ file.name }}</h4>
-          <span class="text-[11px] text-slate-400 font-mono mt-0.5 block uppercase tracking-wider">{{ ext.replace('.', '') }} AUDIO</span>
-        </div>
-
-        <!-- Scrubber Range -->
-        <div class="w-full max-w-md flex flex-col gap-1.5">
-          <input
-            type="range"
-            min="0"
-            :max="audioDuration || 100"
-            :value="audioCurrentTime"
-            @input="onAudioSeek"
-            class="w-full accent-amber-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
-          />
-          <div class="flex justify-between text-[10px] text-slate-400 font-mono">
-            <span>{{ formatAudioTime(audioCurrentTime) }}</span>
-            <span>{{ formatAudioTime(audioDuration) }}</span>
-          </div>
-        </div>
-
-        <!-- Controls -->
-        <div class="flex items-center gap-4">
-          <button @click="toggleAudioMute" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
-            <VolumeX v-if="isAudioMuted" class="w-4 h-4 text-rose-400" />
-            <Volume2 v-else class="w-4 h-4 text-slate-300" />
-          </button>
-          <button
+      <div class="flex-1 flex flex-col justify-between p-5 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-950 text-slate-100 select-none overflow-hidden h-full">
+        <!-- TOP: Turntable Vinyl Disc & Equalizer Visualizer -->
+        <div class="flex flex-col items-center justify-center flex-1 min-h-0 py-2 gap-3">
+          <!-- Interactive Vinyl Disc -->
+          <div
             @click="toggleAudioPlay"
-            class="w-12 h-12 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 flex items-center justify-center shadow-lg transition active:scale-95"
+            class="relative w-36 h-36 sm:w-44 sm:h-44 rounded-full border-4 border-amber-500/30 shadow-[0_0_35px_rgba(245,158,11,0.2)] flex items-center justify-center bg-slate-950 cursor-pointer group hover:border-amber-400/60 transition-all select-none"
+            :class="isAudioPlaying ? 'animate-[spin_8s_linear_infinite]' : ''"
+            title="Klik untuk Putar / Jeda"
           >
-            <Pause v-if="isAudioPlaying" class="w-5 h-5 fill-slate-950" />
-            <Play v-else class="w-5 h-5 fill-slate-950 ml-0.5" />
-          </button>
-          <button @click="triggerDownload" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition" title="Download Audio">
-            <Download class="w-4 h-4" />
-          </button>
+            <!-- Vinyl Grooves Rings -->
+            <div class="absolute inset-2 rounded-full border border-slate-800/80 pointer-events-none"></div>
+            <div class="absolute inset-5 rounded-full border border-slate-800/70 pointer-events-none"></div>
+            <div class="absolute inset-8 rounded-full border border-slate-800/60 pointer-events-none"></div>
+
+            <!-- Central Vinyl Label -->
+            <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 border-2 border-amber-300/80 flex items-center justify-center shadow-inner group-hover:scale-105 transition">
+              <Music class="w-7 h-7 text-slate-950 fill-slate-950" />
+            </div>
+
+            <!-- Play/Pause Overlay on Hover -->
+            <div class="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition backdrop-blur-[2px]">
+              <Pause v-if="isAudioPlaying" class="w-10 h-10 text-white fill-white drop-shadow-md" />
+              <Play v-else class="w-10 h-10 text-white fill-white ml-1 drop-shadow-md" />
+            </div>
+          </div>
+
+          <!-- Animated Audio Wave / Equalizer Bars -->
+          <div class="flex items-end justify-center gap-1 h-6 px-4">
+            <span
+              v-for="bar in 16"
+              :key="bar"
+              class="w-1 rounded-full transition-all duration-150"
+              :class="isAudioPlaying ? 'bg-gradient-to-t from-amber-500 to-amber-300' : 'bg-slate-800 h-1'"
+              :style="isAudioPlaying ? {
+                height: `${Math.max(4, Math.sin(bar * 0.8 + audioCurrentTime * 6) * 18 + 12)}px`
+              } : { height: '3px' }"
+            ></span>
+          </div>
+        </div>
+
+        <!-- MIDDLE: Track Meta Information -->
+        <div class="text-center px-4 shrink-0 my-1">
+          <h4 class="font-bold text-slate-100 text-sm sm:text-base truncate leading-snug hover:text-amber-300 transition" :title="file.name">
+            {{ file.name }}
+          </h4>
+          <div class="flex items-center justify-center gap-2 mt-1 font-mono text-[11px] text-slate-400">
+            <span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold uppercase tracking-wider text-[10px]">
+              {{ ext.replace('.', '') }}
+            </span>
+            <span>•</span>
+            <span>{{ file.size ? formatBytes(file.size) : 'Audio Stream' }}</span>
+            <span>•</span>
+            <span class="text-emerald-400 font-bold">HQ STEREO</span>
+          </div>
+        </div>
+
+        <!-- BOTTOM: Scrubber Timeline, Playback Controls, Volume -->
+        <div class="w-full flex flex-col gap-3 shrink-0 pt-2 border-t border-slate-800/80">
+          <!-- Timeline Scrubber -->
+          <div class="w-full flex flex-col gap-1">
+            <input
+              type="range"
+              min="0"
+              :max="audioDuration || 100"
+              :value="audioCurrentTime"
+              @input="onAudioSeek"
+              class="w-full accent-amber-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+            />
+            <div class="flex justify-between text-[11px] text-slate-400 font-mono">
+              <span class="text-amber-400 font-medium">{{ formatAudioTime(audioCurrentTime) }}</span>
+              <span>{{ formatAudioTime(audioDuration) }}</span>
+            </div>
+          </div>
+
+          <!-- Controls Main Bar -->
+          <div class="flex items-center justify-between gap-2 px-1">
+            <!-- Left: Repeat Mode -->
+            <button
+              @click="toggleAudioLoop"
+              class="p-2 rounded-xl transition relative"
+              :class="isAudioLoop ? 'bg-amber-500/20 text-amber-400' : 'text-slate-400 hover:text-white hover:bg-slate-800'"
+              :title="isAudioLoop ? 'Ulangi Lagu: Aktif' : 'Ulangi Lagu: Nonaktif'"
+            >
+              <Repeat class="w-4 h-4" />
+              <span v-if="isAudioLoop" class="w-1.5 h-1.5 rounded-full bg-amber-400 absolute bottom-1 right-1"></span>
+            </button>
+
+            <!-- Center: Skip -10s, Play/Pause, Skip +10s -->
+            <div class="flex items-center gap-3">
+              <button
+                @click="seekRelative(-10)"
+                class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition active:scale-95"
+                title="Mundur 10 Detik"
+              >
+                <SkipBack class="w-4 h-4" />
+              </button>
+
+              <button
+                @click="toggleAudioPlay"
+                class="w-12 h-12 rounded-full bg-gradient-to-tr from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 flex items-center justify-center shadow-lg shadow-amber-500/30 transition hover:scale-105 active:scale-95"
+                :title="isAudioPlaying ? 'Jeda' : 'Putar'"
+              >
+                <Pause v-if="isAudioPlaying" class="w-5 h-5 fill-slate-950" />
+                <Play v-else class="w-5 h-5 fill-slate-950 ml-0.5" />
+              </button>
+
+              <button
+                @click="seekRelative(10)"
+                class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition active:scale-95"
+                title="Maju 10 Detik"
+              >
+                <SkipForward class="w-4 h-4" />
+              </button>
+            </div>
+
+            <!-- Right: Download Button -->
+            <button
+              @click="triggerDownload"
+              class="p-2 rounded-xl text-slate-400 hover:text-sky-400 hover:bg-slate-800 transition"
+              title="Unduh Berkas Audio"
+            >
+              <Download class="w-4 h-4" />
+            </button>
+          </div>
+
+          <!-- Volume Controls Bar -->
+          <div class="flex items-center justify-center gap-2 pt-1">
+            <button @click="toggleAudioMute" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">
+              <VolumeX v-if="isAudioMuted || audioVolume === 0" class="w-3.5 h-3.5 text-rose-400" />
+              <Volume1 v-else-if="audioVolume < 0.5" class="w-3.5 h-3.5 text-amber-300" />
+              <Volume2 v-else class="w-3.5 h-3.5 text-amber-400" />
+            </button>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              :value="isAudioMuted ? 0 : audioVolume"
+              @input="onAudioVolumeChange"
+              class="w-24 sm:w-28 accent-amber-400 h-1 bg-slate-800 rounded-lg cursor-pointer"
+            />
+            <span class="text-[10px] text-slate-500 font-mono w-8">
+              {{ isAudioMuted ? '0%' : Math.round(audioVolume * 100) + '%' }}
+            </span>
+          </div>
         </div>
 
         <audio
@@ -298,7 +475,7 @@ watch(() => props.file.path, () => {
           @loadedmetadata="onAudioLoaded"
           @play="isAudioPlaying = true"
           @pause="isAudioPlaying = false"
-          @ended="isAudioPlaying = false"
+          @ended="onAudioEnded"
           class="hidden"
         ></audio>
       </div>

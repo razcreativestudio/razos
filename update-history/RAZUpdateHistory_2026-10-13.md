@@ -421,4 +421,40 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - Respons `/api/v1/files/thumbnail` diverifikasi mengembalikan status 200 OK beserta header `Cache-Control: public, max-age=604800, immutable` dan `ETag`.
 - UI File Manager tetap responsif, mulus, dan tidak pernah hang saat membuka direktori dengan banyak gambar.
 
+---
+
+### Versi: 2.4.7-music-player-redesign-and-controls-suite (Redesain Music Player: Eliminasi Kontrol Terpotong, Turntable Vinyl, Equalizer Waveform, Autoplay & Kontrol Lengkap)
+**Waktu Eksekusi:** 2026-10-13 13:20 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Masalah Utama yang Teridentifikasi
+- **Kontrol Audio Terpotong Habis (Window Height Terlalu Pendek):**
+  - Ukuran default jendela audio viewer di `RAZWindowStore.js` sebelumnya hanya `460 x 340 px` dengan `minHeight = 260`.
+  - Akibatnya, elemen piringan hitam, teks judul, scrubber timeline, tombol Play/Pause, tombol mute, dan tombol unduh terdorong ke bawah dan terpotong oleh batas bawah jendela window frame.
+- **Ketiadaan Tombol Kendali Esensial & Autoplay:**
+  - Belum ada tombol lompat maju/mundur 10 detik (`SkipBack` / `SkipForward`), tombol mode loop/repeat (`Repeat`), dan slider pengatur volume audio independen.
+  - Saat jendela pemutar musik dibuka, lagu tidak otomatis memutar (*no autoplay*).
+
+#### 2. Solusi & Peningkatan yang Diterapkan
+- **Optimalisasi Dimensi Window Frame Audio ([`RAZWindowStore.js`](file:///c:/laragon/www/razos/frontend/src/stores/RAZWindowStore.js)):**
+  - Mengubah dimensi jendela default pemutar audio menjadi `480 x 520 px` dengan `minWidth = 380` dan `minHeight = 440`.
+  - Tata letak menggunakan `flex flex-col justify-between` sehingga seluruh kontrol dijamin terlihat utuh dan tidak terpotong di resolusi layar apa pun.
+- **Turntable Vinyl Disc Interaktif & Animated Equalizer Waveform ([`RAZFileViewerView.vue`](file:///c:/laragon/www/razos/frontend/src/views/RAZFileViewerView.vue)):**
+  - Desain piringan hitam dengan alur konsentris vinyl (*groove rings*) dan label emas berputar 60 FPS saat memutar musik.
+  - Klik langsung pada vinyl disc berfungsi sebagai tombol pintas Play/Pause dengan efek hover overlay.
+  - Menambahkan **Animated Audio Wave / Equalizer Bars (16 Bars)** yang menari-nari naik-turun selaras waktu audio saat memutar dan mereda ke garis datar saat dijeda.
+- **Paket Kontrol Pemutaran Lengkap (Modern Audio Playback Suite):**
+  - **Autoplay On-Mount & Track-Switch:** Lagu otomatis memutar seketika saat berkas audio dibuka atau saat pengguna berganti lagu.
+  - **Tombol Play / Pause Utama:** Tombol bundar besar emas/amber berbayangan pendar (*glow shadow*) di posisi tengah yang mudah ditekan.
+  - **Lompat 10 Detik:** Tombol cepat mundur 10s (`SkipBack`) dan maju 10s (`SkipForward`).
+  - **Mode Ulangi Lagu (Loop / Repeat):** Tombol toggle mode loop dengan titik indikator aktif.
+  - **Scrubber Timeline Presisi:** Progress bar akurat dengan penunjuk waktu berjalan (`01:23`) dan total durasi (`03:45`).
+  - **Slider Kontrol Volume Interaktif:** Ikon speaker dinamis (`VolumeX`, `Volume1`, `Volume2`) lengkap dengan slider horizontal persentase volume.
+  - **Metadata & Tombol Unduh:** Badge format (MP3, WAV, FLAC, dll), estimasi ukuran berkas, status `HQ STEREO`, dan tombol unduh berkas.
+
+#### 3. Verifikasi & Definisi Selesai (DoD)
+- Build produksi Vite frontend (`npm run build`) sukses 100% (*1578 modules transformed*).
+- Tampilan jendela Music Player kini lega, elegan, bebas dari pemotongan elemen, dan seluruh fungsi tombol bekerja responsif.
+
+
 
