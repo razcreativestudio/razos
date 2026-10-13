@@ -14,6 +14,7 @@ import {
   FastForward, Gauge
 } from 'lucide-vue-next'
 import { useSystemStore } from '../stores/RAZSystemStore'
+import RAZMarkdownViewer from '../components/RAZMarkdownViewer.vue'
 
 const props = defineProps({
   file: {
@@ -31,7 +32,8 @@ const isImage = computed(() => ['.webp', '.png', '.jpg', '.jpeg', '.svg', '.gif'
 const isVideo = computed(() => ['.mp4', '.webm', '.mkv', '.mov', '.avi'].includes(ext.value))
 const isAudio = computed(() => ['.mp3', '.wav', '.ogg', '.aac', '.flac', '.m4a'].includes(ext.value))
 const isPdf = computed(() => ext.value === '.pdf')
-const isCodeOrText = computed(() => !isImage.value && !isVideo.value && !isAudio.value && !isPdf.value)
+const isMarkdown = computed(() => ['.md', '.markdown', '.mdown', '.mkd'].includes(ext.value))
+const isCodeOrText = computed(() => !isImage.value && !isVideo.value && !isAudio.value && !isPdf.value && !isMarkdown.value)
 
 // Raw stream URL
 const rawFileUrl = computed(() => `/api/v1/files/raw?path=${encodeURIComponent(props.file.path)}`)
@@ -684,7 +686,12 @@ watch(() => props.file.path, () => {
       <iframe :src="rawFileUrl" class="w-full flex-1 border-none bg-slate-950"></iframe>
     </template>
 
-    <!-- 5. IN-BROWSER CODE & TEXT EDITOR -->
+    <!-- 5. DEDICATED MARKDOWN DOCUMENT VIEWER & READER SUITE -->
+    <template v-else-if="isMarkdown">
+      <RAZMarkdownViewer :file="file" />
+    </template>
+
+    <!-- 6. IN-BROWSER CODE & TEXT EDITOR -->
     <template v-else>
       <div class="h-11 px-3 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between text-xs shrink-0">
         <div class="flex items-center gap-2">

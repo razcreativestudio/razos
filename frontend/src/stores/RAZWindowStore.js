@@ -195,6 +195,12 @@ export const useWindowStore = defineStore('window', () => {
       height = 580
       minWidth = 450
       minHeight = 350
+    } else if (['.md', '.markdown', '.mdown', '.mkd'].includes(ext)) {
+      icon = '/assets/icons/RAZIconCodeEditor.svg'
+      width = 840
+      height = 620
+      minWidth = 460
+      minHeight = 360
     }
 
     zIndexCounter.value++

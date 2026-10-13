@@ -21,7 +21,7 @@ import {
   ChevronRight, ArrowLeft, ArrowRight, ArrowUp, RefreshCw, X, Save, AlertTriangle, Eye, Usb,
   Grid, List, Search, Star, Download, Info, CheckCircle2, Clock, Upload,
   Share2, MoreVertical, LayoutGrid, Server, Image, Film, Music, FileCheck, Play,
-  Copy, Check
+  Copy, Check, BookOpen
 } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
@@ -314,8 +314,12 @@ function isCodeFile(ext) {
   return ['.go', '.js', '.json', '.vue', '.html', '.css', '.sh', '.yaml', '.py', '.php', '.sql'].includes(ext)
 }
 
+function isMarkdownFile(ext) {
+  return ['.md', '.markdown', '.mdown', '.mkd'].includes(ext)
+}
+
 function isDocFile(ext) {
-  return ['.txt', '.md', '.log', '.env', '.conf', '.ini'].includes(ext)
+  return ['.txt', '.log', '.env', '.conf', '.ini'].includes(ext)
 }
 
 // Filtered & Searched Files
@@ -330,7 +334,7 @@ const filteredFiles = computed(() => {
     if (filterType.value === 'images') return !item.is_dir && isImageFile(item.extension)
     if (filterType.value === 'video') return !item.is_dir && isVideoFile(item.extension)
     if (filterType.value === 'audio') return !item.is_dir && isAudioFile(item.extension)
-    if (filterType.value === 'docs') return !item.is_dir && (isDocFile(item.extension) || isPdfFile(item.extension))
+    if (filterType.value === 'docs') return !item.is_dir && (isDocFile(item.extension) || isPdfFile(item.extension) || isMarkdownFile(item.extension))
     if (filterType.value === 'code') return !item.is_dir && isCodeFile(item.extension)
 
     return true
@@ -929,13 +933,14 @@ onMounted(async () => {
                   />
                 </div>
                 <div v-else class="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-inner"
-                     :class="item.is_dir ? 'bg-sky-500/15 text-sky-400 border border-sky-500/20' : isVideoFile(item.extension) ? 'bg-purple-500/15 text-purple-400 border border-purple-500/20' : isAudioFile(item.extension) ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20' : isPdfFile(item.extension) ? 'bg-rose-500/15 text-rose-400 border border-rose-500/20' : 'bg-slate-800/80 text-emerald-400 border border-slate-700/60'">
+                     :class="item.is_dir ? 'bg-sky-500/15 text-sky-400 border border-sky-500/20' : isVideoFile(item.extension) ? 'bg-purple-500/15 text-purple-400 border border-purple-500/20' : isAudioFile(item.extension) ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20' : isPdfFile(item.extension) ? 'bg-rose-500/15 text-rose-400 border border-rose-500/20' : isMarkdownFile(item.extension) ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30' : isCodeFile(item.extension) ? 'bg-slate-800/80 text-emerald-400 border border-slate-700/60' : 'bg-slate-800/80 text-amber-300 border border-slate-700/60'">
                   <Folder v-if="item.is_dir" class="w-6 h-6 fill-sky-400/20 text-sky-400" />
                   <Film v-else-if="isVideoFile(item.extension)" class="w-5 h-5 text-purple-400" />
                   <Music v-else-if="isAudioFile(item.extension)" class="w-5 h-5 text-amber-400" />
                   <FileText v-else-if="isPdfFile(item.extension)" class="w-5 h-5 text-rose-400" />
+                  <BookOpen v-else-if="isMarkdownFile(item.extension)" class="w-5 h-5 text-sky-400" />
                   <FileCode v-else-if="isCodeFile(item.extension)" class="w-5 h-5 text-emerald-400" />
-                  <FileText v-else-if="isDocFile(item.extension)" class="w-5 h-5 text-sky-400" />
+                  <FileText v-else-if="isDocFile(item.extension)" class="w-5 h-5 text-amber-300" />
                   <File v-else class="w-5 h-5 text-slate-400" />
                 </div>
 
@@ -1009,8 +1014,9 @@ onMounted(async () => {
                     <Film v-else-if="isVideoFile(item.extension)" class="w-4 h-4 text-purple-400" />
                     <Music v-else-if="isAudioFile(item.extension)" class="w-4 h-4 text-amber-400" />
                     <FileText v-else-if="isPdfFile(item.extension)" class="w-4 h-4 text-rose-400" />
+                    <BookOpen v-else-if="isMarkdownFile(item.extension)" class="w-4 h-4 text-sky-400" />
                     <FileCode v-else-if="isCodeFile(item.extension)" class="w-4 h-4 text-emerald-400" />
-                    <FileText v-else-if="isDocFile(item.extension)" class="w-4 h-4 text-amber-400" />
+                    <FileText v-else-if="isDocFile(item.extension)" class="w-4 h-4 text-amber-300" />
                     <File v-else class="w-4 h-4 text-slate-400" />
                     <span class="truncate max-w-[280px]">{{ item.name }}</span>
                   </td>

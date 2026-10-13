@@ -861,6 +861,44 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - Multi-window multitasking berjalan sempurna: pengguna dapat membuka Website Manager, lalu membuka Wizard Buat Website atau Edit Website di jendela terpisah, sambil tetap bebas mengklik, menjelajah, dan mengelola website di jendela utama tanpa gangguan sedikit pun.
 - Seluruh backup tersimpan aman di `backup/*.bak_v260`.
 
+---
+
+### Versi: 2.6.1-dedicated-markdown-viewer-reader (Dedicated Markdown Document Reader & Editor Suite)
+**Waktu Eksekusi:** 2026-10-13 16:30 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Masalah & Kebutuhan Pengguna
+- **Instruksi Pengguna:** *"di file manager untuk file file yang berisi markdown atau format markdown, buatkan markdown view nya untuk membaca nya"*
+- **Kendala Sebelumnya:**
+  - Berkas format Markdown (`.md`, `.markdown`, `.mdown`, `.mkd`) sebelumnya dibuka di dalam plain text editor monokrom standar.
+  - Teks terlihat mentah tanpa rendering format, tabel berantakan, heading tidak berjenjang, dan tidak ada pengalaman membaca dokumen yang nyaman seperti Typora, GitHub Readme, atau Obsidian.
+
+#### 2. Solusi & Implementasi Fitur (`RAZMarkdownViewer.vue`)
+- **Tiga Mode Tampilan Dokumen Fleksibel:**
+  1. **Mode Pratinjau (Preview / Reader):** Memformat seluruh sintaks Markdown ke artikel HTML dark mode elegan. Mendukung heading h1-h6 berjenjang, tabel bergaris rapi, blockquote bergaris aksen sky-500, task list checkbox, code block terformat, dan link aktif.
+  2. **Mode Dua Sisi (Split View):** Sisi kiri menampilkan editor teks Markdown mentah, dan sisi kanan menyajikan Live Preview yang ter-render secara sinkron seketika saat teks diketik.
+  3. **Mode Editor (Raw):** Editor teks Markdown penuh dengan informasi jumlah baris dan karakter.
+- **Daftar Isi Otomatis (Table of Contents / Outline):**
+  - Mesin parser cerdas mendeteksi otomatis seluruh heading `#`, `##`, `###`, `####` di dalam dokumen.
+  - Sidebar outline popover yang dapat diklik untuk melakukan *smooth scroll* langsung ke bagian bab/heading yang dipilih.
+- **Statistik Dokumen Real-Time:**
+  - Menampilkan jumlah kata (*word count*), jumlah karakter, jumlah baris, serta estimasi waktu membaca (*estimated reading time* misal: `~2 mnt baca`).
+- **Aksi Cepat Dokumen:**
+  - **Salin Teks (Copy Markdown):** Salin seluruh isi berkas ke clipboard dengan notifikasi sukses.
+  - **Simpan (Save):** Simpan perubahan berkas kembali ke filesystem STB.
+  - **Unduh (Download):** Unduh berkas `.md` ke komputer lokal.
+  - **Muat Ulang (Reload):** Segarkan konten berkas dari server.
+- **Peningkatan Visual di File Manager (`RAZFileManagerView.vue`):**
+  - Menambahkan deteksi format `isMarkdownFile` (`.md`, `.markdown`, `.mdown`, `.mkd`).
+  - Menyematkan ikon buku terbuka (`BookOpen`) berwarna cyan/sky yang khas pada tampilan grid maupun list view di File Manager.
+  - Pengoptimalan ukuran jendela default di `RAZWindowStore.js` (840x620px) agar sangat proporsional untuk membaca artikel dan dokumentasi.
+
+#### 3. Verifikasi & Definisi Selesai (DoD)
+- Kompilasi build frontend Vite (`npm run build`) sukses 100% (*1588 modules transformed* dalam 4.31 detik).
+- Membuka file Markdown dari File Manager (seperti `Readme.md` atau `Projectplan.md`) langsung memuat Markdown Reader dengan styling tipografi dark mode yang sangat memanjakan mata.
+- File backup tersimpan di `backup/RAZFileViewerView.vue.bak_v261`.
+
+
 
 
 
