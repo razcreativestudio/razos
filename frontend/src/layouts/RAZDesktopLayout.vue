@@ -266,7 +266,7 @@ function handleDesktopIconContextMenu(e, app) {
             <RAZFilePropertiesView v-else-if="win.id.startsWith('file-prop-')" :win="win" />
 
             <!-- Standalone Website Wizard Window -->
-            <RAZWebsiteWizardView v-else-if="win.id === 'website-create'" />
+            <RAZWebsiteWizardView v-else-if="win.id === 'website-create'" :win="win" />
 
             <!-- Standalone Website Edit Window -->
             <RAZWebsiteEditView v-else-if="win.id.startsWith('website-edit-')" :win="win" />
@@ -278,7 +278,7 @@ function handleDesktopIconContextMenu(e, app) {
             <RAZWebsiteDetailView v-else-if="win.id.startsWith('website-detail-')" :win="win" />
 
             <!-- Standalone Database Creator Window -->
-            <RAZDatabaseCreatorView v-else-if="win.id === 'database-create'" />
+            <RAZDatabaseCreatorView v-else-if="win.id === 'database-create'" :win="win" />
 
             <!-- Aplikasi Utama Berdasarkan ID -->
             <component v-else :is="viewMap[win.id]" />

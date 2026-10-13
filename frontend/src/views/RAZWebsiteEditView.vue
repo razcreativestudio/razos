@@ -16,7 +16,8 @@ import {
 const props = defineProps({
   win: {
     type: Object,
-    required: true
+    required: false,
+    default: () => ({ customData: {} })
   }
 })
 
@@ -146,7 +147,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="h-full flex flex-col justify-between text-xs sm:text-sm select-none gap-3">
+  <form @submit.prevent="confirmUpdateWebsite" class="h-full flex flex-col justify-between text-xs sm:text-sm select-none gap-3">
     <!-- Navigation Tabs -->
     <div class="flex items-center gap-1 overflow-x-auto bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-[11px] shrink-0">
       <button
@@ -430,5 +431,5 @@ onMounted(() => {
         <span>{{ isSavingEdit ? 'Menyimpan...' : 'Simpan Perubahan' }}</span>
       </button>
     </div>
-  </div>
+  </form>
 </template>

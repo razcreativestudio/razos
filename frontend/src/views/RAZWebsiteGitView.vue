@@ -16,7 +16,8 @@ import {
 const props = defineProps({
   win: {
     type: Object,
-    required: true
+    required: false,
+    default: () => ({ customData: {} })
   }
 })
 
@@ -132,7 +133,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="h-full flex flex-col justify-between text-xs select-none gap-3">
+  <form @submit.prevent="saveGitConfig" class="h-full flex flex-col justify-between text-xs select-none gap-3">
     <!-- Body Form & Log -->
     <div class="flex-1 overflow-y-auto space-y-3.5 pr-1">
       <!-- Folder Sasaran -->
@@ -242,5 +243,5 @@ onMounted(() => {
         </button>
       </div>
     </div>
-  </div>
+  </form>
 </template>

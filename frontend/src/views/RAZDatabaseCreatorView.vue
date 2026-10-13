@@ -13,6 +13,14 @@ import { Database, ShieldCheck, Check, X, Server } from 'lucide-vue-next'
 const systemStore = useSystemStore()
 const windowStore = useWindowStore()
 
+const props = defineProps({
+  win: {
+    type: Object,
+    required: false,
+    default: () => ({ id: 'database-create' })
+  }
+})
+
 const dbName = ref('')
 const dbEngine = ref('mariadb')
 const dbUser = ref('raz_user')
@@ -45,7 +53,7 @@ async function handleSubmit() {
       // Picu refresh reaktif global ke semua window
       systemStore.triggerDatabasesRefresh()
       // Tutup window pembuatan DB
-      windowStore.closeWindow('database-create')
+      windowStore.closeWindow(props.win?.id || 'database-create')
     } else {
       systemStore.showNotification('Gagal', 'Gagal membuat database baru', 'error')
     }
@@ -57,12 +65,12 @@ async function handleSubmit() {
 }
 
 function handleCancel() {
-  windowStore.closeWindow('database-create')
+  windowStore.closeWindow(props.win?.id || 'database-create')
 }
 </script>
 
 <template>
-  <div class="h-full flex flex-col justify-between p-4 bg-slate-900/90 text-xs sm:text-sm select-none">
+  <form @submit.prevent="handleSubmit" class="h-full flex flex-col justify-between p-4 bg-slate-900/90 text-xs sm:text-sm select-none">
     <div class="space-y-4 overflow-y-auto pr-1">
       <!-- Info Header -->
       <div class="flex items-center gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
@@ -154,5 +162,5 @@ function handleCancel() {
         <span>{{ isSubmitting ? 'Memproses...' : 'Simpan & Aktifkan DB' }}</span>
       </button>
     </div>
-  </div>
+  </form>
 </template>

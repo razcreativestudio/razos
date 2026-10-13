@@ -16,7 +16,8 @@ import {
 const props = defineProps({
   win: {
     type: Object,
-    required: true
+    required: false,
+    default: () => ({ id: 'website-create' })
   }
 })
 
@@ -199,7 +200,7 @@ async function confirmCreateWebsite() {
       // Memicu Website Manager memuat ulang daftar secara reaktif
       systemStore.triggerWebsitesRefresh()
       // Tutup jendela wizard mandiri ini
-      windowStore.closeWindow(props.win.id)
+      windowStore.closeWindow(props.win?.id || 'website-create')
     } else {
       systemStore.showNotification('Gagal', data.error || 'Gagal membuat website', 'error')
     }
@@ -216,7 +217,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="h-full flex flex-col justify-between text-xs sm:text-sm select-none gap-3">
+  <form @submit.prevent="confirmCreateWebsite" class="h-full flex flex-col justify-between text-xs sm:text-sm select-none gap-3">
     <!-- Wizard Stepper Indicator -->
     <div class="grid grid-cols-4 gap-1.5 bg-slate-950/80 p-1.5 rounded-xl border border-slate-800/80 text-center text-[11px] shrink-0">
       <button
@@ -485,5 +486,5 @@ onMounted(() => {
         </button>
       </div>
     </div>
-  </div>
+  </form>
 </template>
