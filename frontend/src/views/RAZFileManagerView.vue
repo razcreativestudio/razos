@@ -226,31 +226,43 @@ async function fetchFiles(targetPath = currentPath.value, isHistoryNav = false) 
   selectedItem.value = null
   try {
     const res = await fetch(`/api/v1/files/list?path=${encodeURIComponent(cleanPath)}`)
-    if (res.ok) {
-      files.value = await res.json()
-      currentPath.value = cleanPath
-      addressInputValue.value = cleanPath
+    const data = await res.json()
+
+    // Tangani jika folder dilindungi izin sistem operasi (Access Denied)
+    if (data && data.isAccessDenied) {
+      systemStore.showNotification('Akses Ditolak', data.error || `Direktori "${cleanPath}" dilindungi sistem operasi.`, 'warning')
+      addressInputValue.value = currentPath.value
+      isLoading.value = false
+      return
+    }
+
+    if (res.ok && Array.isArray(data)) {
+      // Periksa apakah server me-resolve Windows Junction (misal My Documents -> Documents)
+      const resolvedHeader = res.headers.get('X-Resolved-Path')
+      const actualPath = resolvedHeader ? normalizePath(resolvedHeader) : cleanPath
+
+      files.value = data
+      currentPath.value = actualPath
+      addressInputValue.value = actualPath
 
       // Rekam jejak ke history stack jika bukan navigasi back/forward
       if (!isHistoryNav) {
         if (historyIndex.value < historyStack.value.length - 1) {
           historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
         }
-        if (historyStack.value.length === 0 || historyStack.value[historyStack.value.length - 1] !== cleanPath) {
-          historyStack.value.push(cleanPath)
+        if (historyStack.value.length === 0 || historyStack.value[historyStack.value.length - 1] !== actualPath) {
+          historyStack.value.push(actualPath)
           historyIndex.value = historyStack.value.length - 1
         }
       }
     } else {
       // Notifikasi peringatan jika path tidak ditemukan
       systemStore.showNotification('Peringatan', `Direktori "${cleanPath}" tidak ditemukan`, 'warning')
-      // Fallback aman ke default storage jika path yang diminta invalid
-      if (cleanPath !== defaultStoragePath.value) {
-        fetchFiles(defaultStoragePath.value)
-      }
+      addressInputValue.value = currentPath.value
     }
   } catch (err) {
     systemStore.showNotification('Gagal', `Gagal memuat direktori: ${err.message}`, 'error')
+    addressInputValue.value = currentPath.value
   }
   isLoading.value = false
 }

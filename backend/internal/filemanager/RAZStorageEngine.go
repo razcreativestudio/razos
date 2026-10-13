@@ -108,6 +108,10 @@ func ListDirectory(targetPath string) ([]FileItem, error) {
 	}
 
 	cleanPath := filepath.Clean(targetPath)
+	// Resolusi Windows Junction dan symbolic links secara transparan
+	if evalPath, evalErr := filepath.EvalSymlinks(cleanPath); evalErr == nil {
+		cleanPath = evalPath
+	}
 	entries, err := os.ReadDir(cleanPath)
 	if err != nil {
 		return nil, err

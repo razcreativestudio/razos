@@ -10,7 +10,7 @@ import { ref, onMounted, computed, watch } from 'vue'
 import {
   ZoomIn, ZoomOut, RotateCw, RotateCcw, Maximize2, Download, Play, Pause,
   Volume2, VolumeX, Save, RefreshCw, CheckCircle2, FileText, Film, Music,
-  FileCode, ExternalLink, Info
+  FileCode, ExternalLink, Info, ShieldAlert, AlertCircle
 } from 'lucide-vue-next'
 import { useSystemStore } from '../stores/RAZSystemStore'
 
@@ -108,19 +108,33 @@ const textContent = ref('')
 const originalContent = ref('')
 const isLoadingText = ref(false)
 const isSavingText = ref(false)
+const isLockedFile = ref(false)
+const lockErrorMessage = ref('')
+const lockErrorCode = ref('')
 const isDirty = computed(() => textContent.value !== originalContent.value)
 
 async function loadTextContent() {
   if (!isCodeOrText.value) return
   isLoadingText.value = true
+  isLockedFile.value = false
+  lockErrorMessage.value = ''
+  lockErrorCode.value = ''
   try {
     const res = await fetch(`/api/v1/files/content?path=${encodeURIComponent(props.file.path)}`)
-    if (res.ok) {
-      const data = await res.json()
+    const data = await res.json()
+    if (res.ok && !data.isLocked && !data.error) {
       textContent.value = data.content || ''
       originalContent.value = data.content || ''
+    } else {
+      isLockedFile.value = true
+      lockErrorMessage.value = data.error || 'Berkas tidak dapat dibuka atau diakses.'
+      lockErrorCode.value = data.errorCode || (data.notFound ? 'NOT_FOUND' : 'LOCKED')
     }
-  } catch (err) {}
+  } catch (err) {
+    isLockedFile.value = true
+    lockErrorMessage.value = `Gagal memuat berkas: ${err.message}`
+    lockErrorCode.value = 'ERROR'
+  }
   isLoadingText.value = false
 }
 
@@ -340,7 +354,25 @@ watch(() => props.file.path, () => {
         </div>
       </div>
 
-      <div class="flex-1 relative flex">
+      <!-- Tampilan Berkas Terkunci oleh Kernel Sistem / Tidak Dapat Diakses -->
+      <div v-if="isLockedFile" class="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-950/90 gap-4">
+        <div class="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shadow-xl shadow-amber-500/5">
+          <ShieldAlert class="w-8 h-8" />
+        </div>
+        <div class="max-w-md space-y-1.5">
+          <h3 class="text-sm font-bold text-slate-100">Berkas Dibatasi oleh Sistem Operasi</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            {{ lockErrorMessage }}
+          </p>
+        </div>
+        <div class="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-400 flex items-center gap-2">
+          <span>Status Kode:</span>
+          <span class="text-amber-400 font-bold">{{ lockErrorCode }}</span>
+        </div>
+      </div>
+
+      <!-- Textarea Editor Normal -->
+      <div v-else class="flex-1 relative flex">
         <textarea
           v-model="textContent"
           class="w-full h-full p-4 bg-slate-950 text-emerald-400 font-mono text-xs outline-none resize-none leading-relaxed selection:bg-sky-500/30 border-none"

@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import os from 'os'
 import fs from 'fs'
+import path from 'path'
 import { execSync } from 'child_process'
 
 // Plugin middleware API Vite untuk menyajikan endpoint real hardware & database SQLite/JSON tanpa dummy data
@@ -238,20 +239,56 @@ function razosApiPlugin() {
         return clean
       }
 
+      // Helper Resolusi Windows NTFS Junction Points & Symbolic Links
+      function resolveJunctionTarget(targetPath) {
+        try {
+          if (fs.existsSync(targetPath)) {
+            const lstat = fs.lstatSync(targetPath)
+            if (lstat.isSymbolicLink()) {
+              const link = fs.readlinkSync(targetPath)
+              const resolved = path.isAbsolute(link) ? link : path.resolve(path.dirname(targetPath), link)
+              return resolved.replace(/\\/g, '/')
+            }
+          }
+        } catch (e) {}
+        return targetPath
+      }
+
       // 8. Endpoint Files List (/api/v1/files/list)
       server.middlewares.use('/api/v1/files/list', (req, res) => {
         const urlObj = new URL(req.url, 'http://localhost')
         const rawPath = urlObj.searchParams.get('path') || ''
         const targetPath = resolveSafePath(rawPath)
+        // Otomatis resolve jika target merupakan Windows Junction (misal Documents and Settings -> C:/Users, My Documents -> C:/Users/.../Documents)
+        const activePath = resolveJunctionTarget(targetPath)
 
         try {
-          if (!fs.existsSync(targetPath)) {
-            res.statusCode = 404
-            return res.end(JSON.stringify({ error: `Direktori tidak ditemukan: ${targetPath}` }))
+          if (!fs.existsSync(activePath)) {
+            res.setHeader('Content-Type', 'application/json')
+            return res.end(JSON.stringify({
+              error: `Direktori tidak ditemukan: ${activePath}`,
+              isNotFound: true,
+              items: []
+            }))
           }
 
-          const dirEntries = fs.readdirSync(targetPath, { withFileTypes: true })
-          const cleanParent = targetPath.endsWith('/') ? targetPath : targetPath + '/'
+          let dirEntries = []
+          try {
+            dirEntries = fs.readdirSync(activePath, { withFileTypes: true })
+          } catch (readErr) {
+            // Tangani izin sistem proteksi (EPERM / EACCES / EBUSY pada System Volume Information, dsb)
+            if (readErr.code === 'EPERM' || readErr.code === 'EACCES' || readErr.code === 'EBUSY') {
+              res.setHeader('Content-Type', 'application/json')
+              return res.end(JSON.stringify({
+                error: `Akses ditolak: Direktori '${activePath}' dilindungi oleh sistem operasi (${readErr.code}).`,
+                isAccessDenied: true,
+                items: []
+              }))
+            }
+            throw readErr
+          }
+
+          const cleanParent = activePath.endsWith('/') ? activePath : activePath + '/'
 
           const items = dirEntries.map(e => {
             const full = (cleanParent + e.name).replace(/\\/g, '/')
@@ -289,11 +326,19 @@ function razosApiPlugin() {
               extension: isDir ? '' : (e.name.includes('.') ? '.' + e.name.split('.').pop() : '')
             }
           })
+
           res.setHeader('Content-Type', 'application/json')
+          if (activePath !== targetPath) {
+            res.setHeader('X-Resolved-Path', activePath)
+          }
           res.end(JSON.stringify(items))
         } catch (err) {
-          res.statusCode = 500
-          res.end(JSON.stringify({ error: err.message }))
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({
+            error: err.message,
+            isAccessDenied: true,
+            items: []
+          }))
         }
       })
 
@@ -376,17 +421,38 @@ function razosApiPlugin() {
           const rawPath = urlObj.searchParams.get('path')
           const targetPath = resolveSafePath(rawPath)
           try {
+            if (!fs.existsSync(targetPath)) {
+              res.setHeader('Content-Type', 'application/json')
+              return res.end(JSON.stringify({ error: 'Berkas tidak ditemukan.', notFound: true, content: '' }))
+            }
             const stat = fs.statSync(targetPath)
             if (stat.isDirectory()) {
-              res.statusCode = 400
-              return res.end(JSON.stringify({ error: 'Target adalah folder direktori, bukan berkas teks.' }))
+              res.setHeader('Content-Type', 'application/json')
+              return res.end(JSON.stringify({ error: 'Target adalah folder direktori, bukan berkas teks.', isDirectory: true, content: '' }))
             }
-            const content = fs.readFileSync(targetPath, 'utf-8')
-            res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify({ content }))
+
+            try {
+              const content = fs.readFileSync(targetPath, 'utf-8')
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ content, isLocked: false }))
+            } catch (readErr) {
+              // Jika berkas sedang dikunci atau diproteksi oleh kernel sistem (EBUSY / EPERM pada DumpStack.log.tmp, pagefile.sys, dll)
+              res.setHeader('Content-Type', 'application/json')
+              return res.end(JSON.stringify({
+                content: '',
+                isLocked: true,
+                errorCode: readErr.code || 'LOCKED',
+                error: `Berkas sedang digunakan atau dikunci secara eksklusif oleh sistem operasi (${readErr.code || 'EBUSY'}).`
+              }))
+            }
           } catch (err) {
-            res.statusCode = 500
-            res.end(JSON.stringify({ error: err.message }))
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({
+              content: '',
+              isLocked: true,
+              errorCode: err.code || 'SYS_ERR',
+              error: err.message
+            }))
           }
         } else if (req.method === 'POST') {
           let body = ''
@@ -399,8 +465,11 @@ function razosApiPlugin() {
               res.setHeader('Content-Type', 'application/json')
               res.end(JSON.stringify({ status: 'saved' }))
             } catch (err) {
-              res.statusCode = 500
-              res.end(JSON.stringify({ error: err.message }))
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({
+                status: 'error',
+                error: `Gagal menyimpan berkas: ${err.message}`
+              }))
             }
           })
         }
@@ -428,14 +497,23 @@ function razosApiPlugin() {
           else if (ext === 'mp3') mime = 'audio/mpeg'
           else if (['wav', 'ogg'].includes(ext)) mime = 'audio/' + ext
           else if (ext === 'pdf') mime = 'application/pdf'
-          else if (['txt', 'md', 'json', 'log', 'env'].includes(ext)) mime = 'text/plain; charset=utf-8'
+          else if (['txt', 'md', 'json', 'log', 'env', 'tmp'].includes(ext)) mime = 'text/plain; charset=utf-8'
 
           res.setHeader('Content-Type', mime)
           const stream = fs.createReadStream(targetPath)
+          stream.on('error', (err) => {
+            if (!res.headersSent) {
+              res.statusCode = 403
+              res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+              res.end(`Berkas tidak dapat di-stream: ${err.message}`)
+            }
+          })
           stream.pipe(res)
         } catch (err) {
-          res.statusCode = 500
-          res.end(err.message)
+          if (!res.headersSent) {
+            res.statusCode = 403
+            res.end(err.message)
+          }
         }
       })
     }

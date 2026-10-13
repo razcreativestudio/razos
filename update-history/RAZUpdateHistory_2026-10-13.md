@@ -259,3 +259,34 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 #### 4. Verifikasi Build & Stabilitas
 - `npm run build` berhasil 100% (*1504 modules transformed*).
 - Dev server HMR berjalan lancar tanpa error di `http://localhost:3000`.
+
+---
+
+### Versi: 2.4.3-windows-junction-and-locked-file-resilience (Resolusi Windows Junction & Penanganan Berkas Terkunci Kernel)
+**Waktu Eksekusi:** 2026-10-13 12:20 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Resolusi Otomatis Windows NTFS Junction Points (`My Documents`, `Documents and Settings`)
+- **Masalah:** Di Windows, folder seperti `C:/Users/Administrator/My Documents` dan `C:/Documents and Settings` merupakan NTFS Junction Points dengan Access Control Entry (ACE) terproteksi. Ketika diklik, `fs.readdirSync()` menghasilkan error `EPERM (Operation not permitted)` yang memicu HTTP 500 di console browser.
+- **Penyelesaian:**
+  - Mengimplementasikan helper `resolveJunctionTarget(targetPath)` menggunakan `fs.lstatSync().isSymbolicLink()` dan `fs.readlinkSync()`.
+  - Ketika pengguna mengklik `My Documents`, target otomatis di-resolve secara transparan ke `C:/Users/Administrator/Documents`.
+  - Menyertakan response header `X-Resolved-Path: C:/Users/Administrator/Documents` sehingga Address Bar dan Breadcrumbs di File Manager langsung sinkron dengan lokasi sebenarnya.
+  - Menyelaraskan implementasi pada backend Go (`backend/internal/filemanager/RAZStorageEngine.go`) menggunakan `filepath.EvalSymlinks()`.
+
+#### 2. Penanganan Berkas Terkunci Kernel Sistem (`DumpStack.log.tmp`, `pagefile.sys`)
+- **Masalah:** Berkas sistem seperti crash log dump kernel (`DumpStack.log.tmp`) atau memory paging berstatus `EBUSY / EXCLUSIVE_LOCK` atau berkas sementara yang dibuat-hapus oleh OS saat runtime, memicu HTTP 500 saat dibuka via penampil teks.
+- **Penyelesaian:**
+  - Endpoint `/api/v1/files/content` mendeteksi error `EBUSY`, `EPERM`, `EACCES`, atau berkas hilang/sementara. Alih-alih crash 500, endpoint mengembalikan respons terstruktur status 200 ber-flag `isLocked: true` dan pesan edukatif.
+  - Menghilangkan pesan `500 (Internal Server Error)` di Network Console browser.
+  - Komponen `RAZFileViewerView.vue` dilengkapi tampilan visual peringatan Glassmorphism (ShieldAlert icon) yang menginformasikan kepada pengguna bahwa berkas tersebut dilindungi atau digunakan secara eksklusif oleh sistem operasi.
+
+#### 3. Penanganan Folder Terproteksi Sistem (`System Volume Information`)
+- Jika pengguna mencoba membuka folder sistem yang memang tidak memiliki izin akses (EPERM / Access Denied):
+  - Endpoint mengembalikan status 200 ber-flag `isAccessDenied: true`.
+  - File Manager menampilkan custom notification: *"⚠️ Akses Ditolak: Direktori dilindungi oleh sistem operasi"*, serta mempertahankan posisi folder sebelumnya tanpa merusak UI explorer.
+
+#### 4. Verifikasi Build & Stabilitas
+- `npm run build` sukses 100% (*1504 modules transformed*).
+- Pengujian otomatis via Node fetch untuk `My Documents` (resolusi ke `Documents`, 65 items) dan `DumpStack.log.tmp` berhasil 100% dengan status HTTP 200 tanpa error konsol.
+- Dev server HMR aktif di `http://localhost:3000`.
