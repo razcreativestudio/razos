@@ -17,10 +17,13 @@
 - [x] Pembuatan modul Maintenance: RAM Cleaner (`drop_caches`) dan Storage Cleaner (`docker system prune`).
 
 ## Fase 3: App Store & Manajemen Container
-- [x] Desain skema katalog aplikasi berbasis YAML/JSON.
-- [x] Implementasi App Store UI (kategori, deskripsi, form port/volume kustom).
-- [x] Engine deploy aplikasi berbasis Docker Compose / Docker Container API ke `/DATA/apps/`.
-- [x] Fitur Clean Uninstall: Menghapus container sekaligus opsi memusnahkan folder data terkait.
+- [x] Desain skema katalog aplikasi berbasis YAML/JSON (525+ aplikasi Docker siap pakai).
+- [x] Implementasi App Store UI (katalog 525+ apps, filter kategori, pencarian live cepat, form port/volume kustom).
+- [x] Full Page App Details View dengan render dokumentasi README.md Markdown visual.
+- [x] Tab "Aplikasi Terpasang (Installed Apps)" terdedikasi untuk inspeksi, peluncuran port Web UI, dan manajemen status aktif.
+- [x] Editor Docker Compose YAML ala CasaOS dengan dukungan upload/drag-and-drop `.yaml`/`.yml`, live parsing container, preset template cepat, dan eksekusi deployment mandiri.
+- [x] Integrasi sinkronisasi Desktop & Start Menu otomatis (`windowStore.allDesktopApps`).
+- [x] Fitur Clean Uninstall terintegrasi di Context Menu klik kanan desktop icon, start menu, dan kartu App Store (opsi `purge_data=true`).
 
 ## Fase 4: Website & Database Management Suite
 - [x] Integrasi Reverse Proxy internal (Caddy embedded / Traefik ringan) untuk routing port domain.

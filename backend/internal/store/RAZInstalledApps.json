@@ -1,0 +1,18 @@
+[
+  {
+    "id": "qbittorrent",
+    "name": "Qbittorrent",
+    "slug": "qbittorrent",
+    "category": "Docker Compose (YAML)",
+    "description": "Aplikasi di-deploy dari berkas Docker Compose YAML (linuxserver/qbittorrent:latest)",
+    "image": "linuxserver/qbittorrent:latest",
+    "port": 8085,
+    "data_path": "/DATA/apps/qbittorrent/config",
+    "extra_envs": [],
+    "installed": true,
+    "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/docker.png",
+    "container_name": "qbittorrent",
+    "compose_yaml": "version: '3.8'\nservices:\n  qbittorrent:\n    image: linuxserver/qbittorrent:latest\n    container_name: qbittorrent\n    ports:\n      - \"8085:8080\"\n    volumes:\n      - /DATA/apps/qbittorrent/config:/config",
+    "installed_at": "2026-10-13T05:38:31.387Z"
+  }
+]

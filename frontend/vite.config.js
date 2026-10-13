@@ -4,6 +4,7 @@ import os from 'os'
 import fs from 'fs'
 import path from 'path'
 import { execSync } from 'child_process'
+import YAML from 'yaml'
 
 // Plugin middleware API Vite untuk menyajikan endpoint real hardware & database SQLite/JSON tanpa dummy data
 function razosApiPlugin() {
@@ -88,27 +89,128 @@ function razosApiPlugin() {
         res.end(JSON.stringify([])) // Dinamis kosong hingga database dibuat
       })
 
-      // 6.1 Endpoint App Store Catalog (/api/v1/store/apps)
-      server.middlewares.use('/api/v1/store/apps', (req, res) => {
-        if (req.method === 'GET') {
-          try {
-            const appsFile = fs.readFileSync('../backend/internal/store/RAZApps.json', 'utf-8')
-            res.setHeader('Content-Type', 'application/json')
-            res.end(appsFile)
-          } catch (e) {
-            try {
-              const appsFile = fs.readFileSync('backend/internal/store/RAZApps.json', 'utf-8')
-              res.setHeader('Content-Type', 'application/json')
-              res.end(appsFile)
-            } catch (err) {
-              res.statusCode = 500
-              res.end(JSON.stringify({ error: err.message }))
-            }
+      // Helper Persistensi Installed Apps
+      function getInstalledAppsFile() {
+        const paths = [
+          '../backend/internal/store/RAZInstalledApps.json',
+          'backend/internal/store/RAZInstalledApps.json'
+        ]
+        for (const p of paths) {
+          if (fs.existsSync(p)) return p
+        }
+        return '../backend/internal/store/RAZInstalledApps.json'
+      }
+
+      function loadInstalledApps() {
+        try {
+          const filePath = getInstalledAppsFile()
+          if (fs.existsSync(filePath)) {
+            const data = fs.readFileSync(filePath, 'utf-8')
+            return JSON.parse(data)
           }
-        } else if (req.method === 'DELETE') {
-          // Uninstall handler
+        } catch (e) {}
+        return []
+      }
+
+      function saveInstalledApps(list) {
+        try {
+          const filePath = getInstalledAppsFile()
+          const dir = path.dirname(filePath)
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+          fs.writeFileSync(filePath, JSON.stringify(list, null, 2), 'utf-8')
+          return true
+        } catch (e) {
+          return false
+        }
+      }
+
+      function loadCatalogApps() {
+        const paths = [
+          '../backend/internal/store/RAZApps.json',
+          'backend/internal/store/RAZApps.json'
+        ]
+        for (const p of paths) {
+          if (fs.existsSync(p)) {
+            try {
+              return JSON.parse(fs.readFileSync(p, 'utf-8'))
+            } catch (e) {}
+          }
+        }
+        return []
+      }
+
+      // 6.0 Endpoint Installed Apps List (/api/v1/store/installed)
+      server.middlewares.use('/api/v1/store/installed', (req, res) => {
+        if (req.method === 'GET') {
+          const list = loadInstalledApps()
           res.setHeader('Content-Type', 'application/json')
-          res.end(JSON.stringify({ status: 'uninstalled' }))
+          res.end(JSON.stringify(list))
+        }
+      })
+
+      // 6.1 Endpoint App Store Catalog & Uninstall (/api/v1/store/apps)
+      server.middlewares.use('/api/v1/store/apps', (req, res) => {
+        const urlObj = new URL(req.url, 'http://localhost')
+        const pathname = urlObj.pathname
+
+        if (req.method === 'GET') {
+          const catalog = loadCatalogApps()
+          const installed = loadInstalledApps()
+          const installedMap = new Map(installed.map(it => [it.slug || it.id, it]))
+
+          // Sinkronisasi status terpasang pada katalog 525+ apps
+          const merged = catalog.map(app => {
+            const match = installedMap.get(app.slug) || installedMap.get(app.id)
+            if (match) {
+              return {
+                ...app,
+                installed: true,
+                installed_port: match.port,
+                installed_volume: match.data_path,
+                installed_at: match.installed_at
+              }
+            }
+            return { ...app, installed: false }
+          })
+
+          // Tambahkan aplikasi kustom (yang diinstal via YAML atau manual tapi tidak ada di katalog resmi)
+          installed.forEach(inst => {
+            const inCatalog = merged.some(m => m.slug === inst.slug || m.id === inst.id)
+            if (!inCatalog) {
+              merged.unshift(inst)
+            }
+          })
+
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify(merged))
+        } else if (req.method === 'DELETE') {
+          // Uninstall handler: /api/v1/store/apps/:slug?purge_data=true
+          const parts = pathname.split('/')
+          const slug = parts[parts.length - 1] || urlObj.searchParams.get('slug')
+          const purgeData = urlObj.searchParams.get('purge_data') === 'true'
+
+          const list = loadInstalledApps()
+          const targetIndex = list.findIndex(a => a.slug === slug || a.id === slug)
+
+          if (targetIndex >= 0) {
+            const targetApp = list[targetIndex]
+            if (purgeData && targetApp.data_path) {
+              try {
+                const targetDir = resolveSafePath(targetApp.data_path)
+                if (fs.existsSync(targetDir)) {
+                  fs.rmSync(targetDir, { recursive: true, force: true })
+                }
+              } catch (e) {}
+            }
+            list.splice(targetIndex, 1)
+            saveInstalledApps(list)
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ status: 'uninstalled', slug: slug, purge_data: purgeData }))
+          } else {
+            // Failsafe jika slug tidak ditemukan di list installed
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ status: 'uninstalled', slug: slug }))
+          }
         }
       })
 
@@ -120,11 +222,209 @@ function razosApiPlugin() {
           req.on('end', () => {
             try {
               const data = JSON.parse(body)
+              const catalog = loadCatalogApps()
+              const installed = loadInstalledApps()
+
+              let record = null
+
+              if (data.app_id) {
+                // Pasang dari katalog resmi
+                const app = catalog.find(a => a.id === data.app_id || a.slug === data.app_id)
+                if (app) {
+                  record = {
+                    id: app.id,
+                    name: app.name,
+                    slug: app.slug,
+                    category: app.category,
+                    description: app.description,
+                    image: app.image,
+                    port: parseInt(data.port) || app.default_port,
+                    data_path: data.data_path || app.default_volume || `/DATA/apps/${app.slug}`,
+                    installed: true,
+                    icon: app.icon || 'https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/docker.png',
+                    thumbnail: app.thumbnail || '',
+                    container_name: `razos-${app.slug}`,
+                    installed_at: new Date().toISOString()
+                  }
+                }
+              }
+
+              if (!record && data.custom_image) {
+                // Pasang Manual Custom Container ala CasaOS
+                const name = data.name || 'Custom App'
+                const slug = data.container_name || name.toLowerCase().replace(/[^a-z0-9]/g, '-')
+                record = {
+                  id: slug,
+                  name: name,
+                  slug: slug,
+                  category: 'Custom Containers',
+                  description: `Container kustom: ${data.custom_image}`,
+                  image: data.custom_image,
+                  port: parseInt(data.port) || 8080,
+                  data_path: data.data_path || `/DATA/apps/${slug}`,
+                  extra_envs: data.extra_envs || [],
+                  installed: true,
+                  icon: data.icon || 'https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/docker.png',
+                  thumbnail: '',
+                  container_name: `razos-${slug}`,
+                  installed_at: new Date().toISOString()
+                }
+              }
+
+              if (!record) {
+                // Fallback umum jika payload langsung menyertakan objek aplikasi
+                const slug = (data.name || 'app').toLowerCase().replace(/[^a-z0-9]/g, '-')
+                record = {
+                  id: slug,
+                  name: data.name || slug,
+                  slug: slug,
+                  category: data.category || 'General',
+                  description: data.description || '',
+                  image: data.image || data.custom_image || 'alpine:latest',
+                  port: parseInt(data.port) || 8080,
+                  data_path: data.data_path || `/DATA/apps/${slug}`,
+                  installed: true,
+                  icon: data.icon || 'https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/docker.png',
+                  container_name: `razos-${slug}`,
+                  installed_at: new Date().toISOString()
+                }
+              }
+
+              // Buat folder direktori data di storage agar siap digunakan
+              try {
+                const targetDir = resolveSafePath(record.data_path)
+                if (!fs.existsSync(targetDir)) {
+                  fs.mkdirSync(targetDir, { recursive: true })
+                }
+              } catch (dirErr) {}
+
+              // Simpan ke daftar installed
+              const existingIdx = installed.findIndex(i => i.slug === record.slug || i.id === record.id)
+              if (existingIdx >= 0) {
+                installed[existingIdx] = record
+              } else {
+                installed.unshift(record)
+              }
+              saveInstalledApps(installed)
+
               res.setHeader('Content-Type', 'application/json')
-              res.end(JSON.stringify({ status: 'installed', app: data }))
+              res.end(JSON.stringify({ status: 'installed', app: record }))
             } catch (err) {
               res.statusCode = 500
+              res.setHeader('Content-Type', 'application/json')
               res.end(JSON.stringify({ error: err.message }))
+            }
+          })
+        }
+      })
+
+      // 6.3 Endpoint Install via YAML Docker Compose ala CasaOS (/api/v1/store/compose)
+      server.middlewares.use('/api/v1/store/compose', (req, res) => {
+        if (req.method === 'POST') {
+          let body = ''
+          req.on('data', chunk => { body += chunk })
+          req.on('end', () => {
+            try {
+              const data = JSON.parse(body)
+              const yamlStr = data.yaml_content || data.yaml || ''
+              if (!yamlStr.trim()) {
+                res.statusCode = 400
+                res.setHeader('Content-Type', 'application/json')
+                return res.end(JSON.stringify({ error: 'Skrip YAML Docker Compose tidak boleh kosong' }))
+              }
+
+              // Parsing Docker Compose YAML
+              const doc = YAML.parse(yamlStr)
+              if (!doc || !doc.services || typeof doc.services !== 'object') {
+                res.statusCode = 400
+                res.setHeader('Content-Type', 'application/json')
+                return res.end(JSON.stringify({ error: 'Format Docker Compose tidak valid: Bagian "services" wajib ada' }))
+              }
+
+              // Ambil service pertama
+              const serviceNames = Object.keys(doc.services)
+              if (serviceNames.length === 0) {
+                res.statusCode = 400
+                res.setHeader('Content-Type', 'application/json')
+                return res.end(JSON.stringify({ error: 'Tidak ada service yang didefinisikan dalam berkas Compose YAML' }))
+              }
+
+              const serviceKey = serviceNames[0]
+              const svc = doc.services[serviceKey]
+              const appName = doc.name || svc.container_name || serviceKey
+              const slug = appName.toLowerCase().replace(/[^a-z0-9]/g, '-')
+
+              // Parsing Port
+              let hostPort = 8080
+              if (Array.isArray(svc.ports) && svc.ports.length > 0) {
+                const portEntry = String(svc.ports[0])
+                const parts = portEntry.split(':')
+                if (parts.length >= 2) {
+                  hostPort = parseInt(parts[0], 10) || 8080
+                } else {
+                  hostPort = parseInt(parts[0], 10) || 8080
+                }
+              }
+
+              // Parsing Volume
+              let hostVolume = `/DATA/apps/${slug}`
+              if (Array.isArray(svc.volumes) && svc.volumes.length > 0) {
+                const volEntry = String(svc.volumes[0])
+                const parts = volEntry.split(':')
+                if (parts.length >= 1) {
+                  hostVolume = parts[0]
+                }
+              }
+
+              // Parsing Environments
+              let envList = []
+              if (Array.isArray(svc.environment)) {
+                envList = svc.environment.map(String)
+              } else if (svc.environment && typeof svc.environment === 'object') {
+                envList = Object.entries(svc.environment).map(([k, v]) => `${k}=${v}`)
+              }
+
+              const installed = loadInstalledApps()
+              const record = {
+                id: slug,
+                name: appName.charAt(0).toUpperCase() + appName.slice(1),
+                slug: slug,
+                category: 'Docker Compose (YAML)',
+                description: `Aplikasi di-deploy dari berkas Docker Compose YAML (${svc.image || 'custom'})`,
+                image: svc.image || 'alpine:latest',
+                port: hostPort,
+                data_path: hostVolume,
+                extra_envs: envList,
+                installed: true,
+                icon: 'https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/docker.png',
+                container_name: svc.container_name || `razos-${slug}`,
+                compose_yaml: yamlStr,
+                installed_at: new Date().toISOString()
+              }
+
+              // Buat folder data di storage
+              try {
+                const targetDir = resolveSafePath(record.data_path)
+                if (!fs.existsSync(targetDir)) {
+                  fs.mkdirSync(targetDir, { recursive: true })
+                }
+              } catch (dirErr) {}
+
+              // Simpan ke daftar terpasang
+              const existingIdx = installed.findIndex(i => i.slug === record.slug || i.id === record.id)
+              if (existingIdx >= 0) {
+                installed[existingIdx] = record
+              } else {
+                installed.unshift(record)
+              }
+              saveInstalledApps(installed)
+
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ status: 'installed', app: record }))
+            } catch (err) {
+              res.statusCode = 500
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: `Gagal mem-parse dan menjalankan YAML: ${err.message}` }))
             }
           })
         }

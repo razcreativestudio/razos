@@ -5,13 +5,15 @@
  * Deskripsi: Layout Desktop mode untuk breakpoint > 768px, memadukan desktop icon shortcuts,
  * window manager frame, dan taskbar bawah dengan wallpaper WebP teroptimasi.
  */
+import { ref } from 'vue'
 import { useWindowStore } from '../stores/RAZWindowStore'
 import { useSystemStore } from '../stores/RAZSystemStore'
 import { useContextMenuStore } from '../stores/RAZContextMenuStore'
 import RAZWindowFrame from '../components/RAZWindowFrame.vue'
 import RAZTaskbar from '../components/RAZTaskbar.vue'
 import {
-  RefreshCw, Folder, Terminal, Cpu, Settings, EyeOff, Layers, Play, Info
+  RefreshCw, Folder, Terminal, Cpu, Settings, EyeOff, Layers, Play, Info,
+  Trash2, ExternalLink, AlertTriangle, X
 } from 'lucide-vue-next'
 
 // Import View Aplikasi
@@ -102,23 +104,79 @@ function handleDesktopContextMenu(e) {
   ], 'Desktop')
 }
 
+// State Modal Konfirmasi Uninstall dari Desktop
+const showUninstallModal = ref(false)
+const appToUninstall = ref(null)
+const purgeDataChecked = ref(true)
+
+function openDesktopUninstall(app) {
+  appToUninstall.value = app
+  purgeDataChecked.value = true
+  showUninstallModal.value = true
+}
+
+async function confirmDesktopUninstall() {
+  if (!appToUninstall.value) return
+  const slug = appToUninstall.value.slug
+  const success = await windowStore.uninstallStoreApp(slug, purgeDataChecked.value)
+  if (success) {
+    systemStore.showNotification('Sukses', `Aplikasi ${appToUninstall.value.title} berhasil di-uninstall`, 'success')
+    showUninstallModal.value = false
+    appToUninstall.value = null
+  } else {
+    systemStore.showNotification('Gagal', 'Terjadi kesalahan saat menghapus aplikasi', 'error')
+  }
+}
+
 // Context Menu Klik Kanan pada Ikon Shortcut Desktop
 function handleDesktopIconContextMenu(e, app) {
-  contextMenuStore.show(e, [
-    {
-      label: `Buka ${app.title}`,
-      icon: Play,
-      action: () => windowStore.openApp(app.id)
-    },
-    { separator: true },
-    {
-      label: 'Info Aplikasi',
-      icon: Info,
-      action: () => {
-        systemStore.showNotification('Aplikasi', `${app.title} (Resolusi Default: ${app.width}x${app.height})`, 'info')
+  if (app.isStoreApp) {
+    // Context Menu untuk Aplikasi Terpasang dari Store / Docker Compose
+    contextMenuStore.show(e, [
+      {
+        label: `Buka ${app.title}`,
+        icon: Play,
+        action: () => windowStore.launchStoreApp(app)
+      },
+      {
+        label: 'Buka di Tab Baru Peramban',
+        icon: ExternalLink,
+        action: () => windowStore.launchStoreApp(app)
+      },
+      { separator: true },
+      {
+        label: 'Info Container',
+        icon: Info,
+        action: () => {
+          systemStore.showNotification('Info Container', `${app.title} (Port Host: ${app.port} | Slug: ${app.slug})`, 'info')
+        }
+      },
+      { separator: true },
+      {
+        label: 'Uninstall Aplikasi',
+        icon: Trash2,
+        danger: true,
+        action: () => openDesktopUninstall(app)
       }
-    }
-  ], app.title)
+    ], app.title)
+  } else {
+    // Context Menu untuk Aplikasi Sistem Core
+    contextMenuStore.show(e, [
+      {
+        label: `Buka ${app.title}`,
+        icon: Play,
+        action: () => windowStore.openApp(app.id)
+      },
+      { separator: true },
+      {
+        label: 'Info Aplikasi',
+        icon: Info,
+        action: () => {
+          systemStore.showNotification('Aplikasi', `${app.title} (Resolusi Default: ${app.width}x${app.height})`, 'info')
+        }
+      }
+    ], app.title)
+  }
 }
 </script>
 
@@ -133,17 +191,18 @@ function handleDesktopIconContextMenu(e, app) {
       <img src="/assets/brand/RAZBrandTransparent.webp" alt="RAZ STUDIO" class="h-8 object-contain" />
     </div>
 
-    <!-- Desktop Icons Grid -->
+    <!-- Desktop Icons Grid (Aplikasi Sistem + Aplikasi Terpasang dari Store) -->
     <div class="relative z-10 p-6 grid grid-flow-col grid-rows-6 gap-6 w-max">
       <div
-        v-for="app in windowStore.apps"
+        v-for="app in windowStore.allDesktopApps"
         :key="app.id"
-        @dblclick="windowStore.openApp(app.id)"
+        @dblclick="app.isStoreApp ? windowStore.launchStoreApp(app) : windowStore.openApp(app.id)"
         @contextmenu.prevent.stop="handleDesktopIconContextMenu($event, app)"
-        class="w-20 flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-slate-800/50 cursor-pointer group transition text-center"
+        class="w-20 flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-slate-800/50 cursor-pointer group transition text-center relative"
       >
-        <div class="w-12 h-12 rounded-2xl flex items-center justify-center p-1 group-hover:scale-105 transition-transform duration-150 drop-shadow-md">
+        <div class="w-12 h-12 rounded-2xl flex items-center justify-center p-1 group-hover:scale-105 transition-transform duration-150 drop-shadow-md relative">
           <img :src="app.icon" :alt="app.title" class="w-full h-full object-contain" />
+          <span v-if="app.isStoreApp" class="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900" title="Container Running"></span>
         </div>
         <span class="text-xs text-slate-100 font-medium group-hover:text-sky-300 drop-shadow line-clamp-2">
           {{ app.title }}
@@ -165,5 +224,56 @@ function handleDesktopIconContextMenu(e, app) {
 
     <!-- Bottom Desktop Taskbar -->
     <RAZTaskbar />
+
+    <!-- Custom Modal Konfirmasi Uninstall Aplikasi (Glassmorphism Slate-900) -->
+    <div
+      v-if="showUninstallModal"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in"
+    >
+      <div class="w-full max-w-md rounded-2xl bg-slate-900/90 border border-rose-500/30 p-6 shadow-2xl flex flex-col gap-4 text-slate-100">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2 text-rose-400">
+            <AlertTriangle class="w-5 h-5" />
+            <h3 class="font-bold text-sm">Konfirmasi Uninstall Aplikasi</h3>
+          </div>
+          <button @click="showUninstallModal = false" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200">
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+
+        <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+          <img :src="appToUninstall?.icon" :alt="appToUninstall?.title" class="w-10 h-10 object-contain rounded-lg" />
+          <div class="min-w-0 flex-1">
+            <h4 class="font-bold text-sm text-slate-100 truncate">{{ appToUninstall?.title }}</h4>
+            <span class="text-xs text-slate-400 font-mono">Port: :{{ appToUninstall?.port }}</span>
+          </div>
+        </div>
+
+        <p class="text-xs text-slate-300 leading-relaxed">
+          Apakah Anda yakin ingin menghentikan dan menghapus container aplikasi ini dari sistem?
+        </p>
+
+        <label class="flex items-center gap-2.5 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 cursor-pointer text-xs text-rose-300">
+          <input type="checkbox" v-model="purgeDataChecked" class="accent-rose-500 rounded" />
+          <span>Hapus juga seluruh direktori data permanen container di storage</span>
+        </label>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+          <button
+            @click="showUninstallModal = false"
+            class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+          >
+            Batal
+          </button>
+          <button
+            @click="confirmDesktopUninstall"
+            class="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-400 text-slate-950 text-xs font-bold transition flex items-center gap-1.5 shadow-lg active:scale-95"
+          >
+            <Trash2 class="w-4 h-4" />
+            <span>Uninstall Container</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>

@@ -38,6 +38,11 @@ function handleStartItemClick(appId) {
   windowStore.openApp(appId)
 }
 
+function handleStartStoreAppClick(app) {
+  isStartMenuOpen.value = false
+  windowStore.launchStoreApp(app)
+}
+
 // Context menu klik kanan pada item taskbar aplikasi aktif
 function handleTaskContextMenu(e, win) {
   contextMenuStore.show(e, [
@@ -159,15 +164,39 @@ function handleTaskbarContextMenu(e) {
           <span class="text-xs font-semibold text-slate-400 tracking-wider">APLIKASI SISTEM</span>
           <img src="/assets/brand/RAZBrandCapsule.webp" alt="RAZ" class="h-4 object-contain" />
         </div>
-        <button
-          v-for="app in windowStore.apps"
-          :key="app.id"
-          @click="handleStartItemClick(app.id)"
-          class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/80 text-left text-sm text-slate-200 transition"
-        >
-          <img :src="app.icon" :alt="app.title" class="w-5 h-5" />
-          <span>{{ app.title }}</span>
-        </button>
+        <div class="flex flex-col gap-0.5">
+          <button
+            v-for="app in windowStore.apps"
+            :key="app.id"
+            @click="handleStartItemClick(app.id)"
+            class="flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-slate-800/80 text-left text-xs text-slate-200 transition"
+          >
+            <img :src="app.icon" :alt="app.title" class="w-4 h-4 object-contain" />
+            <span>{{ app.title }}</span>
+          </button>
+        </div>
+
+        <!-- Bagian Aplikasi Terpasang dari Store -->
+        <template v-if="windowStore.installedStoreApps.length > 0">
+          <div class="px-3 py-1.5 border-b border-t border-slate-800 flex items-center justify-between text-[11px] font-semibold text-slate-400 tracking-wider mt-1">
+            <span>APLIKASI TERPASANG</span>
+            <span class="text-[10px] font-mono text-emerald-400 font-bold">{{ windowStore.installedStoreApps.length }}</span>
+          </div>
+          <div class="max-h-40 overflow-y-auto flex flex-col gap-0.5 pr-1" style="scrollbar-width: thin;">
+            <button
+              v-for="app in windowStore.installedStoreApps"
+              :key="app.slug || app.id"
+              @click="handleStartStoreAppClick(app)"
+              class="flex items-center justify-between px-3 py-1.5 rounded-lg hover:bg-slate-800/80 text-left text-xs text-slate-200 transition group"
+            >
+              <div class="flex items-center gap-2.5 truncate">
+                <img :src="app.icon" :alt="app.name" class="w-4 h-4 object-contain rounded" />
+                <span class="truncate font-medium">{{ app.name }}</span>
+              </div>
+              <span class="text-[10px] font-mono text-slate-400 group-hover:text-sky-300">:{{ app.port }}</span>
+            </button>
+          </div>
+        </template>
       </div>
 
       <!-- Active Window Task Items -->

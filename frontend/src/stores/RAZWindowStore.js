@@ -6,10 +6,10 @@
  */
 
 import { defineStore, acceptHMRUpdate } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 export const useWindowStore = defineStore('window', () => {
-  // Daftar aplikasi yang terdaftar
+  // Aplikasi bawaan sistem operasi
   const apps = ref([
     {
       id: 'file-manager',
@@ -258,8 +258,65 @@ export const useWindowStore = defineStore('window', () => {
     }
   }
 
+  // State Aplikasi yang Terinstall dari App Store (Dinamis dari Container/Catalog/YAML)
+  const installedStoreApps = ref([])
+
+  async function fetchInstalledApps() {
+    try {
+      const res = await fetch('/api/v1/store/installed')
+      if (res.ok) {
+        installedStoreApps.value = await res.json()
+      }
+    } catch (e) {}
+  }
+
+  // Luncurkan Web UI Aplikasi Store
+  function launchStoreApp(app) {
+    if (!app) return
+    const port = app.port || app.storeData?.port || 8080
+    const url = `http://${window.location.hostname}:${port}`
+    window.open(url, '_blank')
+  }
+
+  // Uninstall Aplikasi Store dengan pembersihan data
+  async function uninstallStoreApp(slug, purgeData = true) {
+    try {
+      const res = await fetch(`/api/v1/store/apps/${slug}?purge_data=${purgeData}`, { method: 'DELETE' })
+      if (res.ok) {
+        await fetchInstalledApps()
+        return true
+      }
+    } catch (e) {}
+    return false
+  }
+
+  // Seluruh Aplikasi Desktop (Aplikasi Bawaan Sistem + Aplikasi Terpasang dari Store)
+  const allDesktopApps = computed(() => {
+    const list = [...apps.value]
+    installedStoreApps.value.forEach(inst => {
+      list.push({
+        id: `store-${inst.slug || inst.id}`,
+        title: inst.name,
+        icon: inst.icon || 'https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/docker.png',
+        isStoreApp: true,
+        storeData: inst,
+        port: inst.port,
+        slug: inst.slug || inst.id
+      })
+    })
+    return list
+  })
+
+  // Inisialisasi awal daftar aplikasi terpasang
+  fetchInstalledApps()
+
   return {
     apps,
+    installedStoreApps,
+    allDesktopApps,
+    fetchInstalledApps,
+    launchStoreApp,
+    uninstallStoreApp,
     openWindows,
     activeWindowId,
     openApp,

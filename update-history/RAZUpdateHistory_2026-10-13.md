@@ -322,3 +322,52 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 #### 3. Verifikasi Build
 - `npm run build` sukses 100% (*1504 modules transformed*).
 - HMR dev server aktif di `http://localhost:3000`.
+
+---
+
+### Versi: 2.4.5-casaos-yaml-and-installed-apps-suite (Instalasi 525+ Aplikasi, Tab Aplikasi Terpasang, Uninstall Context Menu & Docker Compose YAML ala CasaOS)
+**Waktu Eksekusi:** 2026-10-13 12:40 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Persistensi & Sinkronisasi Ekosistem Aplikasi App Store
+- **Penyimpanan Terpusat Persisten (`RAZInstalledApps.json`):**
+  - Mengimplementasikan `backend/internal/store/RAZInstalledApps.json` untuk mencatat seluruh aplikasi yang terpasang.
+  - Memisahkan katalog master 525 aplikasi (`RAZApps.json`) dari data instalasi dinamis agar katalog tetap bersih dan status aplikasi tidak hilang saat restart service.
+  - Endpoint `GET /api/v1/store/apps` dan `GET /api/v1/store/installed` otomatis me-merge data runtime secara real-time.
+- **Penyediaan Direktori Host Otomatis:**
+  - Setiap instalasi aplikasi secara otomatis membuat folder volume persisten di `/DATA/apps/<slug>/` pada penyimpanan MicroSD STB.
+  - Mendukung clean uninstall dengan opsi `purge_data=true` untuk memusnahkan data aplikasi jika diinginkan pengguna.
+
+#### 2. Tab "Aplikasi Terpasang (Installed Apps)" di App Store
+- **Tampilan Khusus Container Aktif:**
+  - Tab navigasi kedua di App Store menampilkan seluruh container Docker yang sedang terpasang di sistem.
+  - Menampilkan badge status running hijau, nomor port Web UI, direktori path volume di `/DATA/apps/`, dan spesifikasi image.
+  - Tombol aksi cepat: **Buka Web UI**, **Detail & Dokumentasi**, dan **Uninstall Bersih**.
+  - Empty state elegan dengan tombol jalan pintas langsung ke Katalog Aplikasi atau Impor YAML jika belum ada container yang terpasang.
+
+#### 3. Instalasi via Berkas / Skrip Docker Compose YAML (Ala CasaOS)
+- **Editor Monospace & Live Syntax Inspector:**
+  - Tab navigasi ketiga di App Store menyediakan editor YAML ala CasaOS dengan font monospace, pengecekan sintaks live, dan indikator validasi.
+  - Mengintegrasikan parser pustaka `yaml` untuk membedah struktur Compose: service name, Docker image, host/container ports, bind mount volumes, dan environment variables secara real-time.
+- **Dukungan Drag & Drop / Unggah File `.yaml` / `.yml`:**
+  - Pengguna dapat menyeret file compose atau mengklik tombol upload untuk memuat konfigurasi langsung ke editor.
+- **Template Preset Siap Pakai:**
+  - Menyediakan template cepat: **qBittorrent Downloader**, **Nginx Web Server**, **Nextcloud Hub**, dan **WordPress CMS**.
+- **Eksekusi Deployment Instan:**
+  - Endpoint `POST /api/v1/store/compose` memproses skrip YAML, mendaftarkan kontainer ke store, dan otomatis mengarahkannya ke tab Aplikasi Terpasang.
+
+#### 4. Integrasi Shortcut Desktop, Start Menu & Context Menu Uninstall
+- **Sinkronisasi Otomatis Desktop:**
+  - Seluruh aplikasi yang terpasang langsung muncul di Desktop dan Start Menu melalui Pinia store `windowStore.allDesktopApps`.
+  - Double click pada shortcut desktop langsung meluncurkan antarmuka Web UI aplikasi pada port terkait.
+- **Menu Uninstall di Context Menu (Klik Kanan):**
+  - Klik kanan pada shortcut aplikasi di Desktop kini menyertakan opsi: **Buka Aplikasi**, **Buka di Tab Baru Peramban**, **Info Container**, dan **Uninstall Aplikasi** (`danger: true`).
+  - Dialog konfirmasi uninstall menggunakan Custom Modal Glassmorphism Slate-900 dengan checkbox pemusnahan berkas volume.
+- **Taskbar Start Menu Terintegrasi:**
+  - Start menu popup menampilkan seksi **"APLIKASI TERPASANG"** beserta badge counter jumlah container aktif dan nomor port langsung.
+
+#### 5. Verifikasi & Definisi Selesai (DoD)
+- Build produksi Vite frontend (`npm run build`) berhasil 100% tanpa error (*1577 modules transformed*).
+- Pengujian otomatis deployment katalog (Plex), deployment Compose YAML (qBittorrent), dan clean uninstall terverifikasi 100% lolos via endpoint REST API.
+- Dev server HMR aktif dan responsif di `http://localhost:3000`.
+
