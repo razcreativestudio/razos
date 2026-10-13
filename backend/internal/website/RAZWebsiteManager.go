@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -53,6 +54,13 @@ type Website struct {
 	DbName     string `json:"db_name,omitempty"`
 	DbUser     string `json:"db_user,omitempty"`
 	DbPassword string `json:"db_password,omitempty"`
+
+	// Konfigurasi GitHub & Git Sync
+	GitRepo       string `json:"git_repo,omitempty"`
+	GitBranch     string `json:"git_branch,omitempty"`
+	GitToken      string `json:"git_token,omitempty"` // GitHub PAT
+	GitLastPull   string `json:"git_last_pull,omitempty"`
+	GitLastCommit string `json:"git_last_commit,omitempty"`
 
 	// Status Operasional
 	Status    string `json:"status"` // 'running' | 'stopped'
@@ -173,6 +181,11 @@ type CreateWebsiteRequest struct {
 	DbName     string `json:"db_name"`
 	DbUser     string `json:"db_user"`
 	DbPassword string `json:"db_password"`
+
+	// Konfigurasi GitHub Repository & PAT
+	GitRepo   string `json:"git_repo"`
+	GitBranch string `json:"git_branch"`
+	GitToken  string `json:"git_token"`
 }
 
 // CreateWebsite memproses pembuatan container website, direktori root, dan starter files
@@ -264,10 +277,28 @@ func CreateWebsite(req CreateWebsiteRequest) (*Website, error) {
 		DbUser:     req.DbUser,
 		DbPassword: req.DbPassword,
 
+		GitRepo:     strings.TrimSpace(req.GitRepo),
+		GitBranch:   strings.TrimSpace(req.GitBranch),
+		GitToken:    strings.TrimSpace(req.GitToken),
+		GitLastPull: "",
+		GitLastCommit: "",
+
 		Status:    "running",
 		CreatedAt: time.Now().Format("2006-01-02 15:04"),
 	}
+	if newSite.GitBranch == "" && newSite.GitRepo != "" {
+		newSite.GitBranch = "main"
+	}
 	nextID++
+
+	// Jika git repo disediakan, lakukan auto-clone/pull ke root folder
+	if newSite.GitRepo != "" {
+		lastCommit, _, err := syncGitRepo(newSite.RootFolder, newSite.GitRepo, newSite.GitBranch, newSite.GitToken)
+		if err == nil {
+			newSite.GitLastPull = time.Now().Format("2006-01-02 15:04:05")
+			newSite.GitLastCommit = lastCommit
+		}
+	}
 
 	// Coba deploy ke Docker engine jika daemon aktif
 	_ = deployDockerContainer(&newSite)
@@ -610,3 +641,182 @@ func DeleteWebsite(id int, purgeFiles bool) error {
 	saveSitesToDisk()
 	return nil
 }
+
+// buildGitAuthURL menyisipkan GitHub Personal Access Token (PAT) ke URL HTTPS jika tersedia
+func buildGitAuthURL(repoURL, token string) string {
+	repoURL = strings.TrimSpace(repoURL)
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return repoURL
+	}
+
+	// Tangani format https://github.com/owner/repo
+	if strings.HasPrefix(repoURL, "https://") {
+		cleanURL := strings.TrimPrefix(repoURL, "https://")
+		// Buang kredensial lama jika ada
+		if atIdx := strings.Index(cleanURL, "@"); atIdx != -1 {
+			cleanURL = cleanURL[atIdx+1:]
+		}
+		return fmt.Sprintf("https://oauth2:%s@%s", token, cleanURL)
+	}
+	return repoURL
+}
+
+// sanitizeGitOutput membersihkan token dari pesan log agar tidak terekspos di UI
+func sanitizeGitOutput(output, token string) string {
+	if token != "" {
+		output = strings.ReplaceAll(output, token, "********")
+	}
+	return output
+}
+
+// syncGitRepo mengeksekusi fetch/clone/pull Git ke dalam root directory website
+func syncGitRepo(dir, repoURL, branch, token string) (string, string, error) {
+	if strings.TrimSpace(repoURL) == "" {
+		return "", "", fmt.Errorf("URL GitHub repository belum dikonfigurasi")
+	}
+	if strings.TrimSpace(branch) == "" {
+		branch = "main"
+	}
+
+	// Pastikan direktori target ada
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", "", fmt.Errorf("gagal membuat direktori root: %w", err)
+	}
+
+	authURL := buildGitAuthURL(repoURL, token)
+	var logBuilder strings.Builder
+
+	gitDir := filepath.Join(dir, ".git")
+	isNewGit := false
+	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
+		isNewGit = true
+	}
+
+	if isNewGit {
+		// Inisialisasi Git pada direktori
+		initCmd := exec.Command("git", "init")
+		initCmd.Dir = dir
+		if out, err := initCmd.CombinedOutput(); err != nil {
+			return "", "", fmt.Errorf("git init gagal: %s (%w)", sanitizeGitOutput(string(out), token), err)
+		} else {
+			logBuilder.WriteString(string(out) + "\n")
+		}
+
+		// Tambahkan remote origin
+		remoteCmd := exec.Command("git", "remote", "add", "origin", authURL)
+		remoteCmd.Dir = dir
+		_ = remoteCmd.Run()
+	} else {
+		// Update URL remote origin jika ada perubahan token atau URL
+		setRemoteCmd := exec.Command("git", "remote", "set-url", "origin", authURL)
+		setRemoteCmd.Dir = dir
+		_ = setRemoteCmd.Run()
+	}
+
+	// Fetch branch spesifik
+	fetchCmd := exec.Command("git", "fetch", "--depth=1", "origin", branch)
+	fetchCmd.Dir = dir
+	fetchOut, err := fetchCmd.CombinedOutput()
+	logBuilder.WriteString(string(fetchOut) + "\n")
+	if err != nil {
+		// Coba fetch tanpa depth jika depth 1 gagal
+		fetchCmd2 := exec.Command("git", "fetch", "origin", branch)
+		fetchCmd2.Dir = dir
+		fetchOut2, err2 := fetchCmd2.CombinedOutput()
+		logBuilder.WriteString(string(fetchOut2) + "\n")
+		if err2 != nil {
+			return "", sanitizeGitOutput(logBuilder.String(), token), fmt.Errorf("git fetch gagal: %s", sanitizeGitOutput(string(fetchOut2), token))
+		}
+	}
+
+	// Checkout / Reset hard ke origin/branch agar sinkron sempurna dengan root folder
+	resetCmd := exec.Command("git", "reset", "--hard", fmt.Sprintf("origin/%s", branch))
+	resetCmd.Dir = dir
+	resetOut, err := resetCmd.CombinedOutput()
+	logBuilder.WriteString(string(resetOut) + "\n")
+	if err != nil {
+		// Coba checkout
+		checkoutCmd := exec.Command("git", "checkout", "-B", branch, fmt.Sprintf("origin/%s", branch))
+		checkoutCmd.Dir = dir
+		coOut, coErr := checkoutCmd.CombinedOutput()
+		logBuilder.WriteString(string(coOut) + "\n")
+		if coErr != nil {
+			return "", sanitizeGitOutput(logBuilder.String(), token), fmt.Errorf("git reset/checkout gagal: %s", sanitizeGitOutput(string(resetOut), token))
+		}
+	}
+
+	// Ambil ringkasan commit terakhir
+	logCmd := exec.Command("git", "log", "-1", "--pretty=format:%h - %s (%cr)")
+	logCmd.Dir = dir
+	lastCommitBytes, _ := logCmd.Output()
+	lastCommit := strings.TrimSpace(string(lastCommitBytes))
+
+	return lastCommit, sanitizeGitOutput(logBuilder.String(), token), nil
+}
+
+// PullGitRepository menarik pembaruan kode terbaru dari GitHub ke root folder website
+func PullGitRepository(siteID int) (*Website, string, error) {
+	siteMu.Lock()
+	defer siteMu.Unlock()
+	loadSitesFromDisk()
+
+	var target *Website
+	for i := range sites {
+		if sites[i].ID == siteID {
+			target = &sites[i]
+			break
+		}
+	}
+
+	if target == nil {
+		return nil, "", fmt.Errorf("website dengan ID %d tidak ditemukan", siteID)
+	}
+
+	if strings.TrimSpace(target.GitRepo) == "" {
+		return nil, "", fmt.Errorf("URL GitHub repository belum dikonfigurasi untuk website ini")
+	}
+
+	lastCommit, logs, err := syncGitRepo(target.RootFolder, target.GitRepo, target.GitBranch, target.GitToken)
+	if err != nil {
+		return target, logs, err
+	}
+
+	target.GitLastPull = time.Now().Format("2006-01-02 15:04:05")
+	if lastCommit != "" {
+		target.GitLastCommit = lastCommit
+	}
+
+	saveSitesToDisk()
+	return target, logs, nil
+}
+
+// UpdateGitConfig memperbarui konfigurasi GitHub repository, branch, dan token untuk website
+func UpdateGitConfig(siteID int, repo, branch, token string) (*Website, error) {
+	siteMu.Lock()
+	defer siteMu.Unlock()
+	loadSitesFromDisk()
+
+	var target *Website
+	for i := range sites {
+		if sites[i].ID == siteID {
+			target = &sites[i]
+			break
+		}
+	}
+
+	if target == nil {
+		return nil, fmt.Errorf("website dengan ID %d tidak ditemukan", siteID)
+	}
+
+	target.GitRepo = strings.TrimSpace(repo)
+	target.GitBranch = strings.TrimSpace(branch)
+	if target.GitBranch == "" && target.GitRepo != "" {
+		target.GitBranch = "main"
+	}
+	target.GitToken = strings.TrimSpace(token)
+
+	saveSitesToDisk()
+	return target, nil
+}
+

@@ -49,6 +49,8 @@ func RegisterRoutes(r *gin.Engine) {
 		v1.GET("/websites", handleGetWebsites)
 		v1.POST("/websites", handleCreateWebsite)
 		v1.POST("/websites/:id/action", handleWebsiteAction)
+		v1.POST("/websites/:id/git/pull", handleGitPull)
+		v1.POST("/websites/:id/git/config", handleUpdateGitConfig)
 		v1.DELETE("/websites/:id", handleDeleteWebsite)
 
 		// Database Suite
@@ -251,6 +253,58 @@ func handleWebsiteAction(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, site)
+}
+
+func handleGitPull(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid site ID"})
+		return
+	}
+	site, logs, err := website.PullGitRepository(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   err.Error(),
+			"logs":    logs,
+			"website": site,
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "Kode repository GitHub berhasil ditarik ke root folder",
+		"logs":    logs,
+		"website": site,
+	})
+}
+
+func handleUpdateGitConfig(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid site ID"})
+		return
+	}
+	var body struct {
+		GitRepo   string `json:"git_repo"`
+		GitBranch string `json:"git_branch"`
+		GitToken  string `json:"git_token"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	site, err := website.UpdateGitConfig(id, body.GitRepo, body.GitBranch, body.GitToken)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "Konfigurasi Git berhasil disimpan",
+		"website": site,
+	})
 }
 
 func handleGetDatabases(c *gin.Context) {

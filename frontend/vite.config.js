@@ -147,6 +147,85 @@ function razosApiPlugin() {
         }
       }
 
+      // Helper URL Git dengan Personal Access Token (PAT)
+      function buildGitAuthUrl(repoUrl, token) {
+        if (!repoUrl) return ''
+        let clean = repoUrl.trim()
+        if (!token || !token.trim()) return clean
+        const pat = token.trim()
+        if (clean.startsWith('https://')) {
+          let noProto = clean.slice('https://'.length)
+          if (noProto.includes('@')) {
+            noProto = noProto.split('@').pop()
+          }
+          return `https://oauth2:${pat}@${noProto}`
+        }
+        return clean
+      }
+
+      function sanitizeGitLog(text, token) {
+        if (!text) return ''
+        if (token && token.trim()) {
+          return text.split(token.trim()).join('********')
+        }
+        return text
+      }
+
+      function runGitSync(targetDir, repoUrl, branch, token) {
+        if (!repoUrl) throw new Error('URL GitHub repository belum diisi')
+        const targetBranch = (branch || 'main').trim()
+        const authUrl = buildGitAuthUrl(repoUrl, token)
+        let logs = ''
+
+        if (!fs.existsSync(targetDir)) {
+          fs.mkdirSync(targetDir, { recursive: true })
+        }
+
+        const isGitRepo = fs.existsSync(path.join(targetDir, '.git'))
+        if (!isGitRepo) {
+          logs += execSync('git init', { cwd: targetDir, encoding: 'utf-8' }) + '\n'
+          try {
+            logs += execSync(`git remote add origin "${authUrl}"`, { cwd: targetDir, encoding: 'utf-8' }) + '\n'
+          } catch (e) {
+            logs += execSync(`git remote set-url origin "${authUrl}"`, { cwd: targetDir, encoding: 'utf-8' }) + '\n'
+          }
+        } else {
+          logs += execSync(`git remote set-url origin "${authUrl}"`, { cwd: targetDir, encoding: 'utf-8' }) + '\n'
+        }
+
+        // Fetch & reset hard ke branch origin
+        try {
+          logs += execSync(`git fetch --depth=1 origin ${targetBranch}`, { cwd: targetDir, encoding: 'utf-8' }) + '\n'
+        } catch (e) {
+          try {
+            logs += execSync(`git fetch origin ${targetBranch}`, { cwd: targetDir, encoding: 'utf-8' }) + '\n'
+          } catch (e2) {
+            logs += (e2.stdout || '') + '\n' + (e2.stderr || '')
+          }
+        }
+
+        try {
+          logs += execSync(`git reset --hard origin/${targetBranch}`, { cwd: targetDir, encoding: 'utf-8' }) + '\n'
+        } catch (e) {
+          try {
+            logs += execSync(`git checkout -B ${targetBranch} origin/${targetBranch}`, { cwd: targetDir, encoding: 'utf-8' }) + '\n'
+          } catch (e2) {
+            logs += (e2.stdout || '') + '\n' + (e2.stderr || '')
+          }
+        }
+
+        // Ambil commit terakhir
+        let lastCommit = ''
+        try {
+          lastCommit = execSync('git log -1 --pretty=format:"%h - %s (%cr)"', { cwd: targetDir, encoding: 'utf-8' }).trim()
+        } catch (e) {}
+
+        return {
+          lastCommit,
+          logs: sanitizeGitLog(logs, token)
+        }
+      }
+
       // 5. Endpoint Real Websites (/api/v1/websites)
       server.middlewares.use('/api/v1/websites', (req, res) => {
         const urlObj = new URL(req.url, 'http://localhost')
@@ -159,7 +238,7 @@ function razosApiPlugin() {
           return res.end(JSON.stringify(list))
         }
 
-        // POST: Buat website baru atau toggle status action
+        // POST: Buat website baru, aksi action toggle, git pull, atau update konfigurasi git
         if (req.method === 'POST') {
           let body = ''
           req.on('data', chunk => { body += chunk })
@@ -168,7 +247,65 @@ function razosApiPlugin() {
               const data = body ? JSON.parse(body) : {}
               const list = loadWebsites()
 
-              // Cek apakah aksi action toggle (/api/v1/websites/:id/action)
+              // 5.1 Git Pull Repository (/api/v1/websites/:id/git/pull)
+              const gitPullMatch = pathname.match(/\/(\d+)\/git\/pull/)
+              if (gitPullMatch) {
+                const siteId = parseInt(gitPullMatch[1])
+                const target = list.find(s => s.id === siteId)
+                if (!target) {
+                  res.statusCode = 404
+                  return res.end(JSON.stringify({ error: 'Website tidak ditemukan' }))
+                }
+                if (!target.git_repo) {
+                  res.statusCode = 400
+                  return res.end(JSON.stringify({ error: 'URL GitHub repository belum dikonfigurasi untuk website ini' }))
+                }
+
+                try {
+                  const physicalDir = resolveSafePath(target.root_folder)
+                  const syncRes = runGitSync(physicalDir, target.git_repo, target.git_branch, target.git_token)
+                  target.git_last_pull = new Date().toISOString().replace('T', ' ').substring(0, 19)
+                  if (syncRes.lastCommit) {
+                    target.git_last_commit = syncRes.lastCommit
+                  }
+                  saveWebsites(list)
+                  return res.end(JSON.stringify({
+                    status: 'success',
+                    message: 'Kode repository GitHub berhasil ditarik ke root folder',
+                    website: target,
+                    logs: syncRes.logs
+                  }))
+                } catch (gitErr) {
+                  res.statusCode = 500
+                  return res.end(JSON.stringify({
+                    error: `Gagal menarik Git: ${gitErr.message}`,
+                    logs: sanitizeGitLog(gitErr.stderr || gitErr.stdout || '', target.git_token)
+                  }))
+                }
+              }
+
+              // 5.2 Simpan Konfigurasi Git (/api/v1/websites/:id/git/config)
+              const gitConfigMatch = pathname.match(/\/(\d+)\/git\/config/)
+              if (gitConfigMatch) {
+                const siteId = parseInt(gitConfigMatch[1])
+                const target = list.find(s => s.id === siteId)
+                if (!target) {
+                  res.statusCode = 404
+                  return res.end(JSON.stringify({ error: 'Website tidak ditemukan' }))
+                }
+
+                target.git_repo = (data.git_repo || '').trim()
+                target.git_branch = (data.git_branch || 'main').trim()
+                target.git_token = (data.git_token || '').trim()
+                saveWebsites(list)
+                return res.end(JSON.stringify({
+                  status: 'success',
+                  message: 'Konfigurasi Git berhasil disimpan',
+                  website: target
+                }))
+              }
+
+              // 5.3 Cek apakah aksi action toggle (/api/v1/websites/:id/action)
               const actionMatch = pathname.match(/\/(\d+)\/action/)
               if (actionMatch) {
                 const siteId = parseInt(actionMatch[1])
@@ -218,8 +355,8 @@ function razosApiPlugin() {
               }
 
               // Buat folder fisik dan starter template
+              const physicalDir = resolveSafePath(rootFolder)
               try {
-                const physicalDir = resolveSafePath(rootFolder)
                 if (!fs.existsSync(physicalDir)) {
                   fs.mkdirSync(physicalDir, { recursive: true })
                 }
@@ -338,8 +475,24 @@ server.listen(port, () => console.log('Server berjalan pada port ' + port));
                 db_name: data.db_name || '',
                 db_user: data.db_user || '',
                 db_password: data.db_password || '',
+                git_repo: (data.git_repo || '').trim(),
+                git_branch: (data.git_branch || 'main').trim(),
+                git_token: (data.git_token || '').trim(),
+                git_last_pull: '',
+                git_last_commit: '',
                 status: 'running',
                 created_at: new Date().toISOString().replace('T', ' ').substring(0, 16)
+              }
+
+              // Jika git_repo diisi saat pembuatan, lakukan initial pull
+              if (newSite.git_repo) {
+                try {
+                  const syncRes = runGitSync(physicalDir, newSite.git_repo, newSite.git_branch, newSite.git_token)
+                  newSite.git_last_pull = new Date().toISOString().replace('T', ' ').substring(0, 19)
+                  if (syncRes.lastCommit) {
+                    newSite.git_last_commit = syncRes.lastCommit
+                  }
+                } catch (e) {}
               }
 
               list.push(newSite)

@@ -562,8 +562,52 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - Starter file `index.php` dan `index.html` berhasil terbuat secara fisik di root folder host dengan konfigurasi database yang presisi.
 - Dev server Vite HMR aktif dan responsif di port 3000.
 
+---
 
+### Versi: 2.5.1-website-github-pat-sync (Integrasi GitHub Repository, Personal Access Token PAT & Fitur Git Pull ke Root Folder)
+**Waktu Eksekusi:** 2026-10-13 14:45 WIB  
+**Pelaksana:** AI Agent Core Engineering
 
+#### 1. Masalah & Kebutuhan Pengguna
+- **Deploy Kode dari GitHub ke Website:**
+  - Pengguna membutuhkan fitur untuk meletakkan link repository GitHub beserta Personal Access Token (PAT) agar kode website terbaru dari GitHub dapat ditarik (*pull*) dan langsung dimasukkan ke dalam root folder website yang bersangkutan.
+  - Dukungan untuk repository publik maupun privat (dengan token PAT) tanpa membocorkan token ke log publik atau antarmuka.
 
+#### 2. Solusi Arsitektur & Implementasi
 
+##### A. Backend Engine & Dev Middleware (`RAZWebsiteManager.go`, `RAZApiController.go`, `vite.config.js`)
+- **Penambahan Field Git:**
+  - `git_repo`: URL repository GitHub (misal `https://github.com/user/my-web.git`).
+  - `git_branch`: Nama branch sasaran (default `main` / `master`).
+  - `git_token`: GitHub Personal Access Token (PAT) untuk autentikasi HTTPS aman.
+  - `git_last_pull`: Timestamp penarikan terakhir.
+  - `git_last_commit`: Hash dan ringkasan pesan commit terakhir (`%h - %s (%cr)`).
+- **Prosedur Sinkronisasi Git Aman (Zero Leak):**
+  - Mengonversi URL menjadi authenticated HTTPS: `https://oauth2:<TOKEN>@github.com/<owner>/<repo>`.
+  - Mendukung folder non-empty yang sudah berisi starter files via alur `git init` ➔ `git remote add/set-url` ➔ `git fetch origin <branch>` ➔ `git reset --hard origin/<branch>`.
+  - Fitur sanitasi output log otomatis (`sanitizeGitLog`): Semua kemunculan token PAT diganti menjadi `********` sebelum disimpan atau dikembalikan ke klien.
+- **REST API Endpoint:**
+  - `POST /api/v1/websites/:id/git/pull`: Mengeksekusi `git pull` / sync ke `root_folder` website dan mencatat status commit.
+  - `POST /api/v1/websites/:id/git/config`: Memperbarui konfigurasi Repo, Branch, dan PAT.
+  - Auto initial sync saat `POST /api/v1/websites` jika `git_repo` disertakan di payload pembuatan website.
 
+##### B. Tampilan Antarmuka Website Manager (`RAZWebsitesView.vue`)
+- **Step 2 Wizard Pembuatan Website (Integrasi GitHub & PAT):**
+  - Form input GitHub Repository URL, Branch, dan Personal Access Token (PAT) dengan toggle show/hide mata (*Eye/EyeOff*).
+  - Teks panduan edukatif Bahasa Indonesia bahwa repositori akan langsung di-clone ke root folder website saat pembuatan selesai.
+- **Kartu Website (Card Metadata & Quick Action Bar):**
+  - **Metadata Box:** Menampilkan baris status Git (`Git (branch): <commit-message>`) secara dinamis jika website terhubung ke Git.
+  - **Quick Action Bar:**
+    - Tombol **Quick Git Pull** dengan animasi spinner (`RotateCw`) saat proses penarikan berlangsung.
+    - Tombol **Pengaturan Git & PAT Token** (`GitBranch`) untuk membuka modal manajemen Git.
+- **Custom Modal Pengaturan GitHub & Git Pull:**
+  - Modal Glassmorphism Slate-900 lengkap dengan input URL Repo, Branch, PAT masked, waktu pull terakhir, dan commit terakhir.
+  - **Console Git Log (Terminal Box):** Menampilkan output log dari Git CLI secara real-time dengan gaya monospaced konsol transparan.
+- **Detail Modal Website:**
+  - Menampilkan ringkasan URL Git, branch, hash commit, dan tombol pintasan *"Kelola Git"* langsung dari jendela rincian website.
+
+#### 3. Verifikasi & Definisi Selesai (DoD)
+- Kompilasi build frontend Vite (`npm run build`) sukses 100% (*1578 modules transformed*).
+- Pengujian otomatis via REST API (`POST /api/v1/websites/:id/git/config` & `POST /api/v1/websites/:id/git/pull`) lolos 100%.
+- Verifikasi sanitasi token PAT: Terbukti 100% aman (*Token leaked? false*).
+- Dev server Vite HMR aktif dan sinkron di port 3000.

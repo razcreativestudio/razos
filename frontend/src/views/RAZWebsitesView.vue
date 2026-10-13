@@ -20,7 +20,8 @@ import {
   Globe, Plus, ExternalLink, Inbox, Trash2, X, Server, Layers,
   Play, Square, RotateCw, FolderOpen, Database, Cpu, HardDrive,
   Copy, Check, ShieldCheck, Search, Filter, Terminal, Sparkles,
-  Info, AlertTriangle, ArrowRight, CheckCircle2
+  Info, AlertTriangle, ArrowRight, CheckCircle2,
+  GitBranch, GitPullRequest, Key, Eye, EyeOff, Download, RefreshCw
 } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
@@ -59,6 +60,23 @@ const formDbPort = ref(3306)
 const formDbName = ref('')
 const formDbUser = ref('raz_user')
 const formDbPass = ref('')
+
+// Form Git State di Wizard
+const formGitRepo = ref('')
+const formGitBranch = ref('main')
+const formGitToken = ref('')
+const formShowGitToken = ref(false)
+
+// State Modal Pengaturan Git & Git Pull
+const showGitModal = ref(false)
+const gitModalSite = ref(null)
+const gitModalRepo = ref('')
+const gitModalBranch = ref('main')
+const gitModalToken = ref('')
+const gitModalShowToken = ref(false)
+const gitModalIsPulling = ref(false)
+const gitModalLogs = ref('')
+const pullingSiteId = ref(null)
 
 // State Modal Hapus Website
 const showDeleteModal = ref(false)
@@ -152,6 +170,11 @@ function openCreateDialog() {
   formDbUser.value = 'raz_user'
   formDbPass.value = ''
 
+  formGitRepo.value = ''
+  formGitBranch.value = 'main'
+  formGitToken.value = ''
+  formShowGitToken.value = false
+
   suggestFreePort()
   fetchDatabases()
   showCreateModal.value = true
@@ -237,7 +260,10 @@ async function confirmCreateWebsite() {
     db_port: formEnableDb.value ? parseInt(formDbPort.value) : 3306,
     db_name: formEnableDb.value ? formDbName.value : '',
     db_user: formEnableDb.value ? formDbUser.value : '',
-    db_password: formEnableDb.value ? formDbPass.value : ''
+    db_password: formEnableDb.value ? formDbPass.value : '',
+    git_repo: formGitRepo.value.trim(),
+    git_branch: formGitBranch.value.trim() || 'main',
+    git_token: formGitToken.value.trim()
   }
 
   try {
@@ -263,6 +289,99 @@ async function confirmCreateWebsite() {
     systemStore.showNotification('Error', 'Gagal menghubungi backend', 'error')
   }
   isSubmitting.value = false
+}
+
+// Buka Modal Pengaturan Git & PAT
+function openGitModal(site) {
+  gitModalSite.value = site
+  gitModalRepo.value = site.git_repo || ''
+  gitModalBranch.value = site.git_branch || 'main'
+  gitModalToken.value = site.git_token || ''
+  gitModalShowToken.value = false
+  gitModalLogs.value = ''
+  showGitModal.value = true
+}
+
+// Simpan Konfigurasi Git untuk Website
+async function saveGitModalConfig() {
+  if (!gitModalSite.value) return
+  const siteId = gitModalSite.value.id
+  try {
+    const res = await fetch(`/api/v1/websites/${siteId}/git/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        git_repo: gitModalRepo.value.trim(),
+        git_branch: gitModalBranch.value.trim() || 'main',
+        git_token: gitModalToken.value.trim()
+      })
+    })
+    if (res.ok) {
+      const data = await res.json()
+      gitModalSite.value.git_repo = data.website.git_repo
+      gitModalSite.value.git_branch = data.website.git_branch
+      gitModalSite.value.git_token = data.website.git_token
+      systemStore.showNotification('Sukses', 'Konfigurasi GitHub & PAT berhasil disimpan', 'success')
+      fetchWebsites()
+    } else {
+      const err = await res.json().catch(() => ({}))
+      systemStore.showNotification('Gagal', err.error || 'Gagal menyimpan konfigurasi Git', 'error')
+    }
+  } catch (e) {
+    systemStore.showNotification('Error', 'Gagal menghubungi server', 'error')
+  }
+}
+
+// Eksekusi Git Pull ke Root Folder Website
+async function executeGitPull(site) {
+  const target = site || gitModalSite.value
+  if (!target) return
+  if (!target.git_repo) {
+    // Jika belum ada konfigurasi repo, buka dialog pengaturan
+    openGitModal(target)
+    return
+  }
+
+  pullingSiteId.value = target.id
+  gitModalIsPulling.value = true
+  gitModalLogs.value = `[${new Date().toLocaleTimeString()}] Menghubungkan ke GitHub (${target.git_branch || 'main'})...\n`
+  gitModalLogs.value += `Target Folder: ${target.root_folder}\n`
+
+  try {
+    const res = await fetch(`/api/v1/websites/${target.id}/git/pull`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    const data = await res.json()
+    if (res.ok) {
+      target.git_last_pull = data.website?.git_last_pull || new Date().toISOString()
+      target.git_last_commit = data.website?.git_last_commit || ''
+      gitModalLogs.value += (data.logs || 'Git pull selesai tanpa output tambahan.') + '\n'
+      gitModalLogs.value += `[${new Date().toLocaleTimeString()}] SUKSES: Kode terbaru berhasil ditarik ke root folder!\n`
+      systemStore.showNotification(
+        'Git Pull Berhasil',
+        `Pembaruan kode GitHub terbaru berhasil ditarik ke "${target.name}"`,
+        'success'
+      )
+      fetchWebsites()
+    } else {
+      gitModalLogs.value += '\n[ERROR] ' + (data.error || 'Gagal melakukan pull dari GitHub') + '\n'
+      if (data.logs) {
+        gitModalLogs.value += data.logs + '\n'
+      }
+      systemStore.showNotification(
+        'Git Pull Gagal',
+        data.error || 'Terjadi kesalahan saat menarik kode dari GitHub',
+        'error'
+      )
+    }
+  } catch (e) {
+    gitModalLogs.value += '\n[FATAL] Gagal menghubungi backend: ' + e.message + '\n'
+    systemStore.showNotification('Error', 'Gagal menghubungi backend', 'error')
+  } finally {
+    pullingSiteId.value = null
+    gitModalIsPulling.value = false
+  }
 }
 
 // Toggle Status Container Website (Start / Stop / Restart)
@@ -536,12 +655,23 @@ onMounted(() => {
                 {{ site.db_name }}
               </span>
             </div>
+
+            <!-- Git Repository & Commit Info -->
+            <div v-if="site.git_repo" class="flex items-center justify-between pt-1 border-t border-slate-900">
+              <span class="flex items-center gap-1 text-sky-400/90">
+                <GitBranch class="w-3 h-3 text-sky-400" />
+                <span>Git ({{ site.git_branch || 'main' }}):</span>
+              </span>
+              <span class="font-mono text-slate-300 text-[10px] truncate max-w-[160px]" :title="site.git_last_commit || site.git_repo">
+                {{ site.git_last_commit || 'Terkoneksi' }}
+              </span>
+            </div>
           </div>
         </div>
 
         <!-- Card Bottom Action Bar -->
         <div class="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-slate-800/80">
-          <!-- Left Actions: Start/Stop & Folder -->
+          <!-- Left Actions: Start/Stop, Folder, Git, Database, Info -->
           <div class="flex items-center gap-1">
             <!-- Toggle Start / Stop -->
             <button
@@ -568,6 +698,29 @@ onMounted(() => {
               title="Buka Root Folder di File Manager RAZOS"
             >
               <FolderOpen class="w-3.5 h-3.5" />
+            </button>
+
+            <!-- Quick Git Pull -->
+            <button
+              @click="executeGitPull(site)"
+              :disabled="pullingSiteId === site.id"
+              class="p-1.5 rounded-lg transition"
+              :class="site.git_repo
+                ? 'bg-sky-500/15 hover:bg-sky-500/25 text-sky-300'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200'"
+              :title="site.git_repo ? 'Tarik Pembaruan GitHub Terbaru (Git Pull)' : 'Hubungkan Repository GitHub'"
+            >
+              <RotateCw v-if="pullingSiteId === site.id" class="w-3.5 h-3.5 animate-spin text-sky-400" />
+              <GitPullRequest v-else class="w-3.5 h-3.5" />
+            </button>
+
+            <!-- Pengaturan Git & PAT Token -->
+            <button
+              @click="openGitModal(site)"
+              class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-sky-300 transition"
+              title="Pengaturan GitHub & PAT Token"
+            >
+              <GitBranch class="w-3.5 h-3.5" />
             </button>
 
             <!-- Buka Web Database GUI (Adminer) jika ada database -->
@@ -859,6 +1012,62 @@ onMounted(() => {
               <p class="text-[10px] text-slate-500 mt-1">
                 Folder ini akan otomatis dibuat di penyimpanan host dan dapat diedit langsung melalui File Manager RAZOS.
               </p>
+            </div>
+
+            <!-- Integrasi GitHub & PAT (Opsional) -->
+            <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800/90 space-y-2.5">
+              <div class="flex items-center gap-2">
+                <GitBranch class="w-4 h-4 text-sky-400" />
+                <div>
+                  <h5 class="font-bold text-slate-200 text-xs">Integrasi GitHub & Auto-Pull (Opsional)</h5>
+                  <p class="text-[10px] text-slate-400">Clone atau pull kode terbaru dari repository GitHub langsung ke root folder.</p>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                <div class="sm:col-span-2">
+                  <label class="block text-[11px] font-medium text-slate-300 mb-1">GitHub Repository URL</label>
+                  <input
+                    v-model="formGitRepo"
+                    type="text"
+                    class="w-full px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-sky-400 transition"
+                    placeholder="https://github.com/username/repo-web"
+                  />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-medium text-slate-300 mb-1">Branch</label>
+                  <input
+                    v-model="formGitBranch"
+                    type="text"
+                    class="w-full px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-sky-400 transition"
+                    placeholder="main"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-medium text-slate-300 mb-1">GitHub Personal Access Token (PAT)</label>
+                <div class="relative">
+                  <input
+                    :type="formShowGitToken ? 'text' : 'password'"
+                    v-model="formGitToken"
+                    class="w-full pl-8 pr-9 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-sky-400 transition"
+                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx (untuk repo private/autentikasi)"
+                  />
+                  <Key class="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <button
+                    type="button"
+                    @click="formShowGitToken = !formShowGitToken"
+                    class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition"
+                  >
+                    <EyeOff v-if="formShowGitToken" class="w-3.5 h-3.5" />
+                    <Eye v-else class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <p class="text-[10px] text-slate-500 mt-1">
+                  PAT disimpan aman di lokal STB untuk auto-pull repositori private tanpa perlu memasukkan password berulang kali.
+                </p>
+              </div>
             </div>
           </div>
 
@@ -1175,6 +1384,29 @@ onMounted(() => {
               <div>Engine: {{ selectedSiteDetail.db_engine || 'mariadb' }}</div>
             </div>
           </div>
+
+          <!-- Git Sync Details jika ada -->
+          <div v-if="selectedSiteDetail.git_repo" class="bg-sky-500/10 border border-sky-500/20 p-3 rounded-xl space-y-1.5 text-[11px]">
+            <div class="font-bold text-sky-400 flex items-center justify-between">
+              <span class="flex items-center gap-1.5">
+                <GitBranch class="w-3.5 h-3.5" />
+                <span>GitHub Repository Terhubung</span>
+              </span>
+              <button
+                @click="showDetailModal = false; openGitModal(selectedSiteDetail)"
+                class="text-[10px] text-sky-300 hover:underline flex items-center gap-1"
+              >
+                <span>Kelola Git</span>
+                <ArrowRight class="w-3 h-3" />
+              </button>
+            </div>
+            <div class="space-y-1 text-slate-300 font-mono text-[10px]">
+              <div class="truncate">Repo: {{ selectedSiteDetail.git_repo }}</div>
+              <div>Branch: {{ selectedSiteDetail.git_branch || 'main' }}</div>
+              <div v-if="selectedSiteDetail.git_last_commit">Commit: {{ selectedSiteDetail.git_last_commit }}</div>
+              <div v-if="selectedSiteDetail.git_last_pull">Last Pull: {{ selectedSiteDetail.git_last_pull }}</div>
+            </div>
+          </div>
         </div>
 
         <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
@@ -1192,6 +1424,152 @@ onMounted(() => {
             <span>Buka Website</span>
             <ExternalLink class="w-3.5 h-3.5" />
           </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- CUSTOM MODAL: Pengaturan GitHub & Git Sync -->
+    <div
+      v-if="showGitModal && gitModalSite"
+      class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in"
+    >
+      <div class="w-full max-w-xl raz-glass rounded-2xl border border-sky-500/40 p-5 shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-hidden">
+        <!-- Header -->
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
+              <GitBranch class="w-5 h-5" />
+            </div>
+            <div>
+              <h4 class="font-bold text-slate-100 text-sm sm:text-base flex items-center gap-2">
+                <span>Pengaturan GitHub & Git Pull</span>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-sky-300 font-normal">
+                  {{ gitModalSite.name }}
+                </span>
+              </h4>
+              <p class="text-[11px] text-slate-400">Sinkronisasi repositori kode langsung ke root folder website.</p>
+            </div>
+          </div>
+          <button @click="showGitModal = false" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+
+        <!-- Body Form & Log -->
+        <div class="flex-1 overflow-y-auto space-y-3.5 pr-1 text-xs">
+          <!-- Folder Sasaran -->
+          <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+            <div class="min-w-0 pr-2">
+              <span class="text-[10px] text-slate-500 block uppercase font-semibold">Root Folder Sasaran</span>
+              <span class="font-mono text-slate-300 truncate block">{{ gitModalSite.root_folder }}</span>
+            </div>
+            <button
+              @click="openWebsiteFolder(gitModalSite)"
+              class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-medium flex items-center gap-1 transition"
+            >
+              <FolderOpen class="w-3 h-3" />
+              <span>Buka</span>
+            </button>
+          </div>
+
+          <!-- Input Repository & Branch -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="sm:col-span-2">
+              <label class="block font-medium text-slate-300 mb-1">GitHub Repository URL <span class="text-rose-400">*</span></label>
+              <input
+                v-model="gitModalRepo"
+                type="text"
+                class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-sky-400 transition"
+                placeholder="https://github.com/username/repository.git"
+              />
+            </div>
+            <div>
+              <label class="block font-medium text-slate-300 mb-1">Branch</label>
+              <input
+                v-model="gitModalBranch"
+                type="text"
+                class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-sky-400 transition"
+                placeholder="main"
+              />
+            </div>
+          </div>
+
+          <!-- Input Personal Access Token (PAT) -->
+          <div>
+            <label class="block font-medium text-slate-300 mb-1">GitHub Personal Access Token (PAT)</label>
+            <div class="relative">
+              <input
+                :type="gitModalShowToken ? 'text' : 'password'"
+                v-model="gitModalToken"
+                class="w-full pl-8 pr-9 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-sky-400 transition"
+                placeholder="ghp_xxxxxxxxxxxxxxxxxxxx (opsional untuk public, wajib untuk private)"
+              />
+              <Key class="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <button
+                type="button"
+                @click="gitModalShowToken = !gitModalShowToken"
+                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition"
+              >
+                <EyeOff v-if="gitModalShowToken" class="w-3.5 h-3.5" />
+                <Eye v-else class="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <p class="text-[10px] text-slate-500 mt-1">
+              Token PAT disimpan aman di konfigurasi lokal RAZOS untuk otentikasi Git.
+            </p>
+          </div>
+
+          <!-- Info Status Git -->
+          <div v-if="gitModalSite.git_last_pull || gitModalSite.git_last_commit" class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1 text-[11px]">
+            <div v-if="gitModalSite.git_last_commit" class="flex items-center justify-between">
+              <span class="text-slate-500">Commit Terakhir:</span>
+              <span class="font-mono text-sky-400 font-semibold">{{ gitModalSite.git_last_commit }}</span>
+            </div>
+            <div v-if="gitModalSite.git_last_pull" class="flex items-center justify-between">
+              <span class="text-slate-500">Terakhir Ditarik:</span>
+              <span class="font-mono text-slate-300">{{ gitModalSite.git_last_pull }}</span>
+            </div>
+          </div>
+
+          <!-- Terminal Output Log -->
+          <div v-if="gitModalLogs" class="space-y-1">
+            <div class="flex items-center justify-between text-[11px] text-slate-400">
+              <span class="flex items-center gap-1 font-mono text-sky-400">
+                <Terminal class="w-3 h-3" />
+                <span>Console Git Log:</span>
+              </span>
+              <button @click="gitModalLogs = ''" class="hover:text-slate-200 text-[10px]">Bersihkan</button>
+            </div>
+            <pre class="bg-black/90 p-3 rounded-xl border border-slate-800 text-[10px] font-mono text-emerald-400 whitespace-pre-wrap max-h-40 overflow-y-auto leading-relaxed">{{ gitModalLogs }}</pre>
+          </div>
+        </div>
+
+        <!-- Footer Actions -->
+        <div class="flex items-center justify-between border-t border-slate-800 pt-3 shrink-0">
+          <button
+            @click="showGitModal = false"
+            class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+          >
+            Tutup
+          </button>
+
+          <div class="flex items-center gap-2">
+            <button
+              @click="saveGitModalConfig"
+              class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-400 border border-sky-500/30 text-xs font-bold transition active:scale-95"
+            >
+              Simpan Pengaturan
+            </button>
+            <button
+              @click="executeGitPull(gitModalSite)"
+              :disabled="gitModalIsPulling || !gitModalRepo"
+              class="px-4 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition shadow-lg shadow-sky-500/20 active:scale-95 disabled:opacity-50"
+            >
+              <RotateCw v-if="gitModalIsPulling" class="w-3.5 h-3.5 animate-spin" />
+              <GitPullRequest v-else class="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>{{ gitModalIsPulling ? 'Menarik Kode...' : 'Tarik Kode Sekarang (Pull)' }}</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
