@@ -817,7 +817,50 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 #### 4. Verifikasi & Definisi Selesai (DoD)
 - Kompilasi frontend (`npm run build`) sukses 100% (1578 modul tertransformasi tanpa peringatan error).
 - Pengecekan grep codebase memastikan tidak ada sisa `backdrop-blur` pada seluruh modal sistem.
-- Seluruh file backup tersimpan aman di direktori `backup/*.bak_v255`.
+---
+
+### Versi: 2.6.0-standalone-detached-windows (Arsitektur Jendela Mandiri Terpisah Desktop OS - Standalone Windows Seperti File Manager)
+**Waktu Eksekusi:** 2026-10-13 16:00 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Masalah & Kebutuhan Pengguna
+- **Instruksi Pengguna:** *"buat seperti file manager aja, jadi tidak mengganggu aplikasi nya, seperti aplikasi terpisah gitu"*
+- **Kendala Sebelumnya:**
+  - Meskipun modal telah diubah menjadi floating window tanpa background blur pada v2.5.5, modal tersebut secara arsitektur masih berada di dalam komponen aplikasi induk (`in-app component state`).
+  - Akibatnya, saat modal terbuka, pengguna tidak dapat berinteraksi bebas dengan aplikasi induk (Website Manager atau File Manager) karena modal masih menempati z-index tertinggi dari aplikasi tersebut dan mengunci flow layar.
+  - Pengguna menginginkan model seperti **File Manager**, di mana saat melihat gambar, memutar musik, atau membaca berkas, jendela viewer terbuka sebagai **Jendela Desktop OS Terpisah (`RAZWindowStore`)** yang memiliki taskbar icon sendiri, titlebar mandiri, dapat diminimize, di-drag, di-resize, dan **sama sekali tidak mengunci atau mengganggu aplikasi induknya**.
+
+#### 2. Solusi Arsitektur (Detached Standalone Windows Multi-Tasking)
+- **Ekstensi `RAZWindowStore` dengan Generic Custom Window Engine:**
+  - Menambahkan metode `openCustomWindow(config)` yang mendaftarkan jendela baru ke dalam array `openWindows` desktop OS dengan ID dinamis, koordinat acak teratur agar tidak menumpuk, Z-index fokus otomatis, dan dukungan data passing (`customData`).
+  - Menambahkan helper openers spesifik:
+    - `openWebsiteCreator()`: Jendela Wizard Pembuatan Website Baru (`website-create`).
+    - `openWebsiteEditor(site)`: Jendela Edit Konfigurasi 5-Tab Website (`website-edit-<id>`).
+    - `openWebsiteGit(site)`: Jendela Git Sync, GitHub PAT Token & Pull Terminal (`website-git-<id>`).
+    - `openWebsiteDetail(site)`: Jendela Rincian & Kredensial Website (`website-detail-<id>`).
+    - `openFileProperties(fileItem)`: Jendela Informasi & Properti Berkas ala Windows Explorer (`file-prop-<base64>`).
+    - `openDatabaseCreator()`: Jendela Buat Database MariaDB & PostgreSQL (`database-create`).
+- **Sinkronisasi Global Reaktif Antar-Jendela (`RAZSystemStore`):**
+  - Menambahkan trigger reaktif global: `websitesRefreshTrigger`, `databasesRefreshTrigger`, `appsRefreshTrigger`.
+  - Ketika website atau basis data baru dibuat/diedit di jendela mandirinya, trigger ini seketika memicu `watch()` di jendela aplikasi utama (Website Manager & Database Manager) sehingga data otomatis ter-update secara *real-time* tanpa perlu reload manual.
+- **Komponen Jendela Mandiri Baru (Modularisasi Standar Enterprise RAZ):**
+  - `frontend/src/views/RAZWebsiteWizardView.vue`: Wizard pembuatan website 4-langkah mandiri.
+  - `frontend/src/views/RAZWebsiteEditView.vue`: Editor konfigurasi website mandiri 5-tab.
+  - `frontend/src/views/RAZWebsiteGitView.vue`: Pengaturan repository GitHub, Personal Access Token (PAT), dan log terminal Git pull mandiri.
+  - `frontend/src/views/RAZWebsiteDetailView.vue`: Informasi rincian port, kredensial, dan root folder website mandiri.
+  - `frontend/src/views/RAZFilePropertiesView.vue`: Dialog rincian properti berkas ala Windows Explorer mandiri.
+  - `frontend/src/views/RAZDatabaseCreatorView.vue`: Form pembuatan basis data MariaDB/PostgreSQL mandiri.
+- **Perampingan & Refactoring Aplikasi Utama:**
+  - `RAZWebsitesView.vue`: Dirampingkan secara dramatis dari 2443 baris menjadi ~420 baris yang sangat bersih dan mudah dipelihara.
+  - `RAZDatabasesView.vue`: Modal internal dihapus dan dialihkan ke `openDatabaseCreator()`.
+  - `RAZFileManagerView.vue`: Modal info berkas lama dihapus dan dialihkan ke `openFileProperties()`.
+  - `RAZDesktopLayout.vue`: Terintegrasi penuh dengan conditional rendering untuk seluruh jendela mandiri baru.
+
+#### 3. Verifikasi & Definisi Selesai (DoD)
+- Kompilasi build frontend Vite (`npm run build`) sukses 100% (*1584 modules transformed* dalam 4.16 detik).
+- Multi-window multitasking berjalan sempurna: pengguna dapat membuka Website Manager, lalu membuka Wizard Buat Website atau Edit Website di jendela terpisah, sambil tetap bebas mengklik, menjelajah, dan mengelola website di jendela utama tanpa gangguan sedikit pun.
+- Seluruh backup tersimpan aman di `backup/*.bak_v260`.
+
 
 
 

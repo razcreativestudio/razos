@@ -1,9 +1,9 @@
 <script setup>
 /**
  * RAZOS Desktop Layout Component
- * Updated: 2026-10-13 (v2.5.5 - Floating Window Dialog Modals without Background Blur)
+ * Updated: 2026-10-13 (v2.6.0 - Detached Standalone Windows Architecture)
  * Deskripsi: Layout Desktop mode untuk breakpoint > 768px, memadukan desktop icon shortcuts,
- * window manager frame, dan taskbar bawah dengan dialog modal bergaya floating window tanpa blur.
+ * window manager frame multi-jendela, dan taskbar bawah dengan sistem jendela mandiri tanpa background blur.
  */
 import { ref } from 'vue'
 import { useWindowStore } from '../stores/RAZWindowStore'
@@ -25,6 +25,14 @@ import RAZDatabasesView from '../views/RAZDatabasesView.vue'
 import RAZSettingsView from '../views/RAZSettingsView.vue'
 import RAZFileManagerView from '../views/RAZFileManagerView.vue'
 import RAZFileViewerView from '../views/RAZFileViewerView.vue'
+
+// Import View Jendela Khusus / Standalone Child Windows (v2.6.0)
+import RAZWebsiteWizardView from '../views/RAZWebsiteWizardView.vue'
+import RAZWebsiteEditView from '../views/RAZWebsiteEditView.vue'
+import RAZWebsiteGitView from '../views/RAZWebsiteGitView.vue'
+import RAZWebsiteDetailView from '../views/RAZWebsiteDetailView.vue'
+import RAZFilePropertiesView from '../views/RAZFilePropertiesView.vue'
+import RAZDatabaseCreatorView from '../views/RAZDatabaseCreatorView.vue'
 
 const windowStore = useWindowStore()
 const systemStore = useSystemStore()
@@ -251,7 +259,28 @@ function handleDesktopIconContextMenu(e, app) {
       <div class="relative w-full h-[calc(100vh-48px)]">
         <template v-for="win in windowStore.openWindows" :key="win.id">
           <RAZWindowFrame :win="win" class="pointer-events-auto">
+            <!-- Standalone Universal File Viewer -->
             <RAZFileViewerView v-if="win.id.startsWith('viewer-')" :file="win.fileData" />
+
+            <!-- Standalone File Properties Window -->
+            <RAZFilePropertiesView v-else-if="win.id.startsWith('file-prop-')" :win="win" />
+
+            <!-- Standalone Website Wizard Window -->
+            <RAZWebsiteWizardView v-else-if="win.id === 'website-create'" />
+
+            <!-- Standalone Website Edit Window -->
+            <RAZWebsiteEditView v-else-if="win.id.startsWith('website-edit-')" :win="win" />
+
+            <!-- Standalone Website Git Sync Window -->
+            <RAZWebsiteGitView v-else-if="win.id.startsWith('website-git-')" :win="win" />
+
+            <!-- Standalone Website Detail Window -->
+            <RAZWebsiteDetailView v-else-if="win.id.startsWith('website-detail-')" :win="win" />
+
+            <!-- Standalone Database Creator Window -->
+            <RAZDatabaseCreatorView v-else-if="win.id === 'database-create'" />
+
+            <!-- Aplikasi Utama Berdasarkan ID -->
             <component v-else :is="viewMap[win.id]" />
           </RAZWindowFrame>
         </template>

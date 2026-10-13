@@ -220,6 +220,166 @@ export const useWindowStore = defineStore('window', () => {
     activeWindowId.value = winId
   }
 
+  // Generic helper untuk membuka jendela kustom / child window independen
+  function openCustomWindow(config) {
+    if (!config || !config.id) return
+    const existing = openWindows.value.find(w => w.id === config.id)
+    if (existing) {
+      existing.isMinimized = false
+      if (config.data) {
+        existing.customData = config.data
+      }
+      bringToFront(config.id)
+      return
+    }
+
+    zIndexCounter.value++
+    const offset = (openWindows.value.length * 32) % 200
+
+    const win = {
+      id: config.id,
+      title: config.title || 'Jendela Dialog',
+      icon: config.icon || '/assets/icons/RAZBrandCapsule.png',
+      width: config.width || 600,
+      height: config.height || 480,
+      minWidth: config.minWidth || 380,
+      minHeight: config.minHeight || 300,
+      x: Math.max(40, 100 + offset),
+      y: Math.max(30, 60 + offset),
+      zIndex: zIndexCounter.value,
+      isMinimized: false,
+      isMaximized: false,
+      customData: config.data || null,
+      customType: config.type || config.id
+    }
+
+    openWindows.value.push(win)
+    activeWindowId.value = config.id
+  }
+
+  // Standalone Window: Wizard Pembuatan Website Baru
+  function openWebsiteCreator() {
+    openCustomWindow({
+      id: 'website-create',
+      title: 'Wizard Pembuatan Website Terisolasi',
+      icon: '/assets/icons/RAZIconWebsites.svg',
+      width: 700,
+      height: 580,
+      minWidth: 460,
+      minHeight: 400,
+      type: 'website-create'
+    })
+  }
+
+  // Standalone Window: Edit Konfigurasi Website
+  function openWebsiteEditor(site) {
+    if (!site || !site.id) return
+    openCustomWindow({
+      id: `website-edit-${site.id}`,
+      title: `Edit: ${site.name}`,
+      icon: site.icon || '/assets/icons/RAZIconWebsites.svg',
+      width: 720,
+      height: 600,
+      minWidth: 460,
+      minHeight: 420,
+      type: 'website-edit',
+      data: site
+    })
+  }
+
+  // Standalone Window: Pengaturan GitHub & Git Pull
+  function openWebsiteGit(site) {
+    if (!site || !site.id) return
+    openCustomWindow({
+      id: `website-git-${site.id}`,
+      title: `Git Sync: ${site.name}`,
+      icon: site.icon || '/assets/icons/RAZIconWebsites.svg',
+      width: 620,
+      height: 540,
+      minWidth: 440,
+      minHeight: 380,
+      type: 'website-git',
+      data: site
+    })
+  }
+
+  // Standalone Window: Rincian & Kredensial Website
+  function openWebsiteDetail(site) {
+    if (!site || !site.id) return
+    openCustomWindow({
+      id: `website-detail-${site.id}`,
+      title: `Rincian: ${site.name}`,
+      icon: site.icon || '/assets/icons/RAZIconWebsites.svg',
+      width: 560,
+      height: 500,
+      minWidth: 400,
+      minHeight: 340,
+      type: 'website-detail',
+      data: site
+    })
+  }
+
+  // Standalone Window: Manual Install Docker Container Cepat
+  function openAppStoreManual() {
+    openCustomWindow({
+      id: 'appstore-manual',
+      title: 'Instal Cepat Docker Container',
+      icon: '/assets/icons/RAZIconAppStore.svg',
+      width: 540,
+      height: 520,
+      minWidth: 400,
+      minHeight: 360,
+      type: 'appstore-manual'
+    })
+  }
+
+  // Standalone Window: Form Konfigurasi Pasang Aplikasi Katalog
+  function openAppStoreInstaller(app) {
+    if (!app || !app.slug) return
+    openCustomWindow({
+      id: `appstore-install-${app.slug}`,
+      title: `Pasang ${app.name}`,
+      icon: app.icon || '/assets/icons/RAZIconAppStore.svg',
+      width: 500,
+      height: 420,
+      minWidth: 380,
+      minHeight: 300,
+      type: 'appstore-install',
+      data: app
+    })
+  }
+
+  // Standalone Window: Form Buat Database Baru
+  function openDatabaseCreator() {
+    openCustomWindow({
+      id: 'database-create',
+      title: 'Buat Basis Data Baru',
+      icon: '/assets/icons/RAZIconDatabase.svg',
+      width: 500,
+      height: 460,
+      minWidth: 380,
+      minHeight: 320,
+      type: 'database-create'
+    })
+  }
+
+  // Standalone Window: Informasi & Properti Berkas
+  function openFileProperties(fileItem) {
+    if (!fileItem || !fileItem.path) return
+    const id = 'file-prop-' + btoa(unescape(encodeURIComponent(fileItem.path))).replace(/=/g, '')
+    openCustomWindow({
+      id: id,
+      title: `Properti: ${fileItem.name}`,
+      icon: '/assets/icons/RAZIconFileManager.svg',
+      width: 480,
+      height: 460,
+      minWidth: 360,
+      minHeight: 320,
+      type: 'file-properties',
+      data: fileItem
+    })
+  }
+
   // Toggle window dari taskbar (minimize jika aktif di depan, atau restore/bringToFront jika minimize/di belakang)
   function toggleWindowFromTaskbar(winId) {
     const win = openWindows.value.find(w => w.id === winId)
@@ -362,7 +522,16 @@ export const useWindowStore = defineStore('window', () => {
     openWindows,
     activeWindowId,
     openApp,
+    openCustomWindow,
     openFileViewer,
+    openWebsiteCreator,
+    openWebsiteEditor,
+    openWebsiteGit,
+    openWebsiteDetail,
+    openAppStoreManual,
+    openAppStoreInstaller,
+    openDatabaseCreator,
+    openFileProperties,
     closeWindow,
     minimizeWindow,
     toggleMaximize,

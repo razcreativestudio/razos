@@ -1,18 +1,16 @@
 <script setup>
 /**
  * RAZOS Google Drive-Style Storage & Windows File Explorer Hybrid File Manager
- * Updated: 2026-10-13 (v2.5.5 - Floating Window Dialog Modals without Background Blur)
+ * Updated: 2026-10-13 (v2.6.0 - Detached Standalone Windows Architecture)
  * Deskripsi: Antarmuka File Manager tingkat lanjut memadukan arsitektur Windows File Explorer dan Google Drive:
  * - Windows Explorer Interactive Address Bar: Bilah alamat dwi-fungsi (Breadcrumbs interaktif & Editable Text Input).
- *   Pengguna dapat mengklik segmen breadcrumb atau mengklik area teks untuk mengetik/paste path langsung (Enter untuk pergi).
  * - History Navigation Trio: Tombol Back, Forward, dan Up dengan history stack tracking yang presisi.
  * - Quick Address Actions: Tombol Copy Path (dengan notifikasi clipboard) dan Refresh folder langsung di dalam address bar.
- * - Standalone Content Viewers (No Dark/Blur Overlay): Membuka berkas gambar, video, musik, PDF,
- *   dan kode di Window Mandiri terpisah via RAZWindowStore. File Manager tetap aktif dan bebas membuka file lain.
+ * - Standalone Content Viewers & File Properties (No Dark/Blur Overlay): Membuka berkas gambar, video, musik, PDF,
+ *   kode, serta Rincian & Properti Berkas di Jendela Mandiri terpisah via RAZWindowStore tanpa mengunci File Manager.
  * - Accurate Navigation & Path Normalization: Penanganan path Windows & Linux STB yang presisi tanpa lompat folder.
  * - Fluid Responsive Grid: Menggunakan auto-fill minmax(140px, 1fr) sehingga kartu folder/file tidak pernah gepeng.
  * - Bottom Status Bar: Menampilkan jumlah item, status item aktif, dan tombol aksi cepat tanpa memeras ruang grid.
- * - Window Dialog Modals (Tanpa Blur background, visual jendela independen OS).
  */
 import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
@@ -159,13 +157,11 @@ const showRenameModal = ref(false)
 const renameTargetOldPath = ref('')
 const renameTargetNewName = ref('')
 
-// State Modal Info & Properti Berkas
-const showInfoModal = ref(false)
-
+// Buka Jendela Mandiri Info & Properti Berkas (v2.6.0)
 function openInfoModal(item = selectedItem.value) {
   if (!item) return
   selectedItem.value = item
-  showInfoModal.value = true
+  windowStore.openFileProperties(item)
 }
 
 function formatBytes(bytes) {
@@ -1205,111 +1201,6 @@ onMounted(async () => {
           <button @click="confirmRename" class="px-4 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition shadow active:scale-95">
             Simpan Nama
           </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- CUSTOM MODAL: Detail & Properti Berkas (Floating Window Dialog) -->
-    <div
-      v-if="showInfoModal && selectedItem"
-      class="fixed inset-0 bg-black/35 z-50 flex items-center justify-center p-4 animate-in fade-in"
-    >
-      <div class="w-full max-w-md bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black ring-1 ring-white/10 rounded-2xl flex flex-col overflow-hidden text-xs">
-        <!-- Window Titlebar -->
-        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-5 py-3 select-none">
-          <div class="flex items-center gap-2">
-            <div class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
-              <Info class="w-4 h-4" />
-            </div>
-            <h4 class="font-bold text-slate-100 text-sm">Informasi & Properti Berkas</h4>
-          </div>
-          <button @click="showInfoModal = false" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95" title="Tutup Jendela">
-            <X class="w-4 h-4" />
-          </button>
-        </div>
-
-        <!-- Preview Ikon & Nama Berkas -->
-        <div class="p-5 flex flex-col gap-4">
-          <div class="flex items-center gap-4 p-3.5 bg-slate-950/70 rounded-2xl border border-slate-800/80">
-            <div v-if="isImageFile(selectedItem.extension)" class="w-16 h-16 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 shrink-0 shadow">
-              <RAZThumbnail
-                :path="selectedItem.path"
-                :name="selectedItem.name"
-                :size="selectedItem.size"
-                :extension="selectedItem.extension"
-              />
-            </div>
-            <div v-else class="w-16 h-16 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 shadow">
-              <Folder v-if="selectedItem.is_dir" class="w-8 h-8 text-sky-400 fill-sky-400/20" />
-              <Film v-else-if="isVideoFile(selectedItem.extension)" class="w-7 h-7 text-purple-400" />
-              <Music v-else-if="isAudioFile(selectedItem.extension)" class="w-7 h-7 text-amber-400" />
-              <FileText v-else-if="isPdfFile(selectedItem.extension)" class="w-7 h-7 text-rose-400" />
-              <FileCode v-else-if="isCodeFile(selectedItem.extension)" class="w-7 h-7 text-emerald-400" />
-              <FileText v-else-if="isDocFile(selectedItem.extension)" class="w-7 h-7 text-sky-400" />
-              <File v-else class="w-7 h-7 text-slate-400" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <h5 class="font-bold text-slate-100 text-sm break-all leading-snug">{{ selectedItem.name }}</h5>
-              <span class="text-[11px] text-slate-400 font-mono block mt-0.5">{{ selectedItem.is_dir ? 'Folder Direktori' : (selectedItem.extension?.toUpperCase() || 'Berkas') }}</span>
-            </div>
-          </div>
-
-          <!-- Metadata Properties Grid -->
-          <div class="space-y-2 bg-slate-950/50 p-3.5 rounded-2xl border border-slate-800/80 font-mono text-[11px]">
-            <div class="flex justify-between py-1 border-b border-slate-800/50">
-              <span class="text-slate-400 font-sans">Ukuran:</span>
-              <span class="text-slate-200 font-medium">{{ selectedItem.is_dir ? '-' : formatBytes(selectedItem.size) + ' (' + (selectedItem.size || 0).toLocaleString('id-ID') + ' bytes)' }}</span>
-            </div>
-            <div class="flex justify-between py-1 border-b border-slate-800/50">
-              <span class="text-slate-400 font-sans">Format Ekstensi:</span>
-              <span class="text-slate-200 uppercase">{{ selectedItem.is_dir ? 'Folder' : (selectedItem.extension || 'Tanpa Ekstensi') }}</span>
-            </div>
-            <div class="flex flex-col gap-1 py-1 border-b border-slate-800/50 font-sans">
-              <span class="text-slate-400">Lokasi Path Fisik:</span>
-              <span class="text-slate-300 font-mono text-[11px] bg-slate-900/80 p-2 rounded-lg break-all border border-slate-800">{{ selectedItem.path }}</span>
-            </div>
-            <div class="flex justify-between py-1 font-sans">
-              <span class="text-slate-400">Terakhir Dimodifikasi:</span>
-              <span class="text-slate-300 font-mono text-[11px]">{{ formatDate(selectedItem.mod_time) }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Window Action Footer -->
-        <div class="flex items-center justify-between bg-slate-950/75 border-t border-slate-800 px-5 py-3">
-          <button
-            @click="deleteItem(selectedItem); showInfoModal = false;"
-            class="px-3.5 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
-          >
-            <Trash2 class="w-3.5 h-3.5" />
-            <span>Hapus</span>
-          </button>
-
-          <div class="flex items-center gap-2">
-            <button
-              @click="openRenameDialog(selectedItem); showInfoModal = false;"
-              class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
-            >
-              <Edit3 class="w-3.5 h-3.5" />
-              <span>Ubah Nama</span>
-            </button>
-            <button
-              v-if="!selectedItem.is_dir"
-              @click="handleItemDoubleClick(selectedItem); showInfoModal = false;"
-              class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition shadow active:scale-95"
-            >
-              <Eye class="w-3.5 h-3.5" />
-              <span>Buka Berkas</span>
-            </button>
-            <button
-              v-else
-              @click="fetchFiles(selectedItem.path); showInfoModal = false;"
-              class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition shadow active:scale-95"
-            >
-              <Folder class="w-3.5 h-3.5" />
-              <span>Masuk Folder</span>
-            </button>
-          </div>
         </div>
       </div>
     </div>

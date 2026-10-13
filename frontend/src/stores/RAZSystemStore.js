@@ -85,12 +85,35 @@ export const useSystemStore = defineStore('system', () => {
     }
   }
 
+  // Event Triggers untuk sinkronisasi antar-jendela OS
+  const websitesRefreshTrigger = ref(0)
+  const databasesRefreshTrigger = ref(0)
+  const appsRefreshTrigger = ref(0)
+
+  function triggerWebsitesRefresh() {
+    websitesRefreshTrigger.value++
+  }
+
+  function triggerDatabasesRefresh() {
+    databasesRefreshTrigger.value++
+  }
+
+  function triggerAppsRefresh() {
+    appsRefreshTrigger.value++
+  }
+
   return {
     metrics,
     isConnected,
     isCleaningRAM,
     isCleaningStorage,
     notification,
+    websitesRefreshTrigger,
+    databasesRefreshTrigger,
+    appsRefreshTrigger,
+    triggerWebsitesRefresh,
+    triggerDatabasesRefresh,
+    triggerAppsRefresh,
     showNotification,
     fetchMetrics,
     cleanRAM,
