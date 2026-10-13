@@ -257,18 +257,36 @@ function razosApiPlugin() {
             const full = (cleanParent + e.name).replace(/\\/g, '/')
             let size = 0
             let mtime = new Date()
-            try {
-              const stat = fs.statSync(full)
-              size = stat.size
-              mtime = stat.mtime
-            } catch (stErr) {}
+            let isDir = e.isDirectory()
+
+            // Deteksi reparse points, Windows junctions (Documents and Settings), dan symlink
+            if (!isDir && (e.isSymbolicLink() || !e.name.includes('.'))) {
+              try {
+                const stat = fs.statSync(full)
+                isDir = stat.isDirectory()
+                size = stat.size
+                mtime = stat.mtime
+              } catch (stErr) {
+                // Di Windows, junction proteksi sistem yang menghasilkan EPERM (Access Denied) adalah folder
+                if (e.isSymbolicLink() || !e.name.includes('.')) {
+                  isDir = true
+                }
+              }
+            } else {
+              try {
+                const stat = fs.statSync(full)
+                size = stat.size
+                mtime = stat.mtime
+              } catch (stErr) {}
+            }
+
             return {
               name: e.name,
               path: full,
-              is_dir: e.isDirectory(),
+              is_dir: isDir,
               size: size,
               mod_time: mtime,
-              extension: e.isDirectory() ? '' : (e.name.includes('.') ? '.' + e.name.split('.').pop() : '')
+              extension: isDir ? '' : (e.name.includes('.') ? '.' + e.name.split('.').pop() : '')
             }
           })
           res.setHeader('Content-Type', 'application/json')
@@ -358,6 +376,11 @@ function razosApiPlugin() {
           const rawPath = urlObj.searchParams.get('path')
           const targetPath = resolveSafePath(rawPath)
           try {
+            const stat = fs.statSync(targetPath)
+            if (stat.isDirectory()) {
+              res.statusCode = 400
+              return res.end(JSON.stringify({ error: 'Target adalah folder direktori, bukan berkas teks.' }))
+            }
             const content = fs.readFileSync(targetPath, 'utf-8')
             res.setHeader('Content-Type', 'application/json')
             res.end(JSON.stringify({ content }))

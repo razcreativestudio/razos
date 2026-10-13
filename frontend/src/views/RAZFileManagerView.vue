@@ -379,11 +379,16 @@ function handleItemClick(item) {
 
 // Buka Berkas di Window Mandiri (Standalone Window Viewers)
 function handleItemDoubleClick(item) {
+  if (!item) return
   if (item.is_dir) {
     fetchFiles(normalizePath(item.path))
   } else {
-    // Buka konten berkas di Window Mandiri tanpa modal gelap/blur
-    windowStore.openFileViewer(item)
+    // Failsafe: pastikan fungsi windowStore.openFileViewer tersedia (bebas dari cache lama browser)
+    if (typeof windowStore.openFileViewer === 'function') {
+      windowStore.openFileViewer(item)
+    } else {
+      systemStore.showNotification('Pemberitahuan', `Memuat viewer untuk ${item.name}... Silakan refresh (F5) jika tampilan belum terbuka.`, 'info')
+    }
   }
 }
 

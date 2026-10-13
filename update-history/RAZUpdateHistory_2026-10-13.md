@@ -127,3 +127,25 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - **Verifikasi Build:**
   - `npm run build` berhasil 100% (1502 modules transformed).
   - Dev server reload secara lancar via HMR di `localhost:3000`.
+
+---
+
+### Versi: 2.3.2-windows-junction-and-cache-resilience (Resolusi Windows Junction Symlink & Failsafe Store)
+**Waktu Eksekusi:** 2026-10-13 11:15 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Penanganan Tuntas Reparse Point & Junction Windows (Documents and Settings)
+- **Penyebab Masalah:**
+  - Direktori sistem Windows seperti `C:\Documents and Settings` merupakan sebuah *NTFS Junction Link* (Reparse Point). Pada Node.js `fs.readdirSync({ withFileTypes: true })`, objek entry memiliki `e.isDirectory() === false` dan `e.isSymbolicLink() === true`.
+  - Hal ini menyebabkan sistem sebelumnya keliru menandai folder junction sebagai "file biasa tanpa ekstensi", sehingga saat diklik ganda sistem mencoba membaca teks menggunakan `/api/v1/files/content` yang memicu 500 error (`EISDIR` / `EPERM`).
+- **Solusi Rekayasa:**
+  - Memperbarui `frontend/vite.config.js` dan Go backend `RAZStorageEngine.go` agar secara cerdas mendeteksi `isSymbolicLink()` atau entry tanpa ekstensi: jika `fs.statSync` menghasilkan direktori atau melempar permission-denied (EPERM) khas proteksi folder sistem Windows, entri tersebut secara otomatis dan konsisten ditandai sebagai `is_dir = true`.
+  - Menambahkan verifikasi `stat.isDirectory()` pada endpoint `/api/v1/files/content` untuk mengembalikan status 400 terproteksi ("Target adalah folder direktori, bukan berkas teks") sebelum mencoba `readFileSync`.
+
+#### 2. Ketahanan Failsafe Store & Eliminasi Peringatan Modal
+- **Pembersihan Cache State:**
+  - Peringatan `[Vue warn]: Property "showImageModal" was accessed during render` dan `openFileViewer is not a function` berasal dari cache memori browser yang masih menahan bundle sebelum reload penuh (*stale Pinia store instance*).
+  - Menambahkan pengecekan failsafe `typeof windowStore.openFileViewer === 'function'` pada handler double click di `RAZFileManagerView.vue` agar aman dari desinkronisasi cache browser.
+- **Verifikasi:**
+  - `npm run build` sukses 100% (1502 modules transformed).
+  - Vite dev server me-restart server secara otomatis dan bersih di port 3000.

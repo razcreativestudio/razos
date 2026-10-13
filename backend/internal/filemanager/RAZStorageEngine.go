@@ -120,18 +120,28 @@ func ListDirectory(targetPath string) ([]FileItem, error) {
 			continue
 		}
 
+		isDir := entry.IsDir()
+		fullPath := filepath.Join(cleanPath, entry.Name())
+		if !isDir && (entry.Type()&os.ModeSymlink != 0 || !strings.Contains(entry.Name(), ".")) {
+			if stat, err := os.Stat(fullPath); err == nil {
+				isDir = stat.IsDir()
+			} else if entry.Type()&os.ModeSymlink != 0 {
+				isDir = true
+			}
+		}
+
 		ext := ""
-		if !entry.IsDir() {
+		if !isDir {
 			ext = strings.ToLower(filepath.Ext(entry.Name()))
 		}
 
 		// Gunakan forward slash seragam agar tidak terjadi konflik path di browser
-		itemPath := filepath.ToSlash(filepath.Join(cleanPath, entry.Name()))
+		itemPath := filepath.ToSlash(fullPath)
 
 		items = append(items, FileItem{
 			Name:      entry.Name(),
 			Path:      itemPath,
-			IsDir:     entry.IsDir(),
+			IsDir:     isDir,
 			Size:      info.Size(),
 			ModTime:   info.ModTime(),
 			Extension: ext,
@@ -158,6 +168,14 @@ func RenameFileOrFolder(oldPath, newPath string) error {
 
 // ReadFileContent membaca konten berkas teks (misal: log, config, json, yaml, env)
 func ReadFileContent(targetPath string) (string, error) {
+	stat, err := os.Stat(targetPath)
+	if err != nil {
+		return "", err
+	}
+	if stat.IsDir() {
+		return "", fmt.Errorf("target adalah direktori, bukan berkas")
+	}
+
 	data, err := os.ReadFile(targetPath)
 	if err != nil {
 		return "", err
