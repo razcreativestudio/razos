@@ -77,16 +77,361 @@ function razosApiPlugin() {
         res.end(JSON.stringify({ status: 'success', message: 'Pembersihan storage selesai' }))
       })
 
+      // Helper Persistensi Websites
+      function getWebsitesFile() {
+        const paths = [
+          '../backend/internal/store/RAZWebsites.json',
+          'backend/internal/store/RAZWebsites.json'
+        ]
+        for (const p of paths) {
+          if (fs.existsSync(p)) return p
+        }
+        return '../backend/internal/store/RAZWebsites.json'
+      }
+
+      function loadWebsites() {
+        try {
+          const filePath = getWebsitesFile()
+          if (fs.existsSync(filePath)) {
+            const data = fs.readFileSync(filePath, 'utf-8')
+            return JSON.parse(data)
+          }
+        } catch (e) {}
+        return []
+      }
+
+      function saveWebsites(list) {
+        try {
+          const filePath = getWebsitesFile()
+          const dir = path.dirname(filePath)
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+          fs.writeFileSync(filePath, JSON.stringify(list, null, 2), 'utf-8')
+          return true
+        } catch (e) {
+          return false
+        }
+      }
+
+      // Helper Persistensi Databases
+      function getDatabasesFile() {
+        const paths = [
+          '../backend/internal/store/RAZDatabases.json',
+          'backend/internal/store/RAZDatabases.json'
+        ]
+        for (const p of paths) {
+          if (fs.existsSync(p)) return p
+        }
+        return '../backend/internal/store/RAZDatabases.json'
+      }
+
+      function loadDatabases() {
+        try {
+          const filePath = getDatabasesFile()
+          if (fs.existsSync(filePath)) {
+            const data = fs.readFileSync(filePath, 'utf-8')
+            return JSON.parse(data)
+          }
+        } catch (e) {}
+        return []
+      }
+
+      function saveDatabases(list) {
+        try {
+          const filePath = getDatabasesFile()
+          const dir = path.dirname(filePath)
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+          fs.writeFileSync(filePath, JSON.stringify(list, null, 2), 'utf-8')
+          return true
+        } catch (e) {
+          return false
+        }
+      }
+
       // 5. Endpoint Real Websites (/api/v1/websites)
       server.middlewares.use('/api/v1/websites', (req, res) => {
+        const urlObj = new URL(req.url, 'http://localhost')
+        const pathname = urlObj.pathname
         res.setHeader('Content-Type', 'application/json')
-        res.end(JSON.stringify([])) // Tidak ada dummy hardcode, dinamis kosong hingga dibuat pengguna
+
+        // GET: Daftar semua website
+        if (req.method === 'GET') {
+          const list = loadWebsites()
+          return res.end(JSON.stringify(list))
+        }
+
+        // POST: Buat website baru atau toggle status action
+        if (req.method === 'POST') {
+          let body = ''
+          req.on('data', chunk => { body += chunk })
+          req.on('end', () => {
+            try {
+              const data = body ? JSON.parse(body) : {}
+              const list = loadWebsites()
+
+              // Cek apakah aksi action toggle (/api/v1/websites/:id/action)
+              const actionMatch = pathname.match(/\/(\d+)\/action/)
+              if (actionMatch) {
+                const siteId = parseInt(actionMatch[1])
+                const target = list.find(s => s.id === siteId)
+                if (target) {
+                  if (data.action === 'stop') {
+                    target.status = 'stopped'
+                  } else {
+                    target.status = 'running'
+                  }
+                  saveWebsites(list)
+                  return res.end(JSON.stringify(target))
+                }
+                res.statusCode = 404
+                return res.end(JSON.stringify({ error: 'Website tidak ditemukan' }))
+              }
+
+              // Pembuatan website baru
+              const name = (data.name || '').trim()
+              if (!name) {
+                res.statusCode = 400
+                return res.end(JSON.stringify({ error: 'Nama website wajib diisi' }))
+              }
+
+              const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `site-${Date.now()}`
+              let containerName = (data.container_name || '').trim() || `site-${slug}-web`
+              if (list.some(s => s.container_name === containerName)) {
+                containerName = `site-${slug}-${Math.floor(Math.random() * 9000 + 1000)}`
+              }
+
+              // Alokasi port
+              let port = parseInt(data.port) || 0
+              if (port <= 0 || list.some(s => s.port === port)) {
+                const usedPorts = new Set(list.map(s => s.port))
+                for (let p = 8100; p <= 8250; p++) {
+                  if (!usedPorts.has(p)) {
+                    port = p
+                    break
+                  }
+                }
+              }
+
+              // Root folder
+              let rootFolder = (data.root_folder || '').trim()
+              if (!rootFolder) {
+                rootFolder = `C:/DATA/websites/${slug}`
+              }
+
+              // Buat folder fisik dan starter template
+              try {
+                const physicalDir = resolveSafePath(rootFolder)
+                if (!fs.existsSync(physicalDir)) {
+                  fs.mkdirSync(physicalDir, { recursive: true })
+                }
+                const runtime = data.runtime || 'static'
+                if (runtime === 'php') {
+                  const phpFile = path.join(physicalDir, 'index.php')
+                  if (!fs.existsSync(phpFile)) {
+                    fs.writeFileSync(phpFile, `<?php
+/**
+ * RAZOS PHP Website: ${name}
+ */
+$dbName = '${data.db_name || ''}';
+$dbHost = '${data.db_host || ''}';
+$dbPort = ${data.db_port || 3306};
+$dbUser = '${data.db_user || ''}';
+?>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>${name} - RAZOS PHP Web</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #090d16; color: #f1f5f9; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        .card { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(51, 65, 85, 0.8); border-radius: 1.25rem; padding: 2.5rem; max-width: 500px; text-align: center; }
+        .badge { background: rgba(14, 165, 233, 0.2); color: #38bdf8; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: bold; }
+        .db-info { background: #0f172a; padding: 1rem; border-radius: 0.75rem; margin-top: 1.5rem; font-size: 0.75rem; text-align: left; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <span class="badge">PHP 8.2 • RAZOS ISOLATED CONTAINER</span>
+        <h1>${name}</h1>
+        <p style="color: #94a3b8;">Website PHP Anda aktif dan berjalan di server RAZOS.</p>
+        <?php if (!empty($dbName)): ?>
+        <div class="db-info">
+            <strong style="color: #fbbf24;">Koneksi Database:</strong><br>
+            Host: <?php echo htmlspecialchars($dbHost); ?>:<?php echo $dbPort; ?><br>
+            Database: <?php echo htmlspecialchars($dbName); ?><br>
+            User: <?php echo htmlspecialchars($dbUser); ?>
+        </div>
+        <?php endif; ?>
+    </div>
+</body>
+</html>`, 'utf-8')
+                  }
+                } else if (runtime === 'nodejs') {
+                  const jsFile = path.join(physicalDir, 'server.js')
+                  if (!fs.existsSync(jsFile)) {
+                    fs.writeFileSync(jsFile, `// RAZOS Node.js Website: ${name}
+const http = require('http');
+const port = process.env.PORT || 80;
+
+const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end('<h1>${name} - Node.js Container Aktif</h1>');
+});
+
+server.listen(port, () => console.log('Server berjalan pada port ' + port));
+`, 'utf-8')
+                  }
+                } else {
+                  const htmlFile = path.join(physicalDir, 'index.html')
+                  if (!fs.existsSync(htmlFile)) {
+                    fs.writeFileSync(htmlFile, `<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>${name} - RAZOS Static Website</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #090d16; color: #f1f5f9; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        .card { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(51, 65, 85, 0.8); border-radius: 1.25rem; padding: 2.5rem; max-width: 500px; text-align: center; }
+        .badge { background: rgba(56, 189, 248, 0.2); color: #38bdf8; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <span class="badge">NGINX STATIS • RAZOS CONTAINER</span>
+        <h1>${name}</h1>
+        <p style="color: #94a3b8;">Website statis Anda siap diedit. Letakkan file HTML/CSS/JS di folder ini.</p>
+    </div>
+</body>
+</html>`, 'utf-8')
+                  }
+                }
+              } catch (e) {}
+
+              // Default Icon
+              let icon = (data.icon || '').trim()
+              if (!icon) {
+                switch (data.runtime) {
+                  case 'php': icon = 'https://cdn.simpleicons.org/php/777BB4'; break
+                  case 'nodejs': icon = 'https://cdn.simpleicons.org/nodedotjs/5FA04E'; break
+                  case 'nextjs': icon = 'https://cdn.simpleicons.org/nextdotjs/white'; break
+                  default: icon = '/assets/icons/RAZIconWebsites.svg'
+                }
+              }
+
+              const newSite = {
+                id: list.length > 0 ? Math.max(...list.map(s => s.id || 0)) + 1 : 1,
+                name: name,
+                slug: slug,
+                domain: (data.domain || '').trim() || `${slug}.local`,
+                port: port,
+                runtime: data.runtime || 'static',
+                container_name: containerName,
+                root_folder: rootFolder,
+                icon: icon,
+                command: data.command || '',
+                memory_limit: data.memory_limit || '128M',
+                cpu_shares: parseInt(data.cpu_shares) || 512,
+                env_vars: data.env_vars || '',
+                database_id: data.database_id || null,
+                db_engine: data.db_engine || 'mariadb',
+                db_host: data.db_host || '127.0.0.1',
+                db_port: parseInt(data.db_port) || 3306,
+                db_name: data.db_name || '',
+                db_user: data.db_user || '',
+                db_password: data.db_password || '',
+                status: 'running',
+                created_at: new Date().toISOString().replace('T', ' ').substring(0, 16)
+              }
+
+              list.push(newSite)
+              saveWebsites(list)
+              res.end(JSON.stringify(newSite))
+            } catch (err) {
+              res.statusCode = 500
+              res.end(JSON.stringify({ error: err.message }))
+            }
+          })
+          return
+        }
+
+        // DELETE: Hapus website (/api/v1/websites/:id?purge=true)
+        if (req.method === 'DELETE') {
+          const parts = pathname.split('/')
+          const id = parseInt(parts[parts.length - 1] || urlObj.searchParams.get('id'))
+          const purge = urlObj.searchParams.get('purge') === 'true'
+
+          const list = loadWebsites()
+          const index = list.findIndex(s => s.id === id)
+          if (index >= 0) {
+            const target = list[index]
+            if (purge && target.root_folder) {
+              try {
+                const targetDir = resolveSafePath(target.root_folder)
+                if (fs.existsSync(targetDir)) {
+                  fs.rmSync(targetDir, { recursive: true, force: true })
+                }
+              } catch (e) {}
+            }
+            list.splice(index, 1)
+            saveWebsites(list)
+            return res.end(JSON.stringify({ status: 'deleted', id }))
+          }
+          res.statusCode = 404
+          return res.end(JSON.stringify({ error: 'Website tidak ditemukan' }))
+        }
       })
 
       // 6. Endpoint Real Databases (/api/v1/databases)
       server.middlewares.use('/api/v1/databases', (req, res) => {
+        const urlObj = new URL(req.url, 'http://localhost')
+        const pathname = urlObj.pathname
         res.setHeader('Content-Type', 'application/json')
-        res.end(JSON.stringify([])) // Dinamis kosong hingga database dibuat
+
+        // Launch Adminer
+        if (pathname.includes('/adminer/launch')) {
+          return res.end(JSON.stringify({ status: 'ready', url: 'http://localhost:8088' }))
+        }
+
+        if (req.method === 'GET') {
+          return res.end(JSON.stringify(loadDatabases()))
+        }
+
+        if (req.method === 'POST') {
+          let body = ''
+          req.on('data', chunk => { body += chunk })
+          req.on('end', () => {
+            try {
+              const data = body ? JSON.parse(body) : {}
+              const list = loadDatabases()
+              const name = (data.name || '').trim()
+              if (!name) {
+                res.statusCode = 400
+                return res.end(JSON.stringify({ error: 'Nama database wajib diisi' }))
+              }
+
+              const engine = data.engine || 'mariadb'
+              const port = parseInt(data.port) || (engine === 'postgres' ? 5432 : 3306)
+
+              const newDB = {
+                id: list.length > 0 ? Math.max(...list.map(d => d.id || 0)) + 1 : 1,
+                name: name,
+                engine: engine,
+                user: data.user || 'raz_user',
+                port: port,
+                host: data.host || '127.0.0.1',
+                size: '0.5 MB',
+                created_at: new Date().toISOString().replace('T', ' ').substring(0, 16)
+              }
+
+              list.push(newDB)
+              saveDatabases(list)
+              res.end(JSON.stringify(newDB))
+            } catch (err) {
+              res.statusCode = 500
+              res.end(JSON.stringify({ error: err.message }))
+            }
+          })
+          return
+        }
       })
 
       // Helper Persistensi Installed Apps

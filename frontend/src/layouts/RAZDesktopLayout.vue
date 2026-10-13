@@ -13,7 +13,7 @@ import RAZWindowFrame from '../components/RAZWindowFrame.vue'
 import RAZTaskbar from '../components/RAZTaskbar.vue'
 import {
   RefreshCw, Folder, Terminal, Cpu, Settings, EyeOff, Layers, Play, Info,
-  Trash2, ExternalLink, AlertTriangle, X
+  Trash2, ExternalLink, AlertTriangle, X, Globe
 } from 'lucide-vue-next'
 
 // Import View Aplikasi
@@ -130,7 +130,43 @@ async function confirmDesktopUninstall() {
 
 // Context Menu Klik Kanan pada Ikon Shortcut Desktop
 function handleDesktopIconContextMenu(e, app) {
-  if (app.isStoreApp) {
+  if (app.isWebsite) {
+    // Context Menu untuk Website yang Dibuat di Website Manager
+    contextMenuStore.show(e, [
+      {
+        label: `Buka ${app.title}`,
+        icon: Play,
+        action: () => windowStore.launchWebsiteApp(app)
+      },
+      {
+        label: 'Buka di Tab Baru Peramban',
+        icon: ExternalLink,
+        action: () => windowStore.launchWebsiteApp(app)
+      },
+      { separator: true },
+      {
+        label: 'Buka Root Folder',
+        icon: Folder,
+        action: () => {
+          windowStore.openApp('file-manager')
+          systemStore.showNotification('Root Folder', `Lokasi: ${app.root_folder}`, 'info')
+        }
+      },
+      {
+        label: 'Kelola di Website Manager',
+        icon: Globe,
+        action: () => windowStore.openApp('websites')
+      },
+      { separator: true },
+      {
+        label: 'Info Website',
+        icon: Info,
+        action: () => {
+          systemStore.showNotification('Website Info', `${app.title} (Port: ${app.port} | Domain: ${app.domain})`, 'info')
+        }
+      }
+    ], app.title)
+  } else if (app.isStoreApp) {
     // Context Menu untuk Aplikasi Terpasang dari Store / Docker Compose
     contextMenuStore.show(e, [
       {
@@ -191,18 +227,18 @@ function handleDesktopIconContextMenu(e, app) {
       <img src="/assets/brand/RAZBrandTransparent.webp" alt="RAZ STUDIO" class="h-8 object-contain" />
     </div>
 
-    <!-- Desktop Icons Grid (Aplikasi Sistem + Aplikasi Terpasang dari Store) -->
+    <!-- Desktop Icons Grid (Aplikasi Sistem + Aplikasi Terpasang dari Store + Website) -->
     <div class="relative z-10 p-6 grid grid-flow-col grid-rows-6 gap-6 w-max">
       <div
         v-for="app in windowStore.allDesktopApps"
         :key="app.id"
-        @dblclick="app.isStoreApp ? windowStore.launchStoreApp(app) : windowStore.openApp(app.id)"
+        @dblclick="app.isWebsite ? windowStore.launchWebsiteApp(app) : (app.isStoreApp ? windowStore.launchStoreApp(app) : windowStore.openApp(app.id))"
         @contextmenu.prevent.stop="handleDesktopIconContextMenu($event, app)"
         class="w-20 flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-slate-800/50 cursor-pointer group transition text-center relative"
       >
         <div class="w-12 h-12 rounded-2xl flex items-center justify-center p-1 group-hover:scale-105 transition-transform duration-150 drop-shadow-md relative">
           <img :src="app.icon" :alt="app.title" class="w-full h-full object-contain" />
-          <span v-if="app.isStoreApp" class="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900" title="Container Running"></span>
+          <span v-if="app.isStoreApp || app.isWebsite" class="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900" :title="app.isWebsite ? 'Website Running' : 'Container Running'"></span>
         </div>
         <span class="text-xs text-slate-100 font-medium group-hover:text-sky-300 drop-shadow line-clamp-2">
           {{ app.title }}

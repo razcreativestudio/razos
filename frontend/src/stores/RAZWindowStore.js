@@ -270,10 +270,30 @@ export const useWindowStore = defineStore('window', () => {
     } catch (e) {}
   }
 
+  // State Website yang Dikelola oleh Website Manager
+  const managedWebsites = ref([])
+
+  async function fetchWebsitesList() {
+    try {
+      const res = await fetch('/api/v1/websites')
+      if (res.ok) {
+        managedWebsites.value = await res.json()
+      }
+    } catch (e) {}
+  }
+
   // Luncurkan Web UI Aplikasi Store
   function launchStoreApp(app) {
     if (!app) return
     const port = app.port || app.storeData?.port || 8080
+    const url = `http://${window.location.hostname}:${port}`
+    window.open(url, '_blank')
+  }
+
+  // Luncurkan Website yang Dikelola Website Manager
+  function launchWebsiteApp(site) {
+    if (!site) return
+    const port = site.port || site.websiteData?.port || 80
     const url = `http://${window.location.hostname}:${port}`
     window.open(url, '_blank')
   }
@@ -290,9 +310,11 @@ export const useWindowStore = defineStore('window', () => {
     return false
   }
 
-  // Seluruh Aplikasi Desktop (Aplikasi Bawaan Sistem + Aplikasi Terpasang dari Store)
+  // Seluruh Aplikasi Desktop (Aplikasi Bawaan Sistem + Aplikasi Terpasang dari Store + Website)
   const allDesktopApps = computed(() => {
     const list = [...apps.value]
+
+    // Tambahkan Container Terpasang dari App Store
     installedStoreApps.value.forEach(inst => {
       list.push({
         id: `store-${inst.slug || inst.id}`,
@@ -304,18 +326,38 @@ export const useWindowStore = defineStore('window', () => {
         slug: inst.slug || inst.id
       })
     })
+
+    // Tambahkan Website yang Dibuat di Website Manager
+    managedWebsites.value.forEach(site => {
+      list.push({
+        id: `website-${site.id}`,
+        title: site.name,
+        icon: site.icon || '/assets/icons/RAZIconWebsites.svg',
+        isWebsite: true,
+        websiteData: site,
+        port: site.port,
+        domain: site.domain,
+        root_folder: site.root_folder,
+        status: site.status
+      })
+    })
+
     return list
   })
 
-  // Inisialisasi awal daftar aplikasi terpasang
+  // Inisialisasi awal daftar aplikasi dan website
   fetchInstalledApps()
+  fetchWebsitesList()
 
   return {
     apps,
     installedStoreApps,
+    managedWebsites,
     allDesktopApps,
     fetchInstalledApps,
+    fetchWebsitesList,
     launchStoreApp,
+    launchWebsiteApp,
     uninstallStoreApp,
     openWindows,
     activeWindowId,

@@ -513,6 +513,56 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - Slider timeline dapat di-klik di mana saja dan di-slide secara sangat mulus tanpa lag atau jitter.
 - Kecepatan pemutaran 0.5x hingga 2.0x bekerja presisi dengan sinkronisasi piringan vinil dan equalizer.
 
+---
+
+### Versi: 2.5.0-website-manager-container-isolated-suite (Arsitektur Multi-Website Terisolasi Docker, Root Folder Picker, Integrasi Database Manager & Desktop Shortcuts)
+**Waktu Eksekusi:** 2026-10-13 14:05 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Masalah & Kebutuhan Utama yang Diatasi
+- **Ketiadaan Isolasi Container Khusus Website:**
+  - Sebelumnya, pembuatan website belum mengelola container Docker terisolasi secara mandiri dengan spesifikasi nama container unik, alokasi root folder khusus di `/DATA/apps/websites/<slug>`, resource limits RAM/CPU, dan perintah kustom.
+  - Pengguna membutuhkan sistem di mana setiap website berjalan dalam container terpisah yang aman sehingga tidak bertabrakan dengan website lain meskipun menggunakan web server atau runtime yang sama (Nginx, PHP, Node.js, Next.js).
+- **Koneksi Database & Integrasi Database Manager:**
+  - Ketiadaan integrasi langsung antara website dinamis (seperti PHP/Node.js) dengan server basis data (MariaDB / PostgreSQL) dan alat pengelola database visual (seperti Web Adminer / HeidiSQL style).
+- **Ketiadaan Shortcut Desktop & App Drawer untuk Website:**
+  - Ikon dan tautan website belum tersinkronisasi ke Desktop layout atau Start Menu sebagai aplikasi mandiri yang bisa diluncurkan dengan double click.
+
+#### 2. Solusi Arsitektur yang Diterapkan
+
+##### A. Mesin Backend & Persistensi JSON (`RAZWebsiteManager.go` & `RAZWebsites.json`)
+- **Persistensi Data Permanen:** Menyimpan seluruh konfigurasi website secara permanen di `backend/internal/store/RAZWebsites.json`.
+- **Unique Container Isolation (`container_name`):** Setiap website memiliki container name terisolasi (misal `site-toko-online-web`) yang dijamin tidak bentrok.
+- **Auto-Alokasi Port Bebas (8100-8250):** Mendeteksi port yang diminta atau secara otomatis mengalokasikan port TCP yang belum terpakai di sistem host.
+- **Multi-Runtime Stack Support:**
+  - **HTML Statis (Nginx):** Image `nginx:alpine` super ringan (~32MB RAM) memetakan root folder ke `/usr/share/nginx/html`.
+  - **PHP 8.2 + Database:** Image `php:8.2-apache` memetakan root folder ke `/var/www/html` dan menyuntikkan variabel koneksi basis data.
+  - **Node.js Server:** Image `node:18-alpine` untuk server Express/Fastify/API dengan custom execution command.
+  - **Next.js Framework:** Image `node:20-alpine` untuk aplikasi React SSR pada port 3000.
+  - **Custom Docker Stack:** Konfigurasi image dan perintah container bebas.
+- **Generator Starter Template Otomatis:** Secara otomatis membuat starter file modern (`index.html`, `index.php` dengan pengecekan DB info, atau `server.js`) saat root folder baru dibuat.
+- **Resource Limits Hemat Daya:** Pembatasan memori RAM (`64M`, `128M`, `256M`, `512M`) dan `CPUShares` (256, 512, 1024) yang disesuaikan secara presisi untuk hardware STB ARM64 ber-RAM 1.8GB.
+
+##### B. Wizard Pembuatan Website 4-Langkah (`RAZWebsitesView.vue`)
+- **Langkah 1: Identitas & Akses Website:** Nama website, container name otomatis, domain/hostname, port host dengan tombol auto-suggest port bebas, dan pemilih link icon (preset Nginx, PHP, Node, Next.js, WordPress, Laravel, React, Vue, HTML5).
+- **Langkah 2: Runtime Stack & Root Folder:** Pilihan kartu runtime visual interaktif dan penentuan root folder penyimpanan berkas di `/DATA/apps/websites/<slug>`.
+- **Langkah 3: Integrasi Basis Data (Adminer / HeidiSQL Connected):** Toggle aktifkan database, pilihan database terdaftar di RAZOS (auto-fill host, port, user), atau form input kredensial manual lengkap.
+- **Langkah 4: Batasan Sumber Daya & Advanced:** Preset tombol RAM limit, prioritas CPU shares, perintah eksekusi container opsional, dan textarea variabel lingkungan tambahan (ENV vars).
+
+##### C. Integrasi Shortcut Desktop, Start Menu & File Manager
+- **Desktop Launcher & Context Menu:** Setiap website yang dibuat otomatis muncul di Desktop dan Start Menu dengan icon kustomnya (`isWebsite: true`). Double-click pada shortcut desktop langsung membuka website di browser.
+- **Klik Kanan (Context Menu) Shortcut Website:** Opsi buka web, buka di tab baru peramban, buka root folder di File Manager, kelola di Website Manager, dan info website.
+- **Tombol Cepat Buka Root Folder di File Manager:** Mengklik icon folder pada kartu website langsung meluncurkan jendela File Manager ke direktori kerja website tersebut.
+- **Tombol Cepat Buka Web Adminer:** Membuka Web GUI Adminer untuk mengelola tabel dan data database terkait.
+- **100% Custom Modal:** Seluruh dialog interaksi (wizard, konfirmasi hapus dengan opsi purge folder, dan detail kredensial) menggunakan custom modal Glassmorphism Slate-900 tanpa `alert()` atau `confirm()` native.
+
+#### 3. Verifikasi & Definisi Selesai (DoD)
+- Kompilasi build frontend Vite (`npm run build`) sukses 100% (*1578 modules transformed*).
+- Pengujian otomatis end-to-end via endpoint REST API (`POST /api/v1/databases`, `POST /api/v1/websites`, `POST /api/v1/websites/:id/action`, `DELETE /api/v1/websites/:id?purge=true`) lolos 100%.
+- Starter file `index.php` dan `index.html` berhasil terbuat secara fisik di root folder host dengan konfigurasi database yang presisi.
+- Dev server Vite HMR aktif dan responsif di port 3000.
+
+
 
 
 

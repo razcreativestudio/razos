@@ -1,0 +1,22 @@
+[
+  {
+    "id": 1,
+    "name": "razos_toko_db",
+    "engine": "mariadb",
+    "user": "raz_toko",
+    "port": 3306,
+    "host": "127.0.0.1",
+    "size": "0.5 MB",
+    "created_at": "2026-10-13 06:56"
+  },
+  {
+    "id": 2,
+    "name": "razos_portal_db",
+    "engine": "mariadb",
+    "user": "raz_portal",
+    "port": 3306,
+    "host": "127.0.0.1",
+    "size": "0.5 MB",
+    "created_at": "2026-10-13 07:02"
+  }
+]

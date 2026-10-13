@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "name": "Portal Berita Raz",
+    "slug": "portal-berita-raz",
+    "domain": "berita.razos.local",
+    "port": 8110,
+    "runtime": "php",
+    "container_name": "site-portal-berita-web",
+    "root_folder": "C:/DATA/websites/portal-berita-raz",
+    "icon": "https://cdn.simpleicons.org/php/777BB4",
+    "command": "",
+    "memory_limit": "128M",
+    "cpu_shares": 512,
+    "env_vars": "",
+    "database_id": 2,
+    "db_engine": "mariadb",
+    "db_host": "127.0.0.1",
+    "db_port": 3306,
+    "db_name": "razos_portal_db",
+    "db_user": "raz_portal",
+    "db_password": "",
+    "status": "running",
+    "created_at": "2026-10-13 07:02"
+  }
+]

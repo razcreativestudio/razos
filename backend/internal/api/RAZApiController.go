@@ -48,6 +48,7 @@ func RegisterRoutes(r *gin.Engine) {
 		// Website Suite & Reverse Proxy
 		v1.GET("/websites", handleGetWebsites)
 		v1.POST("/websites", handleCreateWebsite)
+		v1.POST("/websites/:id/action", handleWebsiteAction)
 		v1.DELETE("/websites/:id", handleDeleteWebsite)
 
 		// Database Suite
@@ -222,8 +223,34 @@ func handleDeleteWebsite(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid site ID"})
 		return
 	}
-	_ = website.DeleteWebsite(id)
+	purgeFiles := c.Query("purge") == "true"
+	if err := website.DeleteWebsite(id, purgeFiles); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"status": "deleted", "id": id})
+}
+
+func handleWebsiteAction(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid site ID"})
+		return
+	}
+	var body struct {
+		Action string `json:"action"` // "start" | "stop" | "restart"
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid action body"})
+		return
+	}
+	site, err := website.ToggleWebsiteStatus(id, body.Action)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, site)
 }
 
 func handleGetDatabases(c *gin.Context) {

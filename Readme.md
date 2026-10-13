@@ -13,8 +13,8 @@
 - **App Store 525+ Docker, Installed Apps Tab & CasaOS-Style Compose YAML Suite:** Katalog 525+ aplikasi Docker siap pakai dengan halaman detail dokumentasi README.md, tab khusus **"Aplikasi Terpasang (Installed Apps)"** untuk manajemen container aktif, peluncuran Web UI & clean uninstall, integrasi **Context Menu** klik kanan shortcut desktop & start menu untuk uninstall instan, serta editor **Docker Compose YAML ala CasaOS** dengan upload/drag-and-drop `.yaml`/`.yml`, syntax inspection real-time, dan deployment multi-container mandiri.
 - **Task Manager & System Health:** Monitoring penggunaan sumber daya per-aplikasi secara real-time dengan kill-switch instan.
 - **Pembersih Sistem 1-Klik:** RAM Cleaner dan Docker Storage Cleaner terintegrasi untuk menjaga kestabilan perangkat ber-RAM kecil.
-- **Website Suite:** Deploy banyak website secara instan dengan alokasi port otomatis dan reverse proxy internal.
-- **Database Suite:** MariaDB, PostgreSQL, dan GUI Adminer bawaan yang siap dikoneksikan ke website.
+- **Website Manager & Container Isolated Suite:** Platform pembuatan dan pengelolaan multi-website terisolasi berbasis Docker (HTML Statis Nginx, PHP 8.2 + Database, Node.js, Next.js, dan Custom Docker stack) dengan penentuan root folder dokumen (`/DATA/apps/websites/<slug>`), auto-assign port bebas host (8100-8250) anti-tabrakan, penamaan container unik (`site-<slug>-web`), pembatasan sumber daya (Memory limits 64M-1024M optimal STB ARM64 & CPU shares), custom command & environment variables, sinkronisasi link icon ke Desktop shortcut & Start Menu, serta tombol cepat pembuka root folder di File Manager.
+- **Database Suite & Web Manager GUI:** Server MariaDB dan PostgreSQL terpusat dengan Web GUI Adminer (HeidiSQL / phpMyAdmin web style) siap pakai untuk inspeksi visual tabel dan eksekusi query data, terhubung langsung ke Website Manager.
 - **Web Terminal:** Akses SSH/PTY langsung di peramban menggunakan xterm.js.
 
 ---
