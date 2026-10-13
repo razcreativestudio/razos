@@ -33,6 +33,8 @@ import RAZWebsiteGitView from '../views/RAZWebsiteGitView.vue'
 import RAZWebsiteDetailView from '../views/RAZWebsiteDetailView.vue'
 import RAZFilePropertiesView from '../views/RAZFilePropertiesView.vue'
 import RAZDatabaseCreatorView from '../views/RAZDatabaseCreatorView.vue'
+import RAZAppStoreManualView from '../views/RAZAppStoreManualView.vue'
+import RAZAppStoreInstallView from '../views/RAZAppStoreInstallView.vue'
 
 const windowStore = useWindowStore()
 const systemStore = useSystemStore()
@@ -279,6 +281,12 @@ function handleDesktopIconContextMenu(e, app) {
 
             <!-- Standalone Database Creator Window -->
             <RAZDatabaseCreatorView v-else-if="win.id === 'database-create'" :win="win" />
+
+            <!-- Standalone App Store Manual Quick Install Window -->
+            <RAZAppStoreManualView v-else-if="win.id === 'appstore-manual'" :win="win" />
+
+            <!-- Standalone App Store Catalog Installer Window -->
+            <RAZAppStoreInstallView v-else-if="win.id.startsWith('appstore-install-')" :win="win" />
 
             <!-- Aplikasi Utama Berdasarkan ID -->
             <component v-else :is="viewMap[win.id]" />

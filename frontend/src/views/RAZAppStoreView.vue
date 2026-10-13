@@ -282,13 +282,17 @@ const renderedReadmeHtml = computed(() => {
   }
 })
 
-// Buka Dialog Pasang Aplikasi
+// Watch trigger reaktif dari jendela installer / deploy mandiri
+watch(() => systemStore.appsRefreshTrigger, () => {
+  fetchApps()
+  windowStore.fetchInstalledApps()
+})
+
+// Buka Dialog Pasang Aplikasi di Jendela Mandiri (v2.6.0)
 function openInstallDialog(app, e) {
   e?.stopPropagation()
-  activeAppToInstall.value = app
-  customPort.value = app.default_port
-  customVolume.value = app.default_volume
-  showInstallModal.value = true
+  if (!app) return
+  windowStore.openAppStoreInstaller(app)
 }
 
 // Eksekusi Pasang Aplikasi Katalog
@@ -564,8 +568,8 @@ onMounted(async () => {
         </button>
 
         <button
-          @click="showManualModal = true"
-          class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold flex items-center gap-1.5 text-xs transition border border-slate-700"
+          @click="windowStore.openAppStoreManual()"
+          class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold flex items-center gap-1.5 text-xs transition border border-slate-700 active:scale-95 shadow"
         >
           <PlusCircle class="w-3.5 h-3.5 text-sky-400" />
           <span class="hidden md:inline">Instal Cepat</span>
@@ -1121,160 +1125,7 @@ onMounted(async () => {
 
     <!-- ================= CUSTOM MODALS ================= -->
 
-    <!-- CUSTOM MODAL 1: Manual Install Docker Cepat (Floating Window Dialog) -->
-    <div
-      v-if="showManualModal"
-      class="fixed inset-0 bg-black/35 z-50 flex items-center justify-center p-4 animate-in fade-in"
-    >
-      <div class="w-full max-w-lg bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black ring-1 ring-white/10 rounded-2xl flex flex-col overflow-hidden">
-        <!-- Window Titlebar -->
-        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-5 py-3 select-none">
-          <div class="flex items-center gap-2.5">
-            <div class="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
-              <PlusCircle class="w-4 h-4" />
-            </div>
-            <div>
-              <h4 class="font-bold text-slate-100 text-sm">Instal Cepat Docker Container</h4>
-              <p class="text-[11px] text-slate-400">Deploy container mandiri dengan parameter cepat.</p>
-            </div>
-          </div>
-          <button @click="showManualModal = false" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95" title="Tutup Jendela">
-            <X class="w-4 h-4" />
-          </button>
-        </div>
-
-        <div class="p-5 space-y-3.5">
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Nama Aplikasi / Container</label>
-            <input
-              v-model="manualName"
-              type="text"
-              class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 text-xs outline-none focus:border-sky-400"
-              placeholder="Contoh: My Custom App"
-            />
-          </div>
-
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Docker Image (Docker Hub / Registry)</label>
-            <input
-              v-model="manualImage"
-              type="text"
-              class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-sky-400"
-              placeholder="Contoh: nginx:alpine atau redis:7-alpine"
-            />
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Host Port</label>
-              <input
-                v-model="manualPort"
-                type="number"
-                class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-sky-400"
-                placeholder="8080"
-              />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-slate-300 mb-1">Direktori Volume Host</label>
-              <input
-                v-model="manualVolume"
-                type="text"
-                class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-sky-400"
-                placeholder="/DATA/apps/custom-app"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Environment Variables (Satu per baris)</label>
-            <textarea
-              v-model="manualEnvs"
-              rows="3"
-              class="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-sky-400 resize-none"
-              placeholder="TZ=Asia/Jakarta&#10;APP_ENV=production"
-            ></textarea>
-          </div>
-        </div>
-
-        <div class="flex items-center justify-end gap-2 bg-slate-950/75 border-t border-slate-800 px-5 py-3">
-          <button
-            @click="showManualModal = false"
-            class="px-3.5 py-2 rounded-xl bg-slate-800 text-slate-300 font-semibold text-xs hover:bg-slate-700 transition"
-          >
-            Batal
-          </button>
-          <button
-            @click="submitManualInstall"
-            :disabled="isDeployingManual"
-            class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow active:scale-95 disabled:opacity-50"
-          >
-            <span>{{ isDeployingManual ? 'Memasang Container...' : 'Pasang Sekarang' }}</span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- CUSTOM MODAL 2: Form Konfigurasi Pasang Aplikasi Katalog (Floating Window Dialog) -->
-    <div
-      v-if="showInstallModal"
-      class="fixed inset-0 bg-black/35 z-50 flex items-center justify-center p-4 animate-in fade-in"
-    >
-      <div class="w-full max-w-md bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black ring-1 ring-white/10 rounded-2xl flex flex-col overflow-hidden">
-        <!-- Window Titlebar -->
-        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-5 py-3 select-none">
-          <div class="flex items-center gap-2.5">
-            <div class="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
-              <Settings2 class="w-4 h-4" />
-            </div>
-            <h4 class="font-bold text-slate-100 text-sm">Pasang {{ activeAppToInstall?.name }}</h4>
-          </div>
-          <button @click="showInstallModal = false" class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95" title="Tutup Jendela">
-            <X class="w-4 h-4" />
-          </button>
-        </div>
-
-        <div class="p-5 space-y-3.5">
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Port Akses Host (Container Port)</label>
-            <input
-              v-model="customPort"
-              type="number"
-              class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-sky-400"
-              placeholder="Contoh: 8080"
-            />
-          </div>
-
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Direktori Penyimpanan Volume</label>
-            <input
-              v-model="customVolume"
-              type="text"
-              class="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-sky-400"
-              placeholder="Contoh: /DATA/apps/nama-app"
-            />
-            <span class="text-[10px] text-slate-500 mt-1 block">Data disimpan permanen di MicroSD /DATA/apps</span>
-          </div>
-        </div>
-
-        <div class="flex items-center justify-end gap-2 bg-slate-950/75 border-t border-slate-800 px-5 py-3">
-          <button
-            @click="showInstallModal = false"
-            class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition"
-          >
-            Batal
-          </button>
-          <button
-            @click="confirmInstall"
-            :disabled="isInstalling"
-            class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition shadow active:scale-95 disabled:opacity-50"
-          >
-            <span>{{ isInstalling ? 'Sedang Memasang...' : 'Mulai Deployment' }}</span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- CUSTOM MODAL 3: Konfirmasi Clean Uninstall (Floating Window Dialog) -->
+    <!-- CUSTOM MODAL: Konfirmasi Clean Uninstall (Floating Window Dialog) -->
     <div
       v-if="showUninstallModal"
       class="fixed inset-0 bg-black/35 z-50 flex items-center justify-center p-4 animate-in fade-in"
