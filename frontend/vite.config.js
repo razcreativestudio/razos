@@ -800,6 +800,7 @@ function razosApiPlugin() {
           else if (['txt', 'md', 'json', 'log', 'env', 'tmp'].includes(ext)) mime = 'text/plain; charset=utf-8'
 
           res.setHeader('Content-Type', mime)
+          res.setHeader('Cache-Control', 'public, max-age=86400')
           const stream = fs.createReadStream(targetPath)
           stream.on('error', (err) => {
             if (!res.headersSent) {
@@ -812,6 +813,59 @@ function razosApiPlugin() {
         } catch (err) {
           if (!res.headersSent) {
             res.statusCode = 403
+            res.end(err.message)
+          }
+        }
+      })
+
+      // 14. Endpoint Thumbnail Teroptimasi Anti-Hang (/api/v1/files/thumbnail)
+      server.middlewares.use('/api/v1/files/thumbnail', (req, res) => {
+        const urlObj = new URL(req.url, 'http://localhost')
+        const rawPath = urlObj.searchParams.get('path')
+        const targetPath = resolveSafePath(rawPath)
+        try {
+          if (!fs.existsSync(targetPath)) {
+            res.statusCode = 404
+            return res.end('File not found')
+          }
+          const stat = fs.statSync(targetPath)
+          if (stat.isDirectory()) {
+            res.statusCode = 400
+            return res.end('Target is a directory')
+          }
+
+          // Caching ETag & If-None-Match (304 Not Modified untuk respon seketika 0 ms)
+          const etag = `W/"${stat.size}-${Math.floor(stat.mtimeMs)}"`
+          if (req.headers['if-none-match'] === etag) {
+            res.statusCode = 304
+            return res.end()
+          }
+
+          const ext = targetPath.split('.').pop().toLowerCase()
+          let mime = 'image/jpeg'
+          if (ext === 'png') mime = 'image/png'
+          else if (ext === 'webp') mime = 'image/webp'
+          else if (ext === 'svg') mime = 'image/svg+xml'
+          else if (ext === 'gif') mime = 'image/gif'
+          else if (['jpg', 'jpeg'].includes(ext)) mime = 'image/jpeg'
+          else if (ext === 'ico') mime = 'image/x-icon'
+
+          res.setHeader('Content-Type', mime)
+          res.setHeader('ETag', etag)
+          res.setHeader('Last-Modified', stat.mtime.toUTCString())
+          res.setHeader('Cache-Control', 'public, max-age=604800, immutable')
+
+          const stream = fs.createReadStream(targetPath, { highWaterMark: 64 * 1024 })
+          stream.on('error', (err) => {
+            if (!res.headersSent) {
+              res.statusCode = 500
+              res.end(err.message)
+            }
+          })
+          stream.pipe(res)
+        } catch (err) {
+          if (!res.headersSent) {
+            res.statusCode = 500
             res.end(err.message)
           }
         }

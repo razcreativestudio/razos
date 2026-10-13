@@ -68,6 +68,7 @@ func RegisterRoutes(r *gin.Engine) {
 		v1.GET("/files/content", handleGetFileContent)
 		v1.POST("/files/content", handleSaveFileContent)
 		v1.GET("/files/raw", handleGetRawFile)
+		v1.GET("/files/thumbnail", handleGetThumbnail)
 
 		// Health Check
 		v1.GET("/health", func(c *gin.Context) {
@@ -369,6 +370,36 @@ func handleGetRawFile(c *gin.Context) {
 		return
 	}
 	// Langsung stream file menggunakan File responder bawaan Gin
+	c.Header("Cache-Control", "public, max-age=86400")
 	c.File(targetPath)
 }
+
+// handleGetThumbnail melayani thumbnail gambar dengan HTTP Caching teroptimasi agar browser tidak hang
+func handleGetThumbnail(c *gin.Context) {
+	targetPath := c.Query("path")
+	if targetPath == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Path file wajib disertakan"})
+		return
+	}
+
+	info, err := os.Stat(targetPath)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Berkas tidak ditemukan"})
+		return
+	}
+
+	// Buat ETag untuk validasi cache browser (304 Not Modified)
+	etag := fmt.Sprintf(`W/"%d-%d"`, info.Size(), info.ModTime().Unix())
+	c.Header("ETag", etag)
+	c.Header("Cache-Control", "public, max-age=604800, immutable")
+	c.Header("Last-Modified", info.ModTime().UTC().Format(http.TimeFormat))
+
+	if match := c.GetHeader("If-None-Match"); match == etag {
+		c.Status(http.StatusNotModified)
+		return
+	}
+
+	c.File(targetPath)
+}
+
 

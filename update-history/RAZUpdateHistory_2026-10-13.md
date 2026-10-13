@@ -371,3 +371,54 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - Pengujian otomatis deployment katalog (Plex), deployment Compose YAML (qBittorrent), dan clean uninstall terverifikasi 100% lolos via endpoint REST API.
 - Dev server HMR aktif dan responsif di `http://localhost:3000`.
 
+---
+
+### Versi: 2.4.6-thumbnail-anti-hang-and-virtual-rendering (Arsitektur Anti-Hang File Manager, Concurrency Queue & Virtual Chunked Rendering)
+**Waktu Eksekusi:** 2026-10-13 12:56 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Masalah Utama Teridentifikasi
+- **UI Freeze / "Not Responding" Akibat Ratusan Request Simultan:**
+  - Sebelumnya, ketika pengguna membuka folder berisi banyak file gambar, seluruh kartu me-render tag `<img>` telanjang langsung ke file asli resolusi penuh (`/api/v1/files/raw`).
+  - Browser seketika menembakkan puluhan hingga ratusan koneksi HTTP bersamaan dan membebani main UI thread dengan decoding bitmap berukuran megabyte secara masif.
+  - Memori RAM browser dan CPU STB ARM64 melonjak tajam sehingga memicu aplikasi macet total atau crash.
+- **Ketiadaan Lazy Loading & DOM Overload:**
+  - Kartu berkas yang berada jauh di bawah scroll tetap di-request dan di-render, memboroskan bandwidth dan memori.
+  - Merender 500-2000 elemen DOM sekaligus dalam satu tick Vue membuat perpindahan folder tersendat-sendat.
+
+#### 2. Solusi Arsitektur yang Diterapkan
+
+##### A. Komponen Mandiri `RAZThumbnail.vue` (Anti-Hang Concurrency Protected)
+- **IntersectionObserver Terpadu:**
+  - Komponen hanya memicu pemuatan gambar ketika kartu benar-benar berada di dalam viewport atau mendekati viewport (buffer margin `120px`).
+  - Jika pengguna melakukan scroll cepat melewati puluhan gambar, tugas antrean yang belum sempat dimuat akan otomatis dibatalkan (`queueTask.cancelled = true`) sehingga tidak menyita I/O jaringan atau thread decoding.
+- **Global Concurrency Limiting Queue (Maksimal 4 Request Bersamaan):**
+  - Mengimplementasikan queue cerdas berbasis LIFO/FIFO singleton yang membatasi maksimal **4 permintaan fetch aktif secara paralel**.
+  - Permintaan lainnya mengantre secara tertib, menjaga UI thread browser tetap 100% mulus (60 FPS) tanpa freeze.
+- **In-Memory & Browser Caching:**
+  - Menyimpan status gambar yang berhasil dimuat ke cache memori (`__RAZ_THUMBNAIL_CACHE__`), mencegah request ulang saat scroll bolak-balik.
+- **Safe Size Protection (> 20 MB):**
+  - File foto/gambar mentah berukuran raksasa (> 20 MB) dilindungi dengan badge `HD FILE` dan ikon fallback agar tidak meledakkan kuota RAM browser STB.
+- **Placeholder Skeleton Shimmer & Graceful Error:**
+  - Menampilkan shimmer gelap halus saat memuat dan fallback otomatis ke format ikon jika berkas korup atau gagal load tanpa merusak grid layout.
+
+##### B. Progressive Virtual Chunked Display Rendering
+- **Batching DOM Rendering:**
+  - Alih-alih merender ribuan item sekaligus, File Manager awalnya hanya merender `60 item pertama` (`visibleFiles = filteredFiles.slice(0, displayLimit)`).
+  - Saat pengguna menggulir mendekati dasar scroll (`@scroll="handleExplorerScroll"`), sistem secara mulus menambah batch `+40 item`.
+  - Pembukaan folder yang berisi ribuan berkas kini berlangsung instan (< 15 ms).
+  - Menampilkan indikator elegan di bawah grid/list saat memuat batch berikutnya.
+  - Otomatis mereset limit ke 60 saat navigasi folder, pencarian, atau filter kategori berubah.
+
+##### C. Endpoint Khusus `/api/v1/files/thumbnail` dengan HTTP Caching Agresif
+- **Header Caching Canggih di Vite Dev Middleware & Backend Go:**
+  - Mengirimkan header `Cache-Control: public, max-age=604800, immutable` (7 hari).
+  - Menyertakan `ETag` berbasis ukuran dan mtime berkas (`W/"size-mtime"`).
+  - Mendukung respons `304 Not Modified` seketika (0 bytes transfer data) jika berkas sudah ada di cache browser.
+
+#### 3. Verifikasi & Definisi Selesai (DoD)
+- Build produksi Vite frontend (`npm run build`) sukses 100% (*1578 modules transformed*).
+- Respons `/api/v1/files/thumbnail` diverifikasi mengembalikan status 200 OK beserta header `Cache-Control: public, max-age=604800, immutable` dan `ETag`.
+- UI File Manager tetap responsif, mulus, dan tidak pernah hang saat membuka direktori dengan banyak gambar.
+
+

@@ -14,7 +14,7 @@
  * - Bottom Status Bar: Menampilkan jumlah item, status item aktif, dan tombol aksi cepat tanpa memeras ruang grid.
  * - Custom Modal Detail & Properti: Dialog modal khusus yang elegan (Glassmorphism) untuk rincian metadata berkas.
  */
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
 import { useWindowStore } from '../stores/RAZWindowStore'
 import { useContextMenuStore } from '../stores/RAZContextMenuStore'
@@ -29,6 +29,8 @@ import {
 const systemStore = useSystemStore()
 const windowStore = useWindowStore()
 const contextMenuStore = useContextMenuStore()
+
+import RAZThumbnail from '../components/RAZThumbnail.vue'
 
 // State Data
 const storageDevices = ref([])
@@ -251,6 +253,7 @@ async function fetchFiles(targetPath = currentPath.value, isHistoryNav = false) 
   const cleanPath = normalizePath(targetPath)
   isLoading.value = true
   selectedItem.value = null
+  displayLimit.value = 60
   try {
     const res = await fetch(`/api/v1/files/list?path=${encodeURIComponent(cleanPath)}`)
     const data = await res.json()
@@ -336,6 +339,29 @@ const filteredFiles = computed(() => {
 
     return true
   })
+})
+
+// Progressive Virtual Display Rendering (Anti-Hang saat folder memuat ribuan berkas)
+const displayLimit = ref(60)
+const visibleFiles = computed(() => {
+  return filteredFiles.value.slice(0, displayLimit.value)
+})
+const hasMoreFiles = computed(() => {
+  return visibleFiles.value.length < filteredFiles.value.length
+})
+
+function handleExplorerScroll(e) {
+  const el = e.target
+  if (!el) return
+  // Jika mendekati 300px dari dasar scroll container, muat batch 40 berkas berikutnya
+  if (el.scrollHeight - (el.scrollTop + el.clientHeight) < 300 && hasMoreFiles.value) {
+    displayLimit.value += 40
+  }
+}
+
+// Reset limit display saat pencarian, filter, atau kategori sidebar berganti
+watch([searchQuery, filterType, activeSidebarSection], () => {
+  displayLimit.value = 60
 })
 
 // Breadcrumbs Navigasi yang Akurat & Terstruktur
@@ -881,12 +907,12 @@ onMounted(async () => {
 
       <!-- MAIN EXPLORER AREA (GRID VS LIST) -->
       <div class="flex-1 flex flex-col overflow-hidden">
-        <div class="flex-1 p-4 overflow-y-auto" @contextmenu.prevent="handleCanvasContextMenu">
+        <div class="flex-1 p-4 overflow-y-auto" @scroll="handleExplorerScroll" @contextmenu.prevent="handleCanvasContextMenu">
           <!-- GRID VIEW (Fluid Responsive Auto-Fill Layout) -->
           <div v-if="viewMode === 'grid'" class="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3">
             <div
-              v-for="(item, idx) in filteredFiles"
-              :key="idx"
+              v-for="(item, idx) in visibleFiles"
+              :key="item.path || idx"
               @click="handleItemClick(item)"
               @dblclick="handleItemDoubleClick(item)"
               @contextmenu.prevent.stop="handleFileItemContextMenu($event, item)"
@@ -897,9 +923,14 @@ onMounted(async () => {
             >
               <!-- Card Top: Icon & Action Controls (Info & Star) -->
               <div class="flex items-start justify-between gap-2 mb-2">
-                <!-- Media Thumbnail / Icon Box -->
+                <!-- Media Thumbnail / Icon Box (Anti-Hang Concurrency Protected) -->
                 <div v-if="isImageFile(item.extension)" class="w-11 h-11 rounded-xl overflow-hidden bg-slate-950 border border-slate-800 shrink-0 shadow-inner">
-                  <img :src="`/api/v1/files/raw?path=${encodeURIComponent(item.path)}`" class="w-full h-full object-cover" />
+                  <RAZThumbnail
+                    :path="item.path"
+                    :name="item.name"
+                    :size="item.size"
+                    :extension="item.extension"
+                  />
                 </div>
                 <div v-else class="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 shadow-inner"
                      :class="item.is_dir ? 'bg-sky-500/15 text-sky-400 border border-sky-500/20' : isVideoFile(item.extension) ? 'bg-purple-500/15 text-purple-400 border border-purple-500/20' : isAudioFile(item.extension) ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20' : isPdfFile(item.extension) ? 'bg-rose-500/15 text-rose-400 border border-rose-500/20' : 'bg-slate-800/80 text-emerald-400 border border-slate-700/60'">
@@ -943,6 +974,12 @@ onMounted(async () => {
                 </div>
               </div>
             </div>
+
+            <!-- Indikator Loading Batch Virtual Scrolling Grid -->
+            <div v-if="hasMoreFiles" class="col-span-full py-4 flex items-center justify-center gap-2 text-xs text-slate-500 font-mono">
+              <RefreshCw class="w-3.5 h-3.5 animate-spin text-sky-400" />
+              <span>Menampilkan {{ visibleFiles.length }} dari {{ filteredFiles.length }} item (gulir ke bawah untuk memuat lagi)...</span>
+            </div>
           </div>
 
           <!-- LIST VIEW (With Type Badges) -->
@@ -959,8 +996,8 @@ onMounted(async () => {
               </thead>
               <tbody class="divide-y divide-slate-800/50 text-slate-300">
                 <tr
-                  v-for="(item, idx) in filteredFiles"
-                  :key="idx"
+                  v-for="(item, idx) in visibleFiles"
+                  :key="item.path || idx"
                   @click="handleItemClick(item)"
                   @dblclick="handleItemDoubleClick(item)"
                   @contextmenu.prevent.stop="handleFileItemContextMenu($event, item)"
@@ -999,6 +1036,16 @@ onMounted(async () => {
                       <button @click="deleteItem(item)" class="p-1 rounded hover:bg-rose-500/20 text-rose-400" title="Hapus">
                         <Trash2 class="w-3.5 h-3.5" />
                       </button>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- Indikator Loading Batch Virtual Scrolling List -->
+                <tr v-if="hasMoreFiles">
+                  <td colspan="5" class="py-3 text-center text-[11px] text-slate-500 font-mono">
+                    <div class="flex items-center justify-center gap-2">
+                      <RefreshCw class="w-3 h-3 animate-spin text-sky-400" />
+                      <span>Menampilkan {{ visibleFiles.length }} dari {{ filteredFiles.length }} berkas (gulir untuk memuat lagi)...</span>
                     </div>
                   </td>
                 </tr>
@@ -1150,7 +1197,12 @@ onMounted(async () => {
         <!-- Preview Ikon & Nama Berkas -->
         <div class="flex items-center gap-4 p-3.5 bg-slate-950/70 rounded-2xl border border-slate-800/80">
           <div v-if="isImageFile(selectedItem.extension)" class="w-16 h-16 rounded-xl overflow-hidden bg-slate-900 border border-slate-800 shrink-0 shadow">
-            <img :src="`/api/v1/files/raw?path=${encodeURIComponent(selectedItem.path)}`" class="w-full h-full object-cover" />
+            <RAZThumbnail
+              :path="selectedItem.path"
+              :name="selectedItem.name"
+              :size="selectedItem.size"
+              :extension="selectedItem.extension"
+            />
           </div>
           <div v-else class="w-16 h-16 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 shadow">
             <Folder v-if="selectedItem.is_dir" class="w-8 h-8 text-sky-400 fill-sky-400/20" />
