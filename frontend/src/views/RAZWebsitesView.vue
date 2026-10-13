@@ -52,13 +52,13 @@ const formMemLimit = ref('128M')
 const formCpuShares = ref(512)
 const formEnvVars = ref('')
 
-// Form Database State
+// Form Database State (SQLite Direkomendasikan untuk STB ARM64 - 0 MB Service Overhead)
 const formEnableDb = ref(false)
 const formSelectedDbId = ref('')
-const formDbEngine = ref('mariadb')
+const formDbEngine = ref('sqlite')
 const formDbHost = ref('127.0.0.1')
 const formDbPort = ref(3306)
-const formDbName = ref('')
+const formDbName = ref('database.sqlite')
 const formDbUser = ref('raz_user')
 const formDbPass = ref('')
 
@@ -95,10 +95,10 @@ const editEnvVars = ref('')
 
 const editEnableDb = ref(false)
 const editSelectedDbId = ref('')
-const editDbEngine = ref('mariadb')
+const editDbEngine = ref('sqlite')
 const editDbHost = ref('127.0.0.1')
 const editDbPort = ref(3306)
-const editDbName = ref('')
+const editDbName = ref('database.sqlite')
 const editDbUser = ref('raz_user')
 const editDbPass = ref('')
 
@@ -120,26 +120,136 @@ const showDetailModal = ref(false)
 const selectedSiteDetail = ref(null)
 const copiedField = ref(null)
 
-// Preset Icon Pilihan Cepat
+// Preset Icon Pilihan Cepat (Lengkap Sesuai Ekosistem STB Hosting)
 const presetIcons = [
-  { name: 'Nginx / Web', url: '/assets/icons/RAZIconWebsites.svg' },
+  { name: 'Nginx / Statis', url: '/assets/icons/RAZIconWebsites.svg' },
+  { name: 'Go (Golang)', url: 'https://cdn.simpleicons.org/go/00ADD8' },
   { name: 'PHP', url: 'https://cdn.simpleicons.org/php/777BB4' },
   { name: 'Node.js', url: 'https://cdn.simpleicons.org/nodedotjs/5FA04E' },
-  { name: 'Next.js', url: 'https://cdn.simpleicons.org/nextdotjs/white' },
+  { name: 'Python', url: 'https://cdn.simpleicons.org/python/3776AB' },
+  { name: 'Flat-File CMS', url: 'https://cdn.simpleicons.org/markdown/white' },
   { name: 'WordPress', url: 'https://cdn.simpleicons.org/wordpress/21759B' },
-  { name: 'Laravel', url: 'https://cdn.simpleicons.org/laravel/FF2D20' },
-  { name: 'React', url: 'https://cdn.simpleicons.org/react/61DAFB' },
-  { name: 'Vue', url: 'https://cdn.simpleicons.org/vuedotjs/4FC08D' },
-  { name: 'HTML5', url: 'https://cdn.simpleicons.org/html5/E34F26' }
+  { name: 'Linktree / Portal', url: 'https://cdn.simpleicons.org/linktree/43E660' },
+  { name: 'Filebrowser', url: 'https://cdn.simpleicons.org/files/white' },
+  { name: 'SQLite', url: 'https://cdn.simpleicons.org/sqlite/003B57' },
+  { name: 'TailwindCSS', url: 'https://cdn.simpleicons.org/tailwindcss/06B6D4' }
 ]
 
-// Preset Memory Limits Aman untuk STB ARM64
+// Preset Memory Limits Direkomendasikan untuk STB ARM64 (RAM 1.8 GiB)
 const memoryPresets = [
-  { label: '64 MB (Ultra Ringan)', val: '64M' },
-  { label: '128 MB (Rekomendasi STB)', val: '128M' },
-  { label: '256 MB (Standar Dynamic)', val: '256M' },
-  { label: '512 MB (Tinggi / Build)', val: '512M' },
-  { label: '1024 MB (Maksimal)', val: '1024M' }
+  { label: '32M (Ultra Ringan - Statis/Portal)', val: '32M' },
+  { label: '64M (Ringan - Go/Flat-CMS)', val: '64M' },
+  { label: '128M (Rekomendasi STB - PHP/API)', val: '128M' },
+  { label: '256M (Batas Aman STB)', val: '256M' },
+  { label: '512M (Batas Puncak)', val: '512M' }
+]
+
+// 4 Kategori Hosting Ideal untuk Server STB Amlogic S905X ARM64
+const stbRuntimeCategories = [
+  {
+    title: '1. Website Statis & Landing Page',
+    badge: '🔥 Paling Sempurna (15 – 40 MB RAM)',
+    badgeColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+    desc: 'Bebas database. Server STB Anda akan sangat dingin, cepat, dan responsif.',
+    runtimes: [
+      {
+        id: 'static',
+        name: 'HTML & CSS Statis (Nginx Alpine)',
+        stack: 'HTML5, CSS, JS, Tailwind, Astro/Hugo/Vite static build',
+        ram: '15 – 40 MB',
+        icon: '/assets/icons/RAZIconWebsites.svg',
+        desc: 'Landing page studio/agensi, web portofolio, brosur online, company profile.'
+      }
+    ]
+  },
+  {
+    title: '2. Micro-Framework Web & REST API',
+    badge: '⚡ Ringan – Sedang (20 – 120 MB RAM)',
+    badgeColor: 'text-sky-400 bg-sky-500/10 border-sky-500/30',
+    desc: 'Untuk web dinamis, form input, REST API, dashboard internal, atau bot bridge.',
+    runtimes: [
+      {
+        id: 'golang',
+        name: 'Go (Golang) Micro-Service',
+        stack: 'Go Native Binary (Goroutines, net/http)',
+        ram: '20 – 40 MB',
+        icon: 'https://cdn.simpleicons.org/go/00ADD8',
+        desc: 'Paling direkomendasikan untuk STB! Native kecepatan tinggi, memori sangat hemat.'
+      },
+      {
+        id: 'php',
+        name: 'PHP Native + SQLite / MariaDB',
+        stack: 'PHP 8.2 FPM / Apache Alpine',
+        ram: '40 – 80 MB',
+        icon: 'https://cdn.simpleicons.org/php/777BB4',
+        desc: 'Web dinamis PHP standar tanpa framework monolitik raksasa yang boros.'
+      },
+      {
+        id: 'nodejs',
+        name: 'Node.js Express / Fastify Light',
+        stack: 'Node 18/20 Alpine (Express / Fastify)',
+        ram: '70 – 120 MB',
+        icon: 'https://cdn.simpleicons.org/nodedotjs/5FA04E',
+        desc: 'REST API atau backend JavaScript ringan terisolasi dalam container.'
+      },
+      {
+        id: 'python',
+        name: 'Python FastAPI / Flask Micro-service',
+        stack: 'Python 3.11 Alpine (FastAPI / Flask)',
+        ram: '80 – 150 MB',
+        icon: 'https://cdn.simpleicons.org/python/3776AB',
+        desc: 'Micro-service Python teroptimasi untuk API data dan otomatisasi tugas.'
+      }
+    ]
+  },
+  {
+    title: '3. CMS Ringan (Content Management System)',
+    badge: '📦 Ramah STB (35 – 250 MB RAM)',
+    badgeColor: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/30',
+    desc: 'Untuk website yang punya dashboard admin untuk artikel atau publikasi konten.',
+    runtimes: [
+      {
+        id: 'flatcms',
+        name: 'Flat-File CMS (Grav / Kirby Style)',
+        stack: 'Markdown Based (Tanpa Database SQL)',
+        ram: '35 – 50 MB',
+        icon: 'https://cdn.simpleicons.org/markdown/white',
+        desc: 'Sangat cepat dan ramah RAM STB karena tidak membutuhkan service MariaDB/MySQL.'
+      },
+      {
+        id: 'wordpress',
+        name: 'WordPress Optimized (Light)',
+        stack: 'WordPress Core + MariaDB Alpine Caching',
+        ram: '150 – 250 MB',
+        icon: 'https://cdn.simpleicons.org/wordpress/21759B',
+        desc: 'WordPress dengan MariaDB Alpine (disarankan tanpa page-builder berat seperti Elementor).'
+      }
+    ]
+  },
+  {
+    title: '4. Web Dashboard & Internal Tools (Self-Hosted)',
+    badge: '💡 Self-Hosted Utility ( < 40 MB RAM)',
+    badgeColor: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
+    desc: 'Website utility tim, portal bookmark, monitoring, dan sharing file ringan.',
+    runtimes: [
+      {
+        id: 'dashboard',
+        name: 'Linktree Pribadi / Bookmark Portal',
+        stack: 'Homepage / Flame / Dashy Style Web',
+        ram: '< 40 MB',
+        icon: 'https://cdn.simpleicons.org/linktree/43E660',
+        desc: 'Portal kumpulan tautan pribadi, status server, atau bookmark portal responsif.'
+      },
+      {
+        id: 'filebrowser',
+        name: 'File Sharing Ringan (Filebrowser)',
+        stack: 'Go Native Filebrowser Service',
+        ram: '20 – 35 MB',
+        icon: 'https://cdn.simpleicons.org/files/white',
+        desc: 'Alternatif Google Drive ultra ringan untuk manajemen dan unduh berkas di STB.'
+      }
+    ]
+  }
 ]
 
 async function fetchWebsites() {
@@ -233,22 +343,107 @@ function onSiteNameChange() {
   }
 }
 
-// Reaksi perubahan pilihan runtime
+// Reaksi perubahan pilihan runtime stack (Wizard)
 function onRuntimeChange(rt) {
   formRuntime.value = rt
-  if (rt === 'php') {
-    formEnableDb.value = true
-    formIcon.value = 'https://cdn.simpleicons.org/php/777BB4'
-  } else if (rt === 'nodejs') {
-    formIcon.value = 'https://cdn.simpleicons.org/nodedotjs/5FA04E'
-    formCommand.value = 'node server.js'
-  } else if (rt === 'nextjs') {
-    formIcon.value = 'https://cdn.simpleicons.org/nextdotjs/white'
-    formMemLimit.value = '256M'
-    formCommand.value = 'npm run start'
-  } else {
-    formIcon.value = '/assets/icons/RAZIconWebsites.svg'
-    formCommand.value = ''
+  switch (rt) {
+    case 'golang':
+      formIcon.value = 'https://cdn.simpleicons.org/go/00ADD8'
+      formMemLimit.value = '64M'
+      formCommand.value = './main'
+      formEnableDb.value = false
+      break
+    case 'php':
+      formIcon.value = 'https://cdn.simpleicons.org/php/777BB4'
+      formMemLimit.value = '128M'
+      formCommand.value = ''
+      formEnableDb.value = true
+      formDbEngine.value = 'sqlite'
+      formDbName.value = 'database.sqlite'
+      break
+    case 'nodejs':
+      formIcon.value = 'https://cdn.simpleicons.org/nodedotjs/5FA04E'
+      formMemLimit.value = '128M'
+      formCommand.value = 'node server.js'
+      formEnableDb.value = false
+      break
+    case 'python':
+      formIcon.value = 'https://cdn.simpleicons.org/python/3776AB'
+      formMemLimit.value = '128M'
+      formCommand.value = 'python app.py'
+      formEnableDb.value = false
+      break
+    case 'flatcms':
+      formIcon.value = 'https://cdn.simpleicons.org/markdown/white'
+      formMemLimit.value = '64M'
+      formCommand.value = ''
+      formEnableDb.value = false
+      break
+    case 'wordpress':
+      formIcon.value = 'https://cdn.simpleicons.org/wordpress/21759B'
+      formMemLimit.value = '256M'
+      formCommand.value = ''
+      formEnableDb.value = true
+      formDbEngine.value = 'mariadb'
+      formDbPort.value = 3306
+      break
+    case 'dashboard':
+      formIcon.value = 'https://cdn.simpleicons.org/linktree/43E660'
+      formMemLimit.value = '32M'
+      formCommand.value = ''
+      formEnableDb.value = false
+      break
+    case 'filebrowser':
+      formIcon.value = 'https://cdn.simpleicons.org/files/white'
+      formMemLimit.value = '32M'
+      formCommand.value = ''
+      formEnableDb.value = false
+      break
+    case 'static':
+    default:
+      formIcon.value = '/assets/icons/RAZIconWebsites.svg'
+      formMemLimit.value = '32M'
+      formCommand.value = ''
+      formEnableDb.value = false
+      break
+  }
+}
+
+// Reaksi perubahan pilihan runtime stack (Edit Modal)
+function onEditRuntimeChange(rt) {
+  editRuntime.value = rt
+  switch (rt) {
+    case 'golang':
+      if (!editIcon.value || editIcon.value.includes('RAZIconWebsites')) editIcon.value = 'https://cdn.simpleicons.org/go/00ADD8'
+      if (!editCommand.value) editCommand.value = './main'
+      break
+    case 'php':
+      if (!editIcon.value || editIcon.value.includes('RAZIconWebsites')) editIcon.value = 'https://cdn.simpleicons.org/php/777BB4'
+      break
+    case 'nodejs':
+      if (!editIcon.value || editIcon.value.includes('RAZIconWebsites')) editIcon.value = 'https://cdn.simpleicons.org/nodedotjs/5FA04E'
+      if (!editCommand.value) editCommand.value = 'node server.js'
+      break
+    case 'python':
+      if (!editIcon.value || editIcon.value.includes('RAZIconWebsites')) editIcon.value = 'https://cdn.simpleicons.org/python/3776AB'
+      if (!editCommand.value) editCommand.value = 'python app.py'
+      break
+    case 'flatcms':
+      if (!editIcon.value || editIcon.value.includes('RAZIconWebsites')) editIcon.value = 'https://cdn.simpleicons.org/markdown/white'
+      break
+    case 'wordpress':
+      if (!editIcon.value || editIcon.value.includes('RAZIconWebsites')) editIcon.value = 'https://cdn.simpleicons.org/wordpress/21759B'
+      break
+    case 'dashboard':
+      if (!editIcon.value || editIcon.value.includes('RAZIconWebsites')) editIcon.value = 'https://cdn.simpleicons.org/linktree/43E660'
+      break
+    case 'filebrowser':
+      if (!editIcon.value || editIcon.value.includes('RAZIconWebsites')) editIcon.value = 'https://cdn.simpleicons.org/files/white'
+      break
+    case 'static':
+    default:
+      if (!editIcon.value || editIcon.value.includes('simpleicons')) editIcon.value = '/assets/icons/RAZIconWebsites.svg'
+      break
   }
 }
 
@@ -672,19 +867,23 @@ onMounted(() => {
         />
       </div>
 
-      <!-- Filter Kategori Runtime -->
+      <!-- Filter Kategori Runtime STB -->
       <div class="flex items-center gap-1 overflow-x-auto text-[11px]">
         <button
           v-for="f in [
             { id: 'all', label: 'Semua' },
             { id: 'static', label: 'HTML Statis' },
-            { id: 'php', label: 'PHP 8.2' },
+            { id: 'golang', label: 'Go API' },
+            { id: 'php', label: 'PHP Native' },
             { id: 'nodejs', label: 'Node.js' },
-            { id: 'nextjs', label: 'Next.js' }
+            { id: 'python', label: 'Python' },
+            { id: 'flatcms', label: 'Flat CMS' },
+            { id: 'wordpress', label: 'WordPress' },
+            { id: 'dashboard', label: 'Dashboard' }
           ]"
           :key="f.id"
           @click="selectedRuntimeFilter = f.id"
-          class="px-2.5 py-1 rounded-lg font-medium transition"
+          class="px-2.5 py-1 rounded-lg font-medium transition shrink-0 whitespace-nowrap"
           :class="selectedRuntimeFilter === f.id
             ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
             : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'"
@@ -1067,76 +1266,65 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- STEP 2: Runtime Stack & Root Folder -->
-          <div v-else-if="wizardStep === 2" class="space-y-4">
-            <div>
-              <label class="block font-medium text-slate-300 mb-2">Pilih Runtime Stack Website</label>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <!-- HTML Statis -->
-                <div
-                  @click="onRuntimeChange('static')"
-                  class="p-3 rounded-xl border cursor-pointer transition flex items-start gap-3"
-                  :class="formRuntime === 'static'
-                    ? 'bg-sky-500/15 border-sky-400 text-sky-300'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'"
-                >
-                  <div class="w-8 h-8 rounded-lg bg-sky-500/20 flex items-center justify-center shrink-0">
-                    <Globe class="w-4 h-4 text-sky-400" />
-                  </div>
+          <!-- STEP 2: Runtime Stack & Root Folder (STB Optimized) -->
+          <div v-else-if="wizardStep === 2" class="space-y-3.5">
+            <!-- Banner Edukasi STB S905X ARM64 -->
+            <div class="p-2.5 rounded-xl bg-gradient-to-r from-sky-500/15 via-indigo-500/10 to-transparent border border-sky-500/25 flex items-start gap-2.5">
+              <Sparkles class="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+              <div class="text-[11px] leading-relaxed">
+                <span class="font-bold text-sky-300">Preset Khusus STB ARM64 (RAM 1.8 GiB):</span>
+                <p class="text-slate-300 text-[10px] mt-0.5">
+                  Telah difilter khusus agar sistem STB tidak lag atau kehabisan RAM. Runtime berat (Next.js SSR monolitik & MySQL 8 standar) telah ditiadakan demi stabilitas server.
+                </p>
+              </div>
+            </div>
+
+            <!-- Loop 4 Kategori Hosting STB -->
+            <div class="space-y-3 max-h-[46vh] overflow-y-auto pr-1">
+              <div
+                v-for="cat in stbRuntimeCategories"
+                :key="cat.title"
+                class="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3 space-y-2"
+              >
+                <!-- Category Header -->
+                <div class="flex items-center justify-between gap-2 border-b border-slate-800/60 pb-1.5">
                   <div>
-                    <h5 class="font-bold text-slate-200">HTML Statis (Nginx)</h5>
-                    <p class="text-[11px] text-slate-400 mt-0.5">Ultra ringan (~32MB RAM), melayani berkas HTML, CSS, JS, dan gambar statis.</p>
+                    <h5 class="font-bold text-slate-200 text-xs flex items-center gap-1.5">
+                      {{ cat.title }}
+                    </h5>
+                    <p class="text-[10px] text-slate-400">{{ cat.desc }}</p>
                   </div>
+                  <span
+                    class="px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 whitespace-nowrap"
+                    :class="cat.badgeColor"
+                  >
+                    {{ cat.badge }}
+                  </span>
                 </div>
 
-                <!-- PHP 8.2 + Database -->
-                <div
-                  @click="onRuntimeChange('php')"
-                  class="p-3 rounded-xl border cursor-pointer transition flex items-start gap-3"
-                  :class="formRuntime === 'php'
-                    ? 'bg-sky-500/15 border-sky-400 text-sky-300'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'"
-                >
-                  <div class="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center shrink-0">
-                    <img src="https://cdn.simpleicons.org/php/777BB4" class="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h5 class="font-bold text-slate-200">PHP 8.2 + Database</h5>
-                    <p class="text-[11px] text-slate-400 mt-0.5">Cocok untuk WordPress, CMS, Laravel, atau script PHP terhubung MariaDB/PostgreSQL.</p>
-                  </div>
-                </div>
-
-                <!-- Node.js Server -->
-                <div
-                  @click="onRuntimeChange('nodejs')"
-                  class="p-3 rounded-xl border cursor-pointer transition flex items-start gap-3"
-                  :class="formRuntime === 'nodejs'
-                    ? 'bg-sky-500/15 border-sky-400 text-sky-300'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'"
-                >
-                  <div class="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0">
-                    <img src="https://cdn.simpleicons.org/nodedotjs/5FA04E" class="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h5 class="font-bold text-slate-200">Node.js Server</h5>
-                    <p class="text-[11px] text-slate-400 mt-0.5">Runtime Node 18/20 untuk Express, Fastify, Rest API, dan WebSocket server.</p>
-                  </div>
-                </div>
-
-                <!-- Next.js SSR -->
-                <div
-                  @click="onRuntimeChange('nextjs')"
-                  class="p-3 rounded-xl border cursor-pointer transition flex items-start gap-3"
-                  :class="formRuntime === 'nextjs'
-                    ? 'bg-sky-500/15 border-sky-400 text-sky-300'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'"
-                >
-                  <div class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
-                    <img src="https://cdn.simpleicons.org/nextdotjs/white" class="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h5 class="font-bold text-slate-200">Next.js Framework</h5>
-                    <p class="text-[11px] text-slate-400 mt-0.5">Aplikasi React full-stack dengan server side rendering (SSR) port 3000.</p>
+                <!-- Runtimes Grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+                  <div
+                    v-for="rt in cat.runtimes"
+                    :key="rt.id"
+                    @click="onRuntimeChange(rt.id)"
+                    class="p-2.5 rounded-xl border cursor-pointer transition flex items-start gap-2.5"
+                    :class="formRuntime === rt.id
+                      ? 'bg-sky-500/20 border-sky-400 text-sky-200 shadow-sm'
+                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:bg-slate-900'"
+                  >
+                    <div class="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700/80 flex items-center justify-center shrink-0 p-1 mt-0.5">
+                      <img :src="rt.icon" class="w-full h-full object-contain" @error="$event.target.src = '/assets/icons/RAZIconWebsites.svg'" />
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center justify-between gap-1">
+                        <h6 class="font-bold text-slate-200 text-[11px] truncate">{{ rt.name }}</h6>
+                        <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-bold shrink-0">
+                          {{ rt.ram }}
+                        </span>
+                      </div>
+                      <p class="text-[10px] text-slate-400 mt-0.5 leading-snug">{{ rt.desc }}</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1249,75 +1437,104 @@ onMounted(() => {
               </div>
 
               <!-- Detail Kredensial Database -->
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label class="block font-medium text-slate-300 mb-1">Database Engine</label>
-                  <select
-                    v-model="formDbEngine"
-                    class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs outline-none focus:border-amber-400"
-                  >
-                    <option value="mariadb">MariaDB / MySQL</option>
-                    <option value="postgres">PostgreSQL</option>
-                  </select>
-                </div>
+              <!-- Pilihan Database Engine -->
+              <div>
+                <label class="block font-medium text-slate-300 mb-1">Database Engine</label>
+                <select
+                  v-model="formDbEngine"
+                  class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs outline-none focus:border-amber-400"
+                >
+                  <option value="sqlite">⭐ SQLite (Paling Ideal STB - Berbasis File - 0 MB Service RAM)</option>
+                  <option value="mariadb">MariaDB / MySQL (Varian Alpine ~120-180 MB RAM)</option>
+                  <option value="postgres">PostgreSQL Server</option>
+                </select>
+              </div>
 
+              <!-- JIKA SQLITE DIPILIH (Paling Hemat RAM & Direkomendasikan) -->
+              <div v-if="formDbEngine === 'sqlite'" class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-2.5">
+                <div class="flex items-center gap-2 text-emerald-300 text-xs font-bold">
+                  <Database class="w-4 h-4 text-emerald-400" />
+                  <span>SQLite Embedded Database (Tanpa Daemon Service)</span>
+                </div>
+                <p class="text-[11px] text-slate-300 leading-relaxed">
+                  Database berbasis berkas langsung di dalam root folder website. <strong>0 MB konsumsi RAM service terpisah</strong>, sangat cepat dan aman dari memory leak STB.
+                </p>
                 <div>
-                  <label class="block font-medium text-slate-300 mb-1">Host & Port Database</label>
-                  <div class="flex items-center gap-2">
+                  <label class="block text-[11px] font-medium text-slate-300 mb-1">Nama File Database SQLite</label>
+                  <input
+                    v-model="formDbName"
+                    type="text"
+                    placeholder="database.sqlite"
+                    class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-emerald-400"
+                  />
+                  <p class="text-[10px] text-slate-500 mt-1">
+                    Path berkas otomatis: <span class="font-mono text-slate-400">{{ (formRootFolder || '/DATA/apps/websites/site') + '/' + (formDbName || 'database.sqlite') }}</span>
+                  </p>
+                </div>
+              </div>
+
+              <!-- JIKA MARIADB ATAU POSTGRES DIPILIH -->
+              <div v-else class="space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block font-medium text-slate-300 mb-1">Host Database</label>
                     <input
                       v-model="formDbHost"
                       type="text"
                       placeholder="127.0.0.1"
-                      class="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
+                      class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
                     />
+                  </div>
+                  <div>
+                    <label class="block font-medium text-slate-300 mb-1">Port Database</label>
                     <input
                       v-model.number="formDbPort"
                       type="number"
                       placeholder="3306"
-                      class="w-20 px-2 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400 text-center"
+                      class="w-full px-2 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400 text-center"
                     />
                   </div>
                 </div>
-              </div>
 
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label class="block font-medium text-slate-300 mb-1">Nama Database</label>
-                  <input
-                    v-model="formDbName"
-                    type="text"
-                    placeholder="db_tokoonline"
-                    class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
-                  />
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label class="block font-medium text-slate-300 mb-1">Nama Database</label>
+                    <input
+                      v-model="formDbName"
+                      type="text"
+                      placeholder="db_tokoonline"
+                      class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label class="block font-medium text-slate-300 mb-1">Username DB</label>
+                    <input
+                      v-model="formDbUser"
+                      type="text"
+                      placeholder="raz_user"
+                      class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label class="block font-medium text-slate-300 mb-1">Password DB</label>
+                    <input
+                      v-model="formDbPass"
+                      type="password"
+                      placeholder="Kata sandi..."
+                      class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label class="block font-medium text-slate-300 mb-1">Username DB</label>
-                  <input
-                    v-model="formDbUser"
-                    type="text"
-                    placeholder="raz_user"
-                    class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
-                  />
+                <!-- Catatan Terintegrasi Adminer -->
+                <div class="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] flex items-center gap-2">
+                  <Database class="w-4 h-4 shrink-0" />
+                  <span>
+                    Variabel koneksi ini otomatis di-inject ke environment container (`DB_HOST`, `DB_NAME`, dll) dan dapat dikelola langsung via <strong>Web Adminer (HeidiSQL-style)</strong>.
+                  </span>
                 </div>
-
-                <div>
-                  <label class="block font-medium text-slate-300 mb-1">Password DB</label>
-                  <input
-                    v-model="formDbPass"
-                    type="password"
-                    placeholder="Kata sandi..."
-                    class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
-                  />
-                </div>
-              </div>
-
-              <!-- Catatan Terintegrasi Adminer -->
-              <div class="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] flex items-center gap-2">
-                <Database class="w-4 h-4 shrink-0" />
-                <span>
-                  Variabel koneksi ini otomatis di-inject ke environment container (`DB_HOST`, `DB_NAME`, dll) dan dapat dikelola langsung via <strong>Web Adminer (HeidiSQL-style)</strong>.
-                </span>
               </div>
             </div>
             <div v-else class="text-center py-6 text-slate-500">
@@ -1840,28 +2057,65 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- TAB 2: Runtime & Root Folder -->
+          <!-- TAB 2: Runtime & Root Folder (STB Optimized) -->
           <div v-else-if="editActiveTab === 'runtime'" class="space-y-3.5 animate-in fade-in">
-            <div>
-              <label class="block font-medium text-slate-300 mb-2">Pilih Runtime Stack Website</label>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div
-                  v-for="rt in [
-                    { id: 'static', title: 'HTML Statis (Nginx)', desc: 'Ultra ringan (~32MB RAM), berkas HTML/CSS/JS.' },
-                    { id: 'php', title: 'PHP 8.2 + Database', desc: 'WordPress, Laravel, atau script PHP dinamis.' },
-                    { id: 'nodejs', title: 'Node.js Server', desc: 'Runtime Node 18/20 untuk Express/Fastify/API.' },
-                    { id: 'nextjs', title: 'Next.js Framework', desc: 'React SSR full-stack port 3000.' }
-                  ]"
-                  :key="rt.id"
-                  @click="editRuntime = rt.id"
-                  class="p-3 rounded-xl border cursor-pointer transition flex items-start gap-3"
-                  :class="editRuntime === rt.id
-                    ? 'bg-amber-500/15 border-amber-400 text-amber-300'
-                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'"
-                >
+            <!-- Banner Edukasi STB S905X ARM64 -->
+            <div class="p-2.5 rounded-xl bg-gradient-to-r from-amber-500/15 via-sky-500/10 to-transparent border border-amber-500/25 flex items-start gap-2.5">
+              <Sparkles class="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div class="text-[11px] leading-relaxed">
+                <span class="font-bold text-amber-300">Pilihan Runtime Ramah Hardware STB (RAM 1.8 GiB):</span>
+                <p class="text-slate-300 text-[10px] mt-0.5">
+                  Ubah arsitektur runtime sesuai kebutuhan. Runtime Next.js SSR telah digantikan dengan opsi micro-service cepat dan hemat RAM.
+                </p>
+              </div>
+            </div>
+
+            <!-- Loop 4 Kategori STB di Edit Modal -->
+            <div class="space-y-3 max-h-[46vh] overflow-y-auto pr-1">
+              <div
+                v-for="cat in stbRuntimeCategories"
+                :key="cat.title"
+                class="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3 space-y-2"
+              >
+                <!-- Category Header -->
+                <div class="flex items-center justify-between gap-2 border-b border-slate-800/60 pb-1.5">
                   <div>
-                    <h5 class="font-bold text-slate-200">{{ rt.title }}</h5>
-                    <p class="text-[11px] text-slate-400 mt-0.5">{{ rt.desc }}</p>
+                    <h5 class="font-bold text-slate-200 text-xs flex items-center gap-1.5">
+                      {{ cat.title }}
+                    </h5>
+                    <p class="text-[10px] text-slate-400">{{ cat.desc }}</p>
+                  </div>
+                  <span
+                    class="px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 whitespace-nowrap"
+                    :class="cat.badgeColor"
+                  >
+                    {{ cat.badge }}
+                  </span>
+                </div>
+
+                <!-- Runtimes Grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+                  <div
+                    v-for="rt in cat.runtimes"
+                    :key="rt.id"
+                    @click="onEditRuntimeChange(rt.id)"
+                    class="p-2.5 rounded-xl border cursor-pointer transition flex items-start gap-2.5"
+                    :class="editRuntime === rt.id
+                      ? 'bg-amber-500/20 border-amber-400 text-amber-200 shadow-sm'
+                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:bg-slate-900'"
+                  >
+                    <div class="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700/80 flex items-center justify-center shrink-0 p-1 mt-0.5">
+                      <img :src="rt.icon" class="w-full h-full object-contain" @error="$event.target.src = '/assets/icons/RAZIconWebsites.svg'" />
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center justify-between gap-1">
+                        <h6 class="font-bold text-slate-200 text-[11px] truncate">{{ rt.name }}</h6>
+                        <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-bold shrink-0">
+                          {{ rt.ram }}
+                        </span>
+                      </div>
+                      <p class="text-[10px] text-slate-400 mt-0.5 leading-snug">{{ rt.desc }}</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1923,64 +2177,93 @@ onMounted(() => {
                 </select>
               </div>
 
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label class="block font-medium text-slate-300 mb-1">Database Engine</label>
-                  <select
-                    v-model="editDbEngine"
-                    class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs outline-none focus:border-amber-400"
-                  >
-                    <option value="mariadb">MariaDB / MySQL</option>
-                    <option value="postgres">PostgreSQL</option>
-                  </select>
-                </div>
+              <!-- Pilihan Database Engine di Edit Modal -->
+              <div>
+                <label class="block font-medium text-slate-300 mb-1">Database Engine</label>
+                <select
+                  v-model="editDbEngine"
+                  class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs outline-none focus:border-amber-400"
+                >
+                  <option value="sqlite">⭐ SQLite (Paling Ideal STB - Berbasis File - 0 MB Service RAM)</option>
+                  <option value="mariadb">MariaDB / MySQL (Varian Alpine ~120-180 MB RAM)</option>
+                  <option value="postgres">PostgreSQL Server</option>
+                </select>
+              </div>
 
+              <!-- JIKA SQLITE DIPILIH -->
+              <div v-if="editDbEngine === 'sqlite'" class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-2.5">
+                <div class="flex items-center gap-2 text-emerald-300 text-xs font-bold">
+                  <Database class="w-4 h-4 text-emerald-400" />
+                  <span>SQLite Embedded Database (Tanpa Daemon Service)</span>
+                </div>
+                <p class="text-[11px] text-slate-300 leading-relaxed">
+                  Database berbasis berkas langsung di dalam root folder website. <strong>0 MB konsumsi RAM service terpisah</strong>, sangat cepat dan aman dari memory leak STB.
+                </p>
                 <div>
-                  <label class="block font-medium text-slate-300 mb-1">Host & Port Database</label>
-                  <div class="flex items-center gap-2">
+                  <label class="block text-[11px] font-medium text-slate-300 mb-1">Nama File Database SQLite</label>
+                  <input
+                    v-model="editDbName"
+                    type="text"
+                    placeholder="database.sqlite"
+                    class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-emerald-400"
+                  />
+                  <p class="text-[10px] text-slate-500 mt-1">
+                    Path berkas otomatis: <span class="font-mono text-slate-400">{{ (editRootFolder || '/DATA/apps/websites/site') + '/' + (editDbName || 'database.sqlite') }}</span>
+                  </p>
+                </div>
+              </div>
+
+              <!-- JIKA MARIADB ATAU POSTGRES DIPILIH -->
+              <div v-else class="space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block font-medium text-slate-300 mb-1">Host Database</label>
                     <input
                       v-model="editDbHost"
                       type="text"
                       placeholder="127.0.0.1"
-                      class="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
+                      class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
                     />
+                  </div>
+                  <div>
+                    <label class="block font-medium text-slate-300 mb-1">Port Database</label>
                     <input
                       v-model.number="editDbPort"
                       type="number"
                       placeholder="3306"
-                      class="w-20 px-2 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400 text-center"
+                      class="w-full px-2 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400 text-center"
                     />
                   </div>
                 </div>
-              </div>
 
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label class="block font-medium text-slate-300 mb-1">Nama Database</label>
-                  <input
-                    v-model="editDbName"
-                    type="text"
-                    placeholder="db_nama_website"
-                    class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
-                  />
-                </div>
-                <div>
-                  <label class="block font-medium text-slate-300 mb-1">Username</label>
-                  <input
-                    v-model="editDbUser"
-                    type="text"
-                    placeholder="raz_user"
-                    class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
-                  />
-                </div>
-                <div>
-                  <label class="block font-medium text-slate-300 mb-1">Password</label>
-                  <input
-                    v-model="editDbPass"
-                    type="password"
-                    placeholder="••••••••"
-                    class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
-                  />
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label class="block font-medium text-slate-300 mb-1">Nama Database</label>
+                    <input
+                      v-model="editDbName"
+                      type="text"
+                      placeholder="db_nama_website"
+                      class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <div>
+                    <label class="block font-medium text-slate-300 mb-1">Username</label>
+                    <input
+                      v-model="editDbUser"
+                      type="text"
+                      placeholder="raz_user"
+                      class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <div>
+                    <label class="block font-medium text-slate-300 mb-1">Password</label>
+                    <input
+                      v-model="editDbPass"
+                      type="password"
+                      placeholder="••••••••"
+                      class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
+                    />
+                  </div>
                 </div>
               </div>
             </div>

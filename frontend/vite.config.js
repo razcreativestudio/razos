@@ -402,6 +402,70 @@ $dbUser = '${data.db_user || ''}';
 </body>
 </html>`, 'utf-8')
                   }
+                } else if (runtime === 'golang') {
+                  const goFile = path.join(physicalDir, 'main.go')
+                  if (!fs.existsSync(goFile)) {
+                    fs.writeFileSync(goFile, `package main
+// RAZOS Go Micro-Service: ${name} (20-40 MB RAM)
+import (
+	"fmt"
+	"net/http"
+	"os"
+)
+func main() {
+	port := os.Getenv("PORT")
+	if port == "" { port = "80" }
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "<h1>${name} - Go Micro-Service Aktif</h1>")
+	})
+	http.ListenAndServe(":"+port, nil)
+}
+`, 'utf-8')
+                  }
+                } else if (runtime === 'python') {
+                  const pyFile = path.join(physicalDir, 'app.py')
+                  if (!fs.existsSync(pyFile)) {
+                    fs.writeFileSync(pyFile, `# RAZOS Python Micro-service: ${name}
+import http.server, socketserver, os
+PORT = int(os.environ.get("PORT", 80))
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/html; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(b"<h1>${name} - Python Micro-service Aktif</h1>")
+with socketserver.TCPServer(("", PORT), Handler) as httpd:
+    httpd.serve_forever()
+`, 'utf-8')
+                  }
+                } else if (runtime === 'flatcms') {
+                  const cmsFile = path.join(physicalDir, 'index.php')
+                  const contentDir = path.join(physicalDir, 'content')
+                  if (!fs.existsSync(contentDir)) fs.mkdirSync(contentDir, { recursive: true })
+                  fs.writeFileSync(path.join(contentDir, 'home.md'), `# Selamat Datang di ${name}\n\nFlat-File CMS tanpa MySQL/MariaDB!`, 'utf-8')
+                  if (!fs.existsSync(cmsFile)) {
+                    fs.writeFileSync(cmsFile, `<?php
+$content = file_exists(__DIR__ . '/content/home.md') ? file_get_contents(__DIR__ . '/content/home.md') : 'Halaman kosong';
+?>
+<h1><?= htmlspecialchars("${name}") ?> - Flat-File CMS</h1>
+<div><?= nl2br(htmlspecialchars($content)) ?></div>
+`, 'utf-8')
+                  }
+                } else if (runtime === 'dashboard') {
+                  const dashFile = path.join(physicalDir, 'index.html')
+                  if (!fs.existsSync(dashFile)) {
+                    fs.writeFileSync(dashFile, `<!DOCTYPE html>
+<html lang="id">
+<head><meta charset="UTF-8"><title>${name} - Linktree & Portal</title><script src="https://cdn.tailwindcss.com"></script></head>
+<body class="bg-slate-950 text-slate-100 flex items-center justify-center min-h-screen p-4">
+  <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center">
+    <h1 class="text-xl font-bold">${name}</h1>
+    <p class="text-xs text-slate-400 mt-1 mb-6">Linktree & Portal Host</p>
+    <a href="http://localhost:3000" class="block w-full py-2 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-200">🖥️ RAZOS Desktop OS</a>
+  </div>
+</body>
+</html>`, 'utf-8')
+                  }
                 } else if (runtime === 'nodejs') {
                   const jsFile = path.join(physicalDir, 'server.js')
                   if (!fs.existsSync(jsFile)) {
@@ -424,7 +488,7 @@ server.listen(port, () => console.log('Server berjalan pada port ' + port));
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>${name} - RAZOS Static Website</title>
+    <title>${name} - RAZOS Landing Page</title>
     <style>
         body { font-family: system-ui, sans-serif; background: #090d16; color: #f1f5f9; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
         .card { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(51, 65, 85, 0.8); border-radius: 1.25rem; padding: 2.5rem; max-width: 500px; text-align: center; }
@@ -433,7 +497,7 @@ server.listen(port, () => console.log('Server berjalan pada port ' + port));
 </head>
 <body>
     <div class="card">
-        <span class="badge">NGINX STATIS • RAZOS CONTAINER</span>
+        <span class="badge">🔥 NGINX STATIS • (15–40 MB RAM)</span>
         <h1>${name}</h1>
         <p style="color: #94a3b8;">Website statis Anda siap diedit. Letakkan file HTML/CSS/JS di folder ini.</p>
     </div>
@@ -447,9 +511,14 @@ server.listen(port, () => console.log('Server berjalan pada port ' + port));
               let icon = (data.icon || '').trim()
               if (!icon) {
                 switch (data.runtime) {
+                  case 'golang': icon = 'https://cdn.simpleicons.org/go/00ADD8'; break
                   case 'php': icon = 'https://cdn.simpleicons.org/php/777BB4'; break
                   case 'nodejs': icon = 'https://cdn.simpleicons.org/nodedotjs/5FA04E'; break
-                  case 'nextjs': icon = 'https://cdn.simpleicons.org/nextdotjs/white'; break
+                  case 'python': icon = 'https://cdn.simpleicons.org/python/3776AB'; break
+                  case 'flatcms': icon = 'https://cdn.simpleicons.org/markdown/white'; break
+                  case 'wordpress': icon = 'https://cdn.simpleicons.org/wordpress/21759B'; break
+                  case 'dashboard': icon = 'https://cdn.simpleicons.org/linktree/43E660'; break
+                  case 'filebrowser': icon = 'https://cdn.simpleicons.org/files/white'; break
                   default: icon = '/assets/icons/RAZIconWebsites.svg'
                 }
               }

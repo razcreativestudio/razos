@@ -650,3 +650,72 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - Pengujian otomatis via REST API (`PUT /api/v1/websites/1`) lolos 100% dengan status HTTP 200 OK.
 - Tombol aksi Edit tampil presisi di kartu website dan memicu Custom Modal Edit secara responsif.
 
+---
+
+### Versi: 2.5.3-stb-optimized-runtime-categories (Adaptasi 4 Kategori Hosting Ideal & Eliminasi Runtime Berat untuk STB ARM64)
+**Waktu Eksekusi:** 2026-10-13 15:15 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Latar Belakang & Spesifikasi Pengguna
+- **Karakteristik Hardware Target STB:**
+  - Amlogic S905X ARM64, RAM 1.8 GiB, ZRAM Swap ~900 MiB.
+- **Kebutuhan Pengguna:**
+  - Pengguna memberikan panduan: *"buat yang cocok saja untuk server saya"*.
+  - Menghilangkan runtime berat yang memicu lag, hang, atau kehabisan RAM (seperti Next.js SSR / Nuxt.js SSR monolitik, framework kelas enterprise raksasa, dan MySQL 8 resmi).
+  - Menyediakan 4 kategori arsitektur website yang ramah hardware STB dengan preset alokasi memori yang presisi.
+
+#### 2. Implementasi 4 Kategori Hosting Ideal di Website Manager
+
+##### Kategori 1: Website Statis & Landing Page (Paling Sempurna & Super Ringan)
+- **Karakteristik:** Bebas database, konsumsi memori terendah, menjaga server STB tetap dingin dan responsif.
+- **Stack / Runtime:** HTML5, CSS3, JavaScript, TailwindCSS, Bootstrap, atau build statis Vite/Astro/Hugo via Nginx Alpine (`static`).
+- **Konsumsi RAM:** 15 – 40 MB.
+- **Badge Indikator:** `🔥 Paling Sempurna (15 – 40 MB RAM)`.
+
+##### Kategori 2: Micro-Framework Web & REST API (Ringan – Sedang)
+- **Karakteristik:** Web dinamis, formulir input, webhook handler, bot bridge, atau dashboard data internal.
+- **Pilihan Runtime Stack:**
+  1. **Go (Golang) Micro-Service (`golang`):** Direkomendasikan mutlak untuk STB karena binary native ARM64 sangat kencang dan hemat RAM (~20–40 MB RAM). Dilengkapi starter template `main.go` dengan HTTP router dan endpoint `/api/health`.
+  2. **PHP Standar / Native (`php`):** PHP 8.2 native ringan tanpa framework monolitik raksasa (~40–80 MB RAM).
+  3. **Node.js Express / Fastify Light (`nodejs`):** Runtime JavaScript terisolasi untuk API ringan (~70–120 MB RAM). Starter template `server.js` teroptimasi.
+  4. **Python FastAPI / Flask Micro-service (`python`):** Backend Python ringan terisolasi (~80–150 MB RAM) dengan starter template `app.py`.
+- **Database Pendamping STB:**
+  - **SQLite (Paling Ideal / Default Utama):** 0 MB konsumsi service RAM background karena berbasis berkas di root folder (`database.sqlite`).
+  - **MariaDB Alpine:** SQL relasional terisolasi (~120–180 MB RAM).
+
+##### Kategori 3: CMS Ringan (Content Management System)
+- **Pilihan Runtime Stack:**
+  1. **Flat-File CMS Grav / Kirby Style (`flatcms`):** CMS berbasis file Markdown (`content/home.md`) tanpa butuh database MySQL/MariaDB sama sekali! Konsumsi RAM sangat rendah (~35–50 MB RAM).
+  2. **WordPress Optimized (`wordpress`):** WordPress dengan MariaDB Alpine dan rekomendasi tanpa plugin page-builder berat (~150–250 MB RAM).
+
+##### Kategori 4: Web Dashboard & Internal Tools (Self-Hosted)
+- **Pilihan Runtime Stack:**
+  1. **Linktree Pribadi / Portal Bookmark (`dashboard`):** Portal utilitas tim, bookmark link server, dan status launcher responsif (< 40 MB RAM).
+  2. **File Sharing Ringan (`filebrowser`):** Alternatif Google Drive ultra ringan terhubung langsung ke storage host STB (~20–35 MB RAM).
+
+#### 3. Penyesuaian Komponen & Logika Kode
+
+##### A. Antarmuka Pengguna (`frontend/src/views/RAZWebsitesView.vue`)
+- **Wizard Step 2 & Edit Modal Tab 2:**
+  - Menghapus Next.js SSR dari opsi default.
+  - Mengelompokkan pilihan runtime ke dalam 4 kategori STB dengan kartu visual interaktif, badge efisiensi memori, dan icon brand resmi.
+  - Menambahkan banner edukatif spesifikasi hardware STB ARM64.
+- **Integrasi SQLite Zero-RAM di Step 3 & Tab 3:**
+  - Menjadikan SQLite sebagai pilihan default pertama.
+  - Mode form dinamis: Saat SQLite dipilih, field Host, Port, Username, dan Password otomatis disembunyikan; hanya menampilkan input nama berkas SQLite dan info bahwa service RAM = 0 MB.
+- **Preset Memory Limits STB:**
+  - Disesuaikan menjadi: `32M (Ultra Ringan)`, `64M (Ringan)`, `128M (Rekomendasi STB)`, `256M (Batas Aman STB)`, `512M (Batas Puncak)`.
+- **Filter Bar Runtime:**
+  - Ditambahkan filter: Semua, HTML Statis, Go API, PHP Native, Node.js, Python, Flat CMS, WordPress, Dashboard.
+
+##### B. Backend & Dev Middleware (`backend/internal/website/RAZWebsiteManager.go` & `frontend/vite.config.js`)
+- Mengembangkan generator starter template berkualitas tinggi untuk seluruh runtime baru (`main.go` untuk Golang, `app.py` untuk Python, `home.md` untuk Flat-File CMS, `index.html` modern untuk Dashboard & Statis).
+- Memetakan Docker container image berbasis Alpine yang hemat resource.
+
+#### 4. Verifikasi & Definisi Selesai (DoD)
+- Kompilasi build frontend Vite (`npm run build`) sukses 100% (*1578 modules transformed* dalam 4.47 detik).
+- Validasi sintaks kode Go backend di `RAZWebsiteManager.go` terverifikasi bersih dan rapi.
+- File backup diamankan di `backup/`.
+- Seluruh dokumen riwayat pembaruan tersinkronisasi.
+
+

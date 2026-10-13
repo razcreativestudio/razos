@@ -314,21 +314,91 @@ func CreateWebsite(req CreateWebsiteRequest) (*Website, error) {
 	return &newSite, nil
 }
 
-// createStarterFiles membuat file awal (index.html/index.php/index.js) agar web langsung dapat dibuka
+// createStarterFiles membuat file awal sesuai runtime stack yang dipilih pengguna
 func createStarterFiles(dir, name, runtime, dbName, dbHost string, dbPort int, dbUser string) {
 	switch runtime {
+	case "golang":
+		mainGoPath := filepath.Join(dir, "main.go")
+		if _, err := os.Stat(mainGoPath); os.IsNotExist(err) {
+			content := fmt.Sprintf(`package main
+
+// RAZOS High-Performance Micro-Service: %s
+// Sangat hemat memori untuk STB ARM64 (~20-40 MB RAM)
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"time"
+)
+
+type StatusResponse struct {
+	App       string    `+"`json:\"app\"`"+`
+	Status    string    `+"`json:\"status\"`"+`
+	Timestamp time.Time `+"`json:\"timestamp\"`"+`
+	Arch      string    `+"`json:\"arch\"`"+`
+}
+
+func main() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "80"
+	}
+
+	http.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(StatusResponse{
+			App:       "%s",
+			Status:    "online",
+			Timestamp: time.Now(),
+			Arch:      "ARM64 STB Optimized",
+		})
+	})
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprintf(w, `+"`"+`<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>%s - RAZOS Go Micro-Service</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #090d16; color: #f1f5f9; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        .card { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 1.25rem; padding: 2.5rem; max-width: 500px; text-align: center; }
+        .badge { background: rgba(0, 173, 216, 0.2); color: #00add8; padding: 0.3rem 0.8rem; border-radius: 9999px; font-size: 0.75rem; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <span class="badge">GOLANG MICRO-SERVICE • ⚡ 20-40 MB RAM</span>
+        <h1 style="margin-top: 1rem;">%s</h1>
+        <p style="color: #94a3b8; font-size: 0.875rem;">Service Go native aktif dan sangat responsif di STB Anda.</p>
+        <p style="font-family: monospace; font-size: 0.75rem; color: #38bdf8;">GET /api/health</p>
+    </div>
+</body>
+</html>`+"`"+`)
+	})
+
+	fmt.Println("Server Go berjalan pada port " + port)
+	_ = http.ListenAndServe(":"+port, nil)
+}
+`, name, name, name, name)
+			_ = os.WriteFile(mainGoPath, []byte(content), 0644)
+		}
+
 	case "php":
 		indexPath := filepath.Join(dir, "index.php")
 		if _, err := os.Stat(indexPath); os.IsNotExist(err) {
 			content := fmt.Sprintf(`<?php
 /**
  * RAZOS Powered PHP Website: %s
- * Dibuat secara otomatis oleh RAZOS Website Manager
+ * Dibuat secara otomatis oleh RAZOS Website Manager (STB Optimized)
  */
 $dbName = '%s';
 $dbHost = '%s';
 $dbPort = %d;
 $dbUser = '%s';
+$isSqlite = (strpos($dbName, '.sqlite') !== false || empty($dbHost) || $dbHost === 'localhost');
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -338,24 +408,27 @@ $dbUser = '%s';
     <title>%s - RAZOS PHP Web</title>
     <style>
         body { font-family: system-ui, -apple-system, sans-serif; background: #090d16; color: #f1f5f9; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-        .card { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(51, 65, 85, 0.8); border-radius: 1.25rem; padding: 2.5rem; max-width: 500px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
+        .card { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(51, 65, 85, 0.8); border-radius: 1.25rem; padding: 2.5rem; max-width: 520px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
         .badge { background: rgba(14, 165, 233, 0.2); color: #38bdf8; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: bold; }
         h1 { margin: 1rem 0 0.5rem; font-size: 1.5rem; }
         p { color: #94a3b8; font-size: 0.875rem; line-height: 1.5; }
-        .db-info { background: #0f172a; padding: 1rem; border-radius: 0.75rem; margin-top: 1.5rem; font-size: 0.75rem; text-align: left; font-family: monospace; }
+        .db-info { background: #0f172a; padding: 1rem; border-radius: 0.75rem; margin-top: 1.5rem; font-size: 0.75rem; text-align: left; font-family: monospace; border: 1px solid rgba(251, 191, 36, 0.2); }
     </style>
 </head>
 <body>
     <div class="card">
-        <span class="badge">PHP 8.2 • RAZOS ISOLATED CONTAINER</span>
+        <span class="badge">PHP 8.2 • RAZOS CONTAINER (40-80 MB RAM)</span>
         <h1>Selamat Datang di %s</h1>
         <p>Website PHP ini aktif dan berjalan di server RAZOS dengan aman.</p>
         <?php if (!empty($dbName)): ?>
         <div class="db-info">
-            <strong style="color: #fbbf24;">Koneksi Database:</strong><br>
-            Host: <?php echo htmlspecialchars($dbHost); ?>:<?php echo $dbPort; ?><br>
+            <strong style="color: #fbbf24;">Koneksi Basis Data:</strong><br>
+            Tipe: <?php echo $isSqlite ? 'SQLite (Berbasis Berkas - 0 MB Service RAM)' : 'MariaDB / MySQL Server'; ?><br>
             Database: <?php echo htmlspecialchars($dbName); ?><br>
+            <?php if (!$isSqlite): ?>
+            Host: <?php echo htmlspecialchars($dbHost); ?>:<?php echo $dbPort; ?><br>
             User: <?php echo htmlspecialchars($dbUser); ?>
+            <?php endif; ?>
         </div>
         <?php endif; ?>
     </div>
@@ -367,7 +440,7 @@ $dbUser = '%s';
 	case "nodejs":
 		indexPath := filepath.Join(dir, "server.js")
 		if _, err := os.Stat(indexPath); os.IsNotExist(err) {
-			content := fmt.Sprintf(`// RAZOS Node.js Website: %s
+			content := fmt.Sprintf(`// RAZOS Node.js Website: %s (STB Light API)
 const http = require('http');
 const port = process.env.PORT || 80;
 
@@ -387,9 +460,9 @@ const server = http.createServer((req, res) => {
     </head>
     <body>
         <div class="card">
-            <span class="badge">NODE.JS RUNTIME • RAZOS CONTAINER</span>
+            <span class="badge">NODE.JS LIGHT RUNTIME • (70-120 MB RAM)</span>
             <h1>%s</h1>
-            <p style="color: #94a3b8;">Node.js service berjalan dengan lancar pada port \${port}.</p>
+            <p style="color: #94a3b8;">Node.js Express/Fastify service berjalan dengan lancar pada port \${port}.</p>
         </div>
     </body>
     </html>
@@ -403,7 +476,89 @@ server.listen(port, () => {
 			_ = os.WriteFile(indexPath, []byte(content), 0644)
 		}
 
-	default: // Static HTML
+	case "python":
+		appPyPath := filepath.Join(dir, "app.py")
+		if _, err := os.Stat(appPyPath); os.IsNotExist(err) {
+			content := fmt.Sprintf(`# RAZOS Python Micro-service: %s
+import http.server
+import socketserver
+import os
+
+PORT = int(os.environ.get("PORT", 80))
+
+HTML_CONTENT = """<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>%s - RAZOS Python Micro-service</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #090d16; color: #f1f5f9; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        .card { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 1.25rem; padding: 2.5rem; max-width: 500px; text-align: center; }
+        .badge { background: rgba(59, 130, 246, 0.2); color: #60a5fa; padding: 0.3rem 0.8rem; border-radius: 9999px; font-size: 0.75rem; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <span class="badge">PYTHON MICRO-SERVICE • (80-150 MB RAM)</span>
+        <h1 style="margin-top: 1rem;">%s</h1>
+        <p style="color: #94a3b8;">FastAPI / Flask micro-service siap melayani permintaan.</p>
+    </div>
+</body>
+</html>"""
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/html; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(HTML_CONTENT.encode("utf-8"))
+
+with socketserver.TCPServer(("", PORT), Handler) as httpd:
+    print(f"Python server berjalan pada port {PORT}")
+    httpd.serve_forever()
+`, name, name, name)
+			_ = os.WriteFile(appPyPath, []byte(content), 0644)
+		}
+
+	case "flatcms":
+		indexPath := filepath.Join(dir, "index.php")
+		contentDir := filepath.Join(dir, "content")
+		_ = os.MkdirAll(contentDir, 0755)
+		homeMdPath := filepath.Join(contentDir, "home.md")
+		if _, err := os.Stat(homeMdPath); os.IsNotExist(err) {
+			_ = os.WriteFile(homeMdPath, []byte(fmt.Sprintf("# Selamat Datang di %s\n\nIni adalah website berbasis Flat-File CMS. Anda tidak membutuhkan database MySQL/MariaDB! Seluruh artikel disimpan langsung di dalam file Markdown.", name)), 0644)
+		}
+		if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+			content := fmt.Sprintf(`<?php
+/**
+ * RAZOS Flat-File CMS (Grav / Kirby Style)
+ * Bebas Database SQL • Ramah RAM STB (~35-50 MB RAM)
+ */
+$contentFile = __DIR__ . '/content/home.md';
+$content = file_exists($contentFile) ? file_get_contents($contentFile) : 'Halaman belum tersedia.';
+?>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>%s - Flat-File CMS</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #090d16; color: #f1f5f9; max-width: 680px; margin: 4rem auto; padding: 0 1rem; line-height: 1.6; }
+        .badge { background: rgba(99, 102, 241, 0.2); color: #818cf8; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: bold; }
+        .post { background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(51, 65, 85, 0.8); border-radius: 1.25rem; padding: 2rem; margin-top: 1.5rem; }
+    </style>
+</head>
+<body>
+    <span class="badge">FLAT-FILE CMS • TANPA MYSQL (35-50 MB RAM)</span>
+    <div class="post">
+        <?php echo nl2br(htmlspecialchars($content)); ?>
+    </div>
+</body>
+</html>`, name)
+			_ = os.WriteFile(indexPath, []byte(content), 0644)
+		}
+
+	case "dashboard":
 		indexPath := filepath.Join(dir, "index.html")
 		if _, err := os.Stat(indexPath); os.IsNotExist(err) {
 			content := fmt.Sprintf(`<!DOCTYPE html>
@@ -411,20 +566,54 @@ server.listen(port, () => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>%s - RAZOS Static Website</title>
-    <style>
-        body { font-family: system-ui, -apple-system, sans-serif; background: #090d16; color: #f1f5f9; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-        .card { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(51, 65, 85, 0.8); border-radius: 1.25rem; padding: 2.5rem; max-width: 500px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
-        .badge { background: rgba(56, 189, 248, 0.2); color: #38bdf8; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: bold; }
-        h1 { margin: 1rem 0 0.5rem; font-size: 1.5rem; }
-        p { color: #94a3b8; font-size: 0.875rem; line-height: 1.5; }
-    </style>
+    <title>%s - Portal & Bookmark</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <div class="card">
-        <span class="badge">NGINX STATIS • RAZOS ISOLATED CONTAINER</span>
-        <h1>%s</h1>
-        <p>Website statis Anda siap diedit. Masukkan file HTML, CSS, dan aset gambar ke direktori root website untuk mulai membangun proyek.</p>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-md w-full bg-slate-900/80 border border-slate-800 rounded-2xl p-6 text-center shadow-2xl backdrop-blur-md">
+        <div class="w-16 h-16 mx-auto rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center mb-4">
+            <span class="text-2xl">⚡</span>
+        </div>
+        <h1 class="text-xl font-bold text-slate-100">%s</h1>
+        <p class="text-xs text-slate-400 mt-1 mb-6">Linktree Pribadi & Portal Utilitas Host</p>
+        <div class="space-y-2.5">
+            <a href="http://localhost:3000" target="_blank" class="block w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition">🖥️ RAZOS Desktop OS</a>
+            <a href="http://localhost:8088" target="_blank" class="block w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition">🗄️ Database Web GUI</a>
+            <a href="https://github.com" target="_blank" class="block w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition">🐙 GitHub Repositories</a>
+        </div>
+        <div class="mt-6 pt-4 border-t border-slate-800/80 text-[10px] text-slate-500">
+            Self-hosted di STB ARM64 • Konsumsi RAM &lt; 40 MB
+        </div>
+    </div>
+</body>
+</html>`, name, name)
+			_ = os.WriteFile(indexPath, []byte(content), 0644)
+		}
+
+	default: // Static HTML (Nginx Alpine)
+		indexPath := filepath.Join(dir, "index.html")
+		if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+			content := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>%s - RAZOS Landing Page</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#090d16] text-slate-100 min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-xl w-full bg-slate-900/70 border border-slate-800 rounded-2xl p-8 text-center shadow-2xl backdrop-blur-md">
+        <span class="inline-block px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold tracking-wide uppercase">
+            🔥 Paling Sempurna • 15–40 MB RAM
+        </span>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-white mt-4 mb-2 tracking-tight">%s</h1>
+        <p class="text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
+            Landing page modern ultra ringan yang melayani berkas HTML, CSS, JavaScript, dan aset gambar melalui Nginx Alpine.
+        </p>
+        <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <span class="px-3 py-1.5 rounded-xl bg-slate-800/90 border border-slate-700/80 text-xs text-slate-300 font-mono">STB S905X ARM64</span>
+            <span class="px-3 py-1.5 rounded-xl bg-slate-800/90 border border-slate-700/80 text-xs text-slate-300 font-mono">Zero Database Overhead</span>
+        </div>
     </div>
 </body>
 </html>`, name, name)
@@ -467,23 +656,37 @@ func deployDockerContainer(site *Website) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Tentukan Image & Target Port Container
+	// Tentukan Image & Target Port Container sesuai spesifikasi STB
 	imageName := "nginx:alpine"
 	containerTargetPort := "80"
 	mountDest := "/usr/share/nginx/html"
 
 	switch site.Runtime {
-	case "php":
+	case "golang":
+		imageName = "golang:1.21-alpine"
+		mountDest = "/app"
+		containerTargetPort = "80"
+	case "php", "flatcms":
 		imageName = "php:8.2-apache"
 		mountDest = "/var/www/html"
+		containerTargetPort = "80"
+	case "wordpress":
+		imageName = "wordpress:php8.2-apache"
+		mountDest = "/var/www/html"
+		containerTargetPort = "80"
 	case "nodejs":
 		imageName = "node:18-alpine"
 		mountDest = "/app"
 		containerTargetPort = "80"
-	case "nextjs":
-		imageName = "node:20-alpine"
+	case "python":
+		imageName = "python:3.11-alpine"
 		mountDest = "/app"
-		containerTargetPort = "3000"
+		containerTargetPort = "80"
+	case "dashboard", "filebrowser", "static":
+	default:
+		imageName = "nginx:alpine"
+		mountDest = "/usr/share/nginx/html"
+		containerTargetPort = "80"
 	}
 
 	natPort, _ := nat.NewPort("tcp", containerTargetPort)
