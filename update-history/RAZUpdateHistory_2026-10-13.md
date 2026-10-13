@@ -718,4 +718,53 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - File backup diamankan di `backup/`.
 - Seluruh dokumen riwayat pembaruan tersinkronisasi.
 
+---
+
+### Versi: 2.5.4-website-manager-ui-overhaul (Desain Ulang Kartu Website Lega, Grid Auto-Fill Responsif, & Action Bar Elegan)
+**Waktu Eksekusi:** 2026-10-13 15:27 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Masalah Tampilan UI Sebelumnya
+- **Kartu Terjepit & Teks Terpotong Parah:**
+  - Penggunaan breakpoint berbasis viewport peramban (`xl:grid-cols-3`) menyebabkan kartu website pada jendela desktop berukuran ~750px - 850px menyusut menjadi hanya ~250px di monitor besar.
+  - Nama website terpotong menjadi hanya `"Port..."`, domain terpotong menjadi `"berita.r"`, dan kata `"Root Folder:"` terbelah menjadi dua baris berantakan (`"Root"` di baris atas, `"Folder:"` di baris bawah).
+- **Toolbar Aksi Bawah Menumpuk & Berdesakan:**
+  - Sebanyak 9 tombol aksi dijejalkan dalam satu baris sempit di bagian bawah kartu tanpa pemisahan visual yang proporsional.
+- **Teks Subheader Usang:**
+  - Masih menampilkan teks `"Next.js"` pada subjudul deskripsi utama.
+
+#### 2. Solusi & Desain Ulang Komponen (`RAZWebsitesView.vue`)
+
+##### A. Grid Container Auto-Fill Responsif
+- Mengganti grid breakpoint dengan CSS Grid otomatis:
+  `style="grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));"`
+- Kartu website memiliki lebar minimal 360px yang lega, terisi penuh dan seimbang di dalam jendela, serta otomatis menyesuaikan jumlah kolom secara dinamis saat jendela aplikasi di-resize oleh pengguna.
+
+##### B. Header Kartu Website yang Lega & Berimbang
+- **Ikon Aplikasi:** Ditingkatkan menjadi ukuran `w-12 h-12` dengan padding dan shadow halus.
+- **Hierarki Tipografi:**
+  - Judul nama website ditampilkan di baris atas dengan ukuran `text-sm sm:text-base font-bold text-slate-100`, tidak lagi terjepit status badge.
+  - Status running/stopped (`RUNNING` hijau menyala / `STOPPED` merah) diposisikan di sudut kanan atas sebagai pill badge yang bersih.
+  - Domain dan port host diletakkan di baris kedua lengkap dengan badge runtime stack (`PHP`, `Golang`, `Statis`, dll).
+
+##### C. Metadata Box Presisi Tinggi
+- Semua label (`Container:`, `Root Folder:`, `Resources:`, `Basis Data:`, `GitHub:`) diberi perlindungan `shrink-0 whitespace-nowrap` sehingga tidak akan pernah pecah baris lagi.
+- Nilai metadata dialokasikan di sisi kanan dengan teks yang rapi dan truncate seimbang. Root folder kini berupa link tombol interaktif yang langsung membuka direktori sasaran di File Manager saat diklik.
+
+##### D. Action Bar Bawah yang Tertata Elegan
+- **Toolbar Konfigurasi Kiri:** Dibungkus dalam kapsul gelap `bg-slate-950/60 p-1 rounded-xl border border-slate-900` yang rapi dan simetris (Start/Stop, File Manager, Edit Konfigurasi, Git Pull, Git Setting, Database Adminer, Info Detail).
+- **Tombol Utama Kanan:**
+  - Tombol **"Buka Website"** (`ExternalLink`) tampil menonjol dengan gradasi warna sky-to-indigo berkelas enterprise, font tebal, dan efek klik `active:scale-95`.
+  - Tombol **"Hapus"** diletakkan di sampingnya dengan warna rose halus.
+
+##### E. Sinkronisasi Subheader
+- Menghapus referensi Next.js pada subheader dan memperbaruinya menjadi:
+  *"Platform hosting multi-website terisolasi berbasis Docker dioptimasi untuk STB ARM64 (Statis, Go, PHP, Node.js, Python, Flat CMS)."*
+
+#### 3. Verifikasi & Definisi Selesai (DoD)
+- Kompilasi build frontend Vite (`npm run build`) sukses 100% (*1578 modules transformed* dalam 4.67 detik).
+- Tampilan kartu website terverifikasi lega, tidak ada teks judul/label yang pecah atau terpotong, dan tata letak tombol rapi sempurna.
+- File backup tersimpan di `backup/RAZWebsitesView_before_ui_overhaul.vue`.
+
+
 

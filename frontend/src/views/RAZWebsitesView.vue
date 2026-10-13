@@ -829,7 +829,7 @@ onMounted(() => {
           </span>
         </div>
         <p class="text-xs text-slate-400 mt-0.5">
-          Platform hosting multi-website terisolasi berbasis Docker (HTML Statis, PHP+DB, Node.js, Next.js).
+          Platform hosting multi-website terisolasi berbasis Docker dioptimasi untuk STB ARM64 (Statis, Go, PHP, Node.js, Python, Flat CMS).
         </p>
       </div>
 
@@ -856,8 +856,8 @@ onMounted(() => {
     </div>
 
     <!-- Search & Filter Bar -->
-    <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
-      <div class="relative flex-1 min-w-[200px]">
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80">
+      <div class="relative flex-1 min-w-[220px]">
         <Search class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
         <input
           v-model="searchQuery"
@@ -868,7 +868,7 @@ onMounted(() => {
       </div>
 
       <!-- Filter Kategori Runtime STB -->
-      <div class="flex items-center gap-1 overflow-x-auto text-[11px]">
+      <div class="flex items-center gap-1.5 overflow-x-auto text-[11px] pb-0.5 lg:pb-0">
         <button
           v-for="f in [
             { id: 'all', label: 'Semua' },
@@ -885,7 +885,7 @@ onMounted(() => {
           @click="selectedRuntimeFilter = f.id"
           class="px-2.5 py-1 rounded-lg font-medium transition shrink-0 whitespace-nowrap"
           :class="selectedRuntimeFilter === f.id
-            ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
+            ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 font-bold shadow-sm'
             : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'"
         >
           {{ f.label }}
@@ -893,125 +893,143 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Website Cards Grid (Multi-Website Container Isolated) -->
-    <div v-if="filteredWebsites.length > 0" class="flex-1 overflow-auto grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 pr-0.5">
+    <!-- Website Cards Grid: Auto-fill layout yang lega dan responsif -->
+    <div
+      v-if="filteredWebsites.length > 0"
+      class="flex-1 overflow-y-auto grid gap-3.5 pr-0.5"
+      style="grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));"
+    >
       <div
         v-for="site in filteredWebsites"
         :key="site.id"
-        class="raz-glass rounded-2xl border border-slate-800/90 p-4 flex flex-col justify-between hover:border-slate-700 hover:shadow-xl transition-all duration-200 group"
+        class="raz-glass rounded-2xl border border-slate-800/90 p-4 sm:p-5 flex flex-col justify-between hover:border-sky-500/40 hover:shadow-2xl hover:shadow-sky-500/5 transition-all duration-200 group"
       >
         <!-- Card Top Section -->
         <div>
-          <!-- Header Card: Icon, Name, Status Badge -->
-          <div class="flex items-start justify-between gap-3 mb-2.5">
-            <div class="flex items-center gap-3 min-w-0">
-              <div class="w-11 h-11 rounded-xl bg-slate-800/90 border border-slate-700/80 flex items-center justify-center p-2 shrink-0 group-hover:scale-105 transition shadow">
-                <img
-                  v-if="site.icon"
-                  :src="site.icon"
-                  :alt="site.name"
-                  class="w-full h-full object-contain"
-                  @error="$event.target.src = '/assets/icons/RAZIconWebsites.svg'"
-                />
-                <Globe v-else class="w-6 h-6 text-sky-400" />
-              </div>
-              <div class="min-w-0">
-                <h4 class="font-bold text-slate-100 text-sm truncate hover:text-sky-300 transition" :title="site.name">
-                  {{ site.name }}
-                </h4>
-                <div class="flex items-center gap-1.5 font-mono text-[11px] text-sky-400 truncate">
-                  <span>{{ site.domain || 'localhost' }}</span>
-                  <span class="text-slate-600">:</span>
-                  <span class="text-amber-400 font-bold">{{ site.port }}</span>
-                </div>
-              </div>
+          <!-- Header Card: Icon, Name, Domain, Status Badge -->
+          <div class="flex items-start gap-3.5 mb-3">
+            <!-- App Icon (Proporsional & Clean) -->
+            <div class="w-12 h-12 rounded-xl bg-slate-900/90 border border-slate-700/80 p-2.5 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow">
+              <img
+                v-if="site.icon"
+                :src="site.icon"
+                :alt="site.name"
+                class="w-full h-full object-contain"
+                @error="$event.target.src = '/assets/icons/RAZIconWebsites.svg'"
+              />
+              <Globe v-else class="w-6 h-6 text-sky-400" />
             </div>
 
-            <!-- Status Indicator Badge -->
-            <div class="flex flex-col items-end gap-1 shrink-0">
-              <span
-                class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 border"
-                :class="site.status === 'running'
-                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                  : 'bg-rose-500/15 text-rose-300 border-rose-500/30'"
-              >
-                <span class="w-1.5 h-1.5 rounded-full" :class="site.status === 'running' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'"></span>
-                {{ site.status }}
-              </span>
-              <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 uppercase">
-                {{ site.runtime }}
-              </span>
+            <!-- Nama Website & Domain -->
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center justify-between gap-2">
+                <h4 class="font-bold text-slate-100 text-sm sm:text-base truncate group-hover:text-sky-300 transition-colors leading-tight" :title="site.name">
+                  {{ site.name }}
+                </h4>
+
+                <!-- Status Indicator Badge -->
+                <span
+                  class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 border shrink-0"
+                  :class="site.status === 'running'
+                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                    : 'bg-rose-500/15 text-rose-300 border-rose-500/30'"
+                >
+                  <span class="w-1.5 h-1.5 rounded-full" :class="site.status === 'running' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'"></span>
+                  {{ site.status }}
+                </span>
+              </div>
+
+              <!-- Host Link & Runtime Tag -->
+              <div class="flex items-center gap-2 mt-1">
+                <a
+                  :href="'http://' + (site.domain || 'localhost') + ':' + site.port"
+                  target="_blank"
+                  class="inline-flex items-center gap-1 font-mono text-[11px] text-sky-400 hover:text-sky-300 hover:underline truncate max-w-[210px]"
+                  :title="'http://' + (site.domain || 'localhost') + ':' + site.port"
+                >
+                  <span class="truncate">{{ site.domain || 'localhost' }}</span>
+                  <span class="text-slate-600">:</span>
+                  <span class="text-amber-400 font-bold shrink-0">{{ site.port }}</span>
+                </a>
+                <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 uppercase shrink-0 font-semibold border border-slate-700/60">
+                  {{ site.runtime }}
+                </span>
+              </div>
             </div>
           </div>
 
-          <!-- Metadata Box (Specs & Resources) -->
-          <div class="bg-slate-950/70 rounded-xl p-2.5 border border-slate-900/80 space-y-1.5 text-[11px] text-slate-400">
+          <!-- Metadata Box (Lega, Rapi, & Tidak Terpotong) -->
+          <div class="bg-slate-950/80 rounded-xl p-3 border border-slate-900/90 space-y-2 text-[11px]">
             <!-- Container Name -->
-            <div class="flex items-center justify-between">
-              <span class="flex items-center gap-1 text-slate-500">
-                <Server class="w-3 h-3" />
-                <span>Container:</span>
+            <div class="flex items-center justify-between gap-2.5">
+              <span class="text-slate-500 flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+                <Server class="w-3.5 h-3.5 text-slate-400" />
+                <span class="font-medium">Container:</span>
               </span>
-              <span class="font-mono text-slate-300 font-semibold truncate max-w-[170px]" :title="site.container_name">
+              <span class="font-mono text-slate-200 font-semibold truncate text-right flex-1" :title="site.container_name">
                 {{ site.container_name }}
               </span>
             </div>
 
             <!-- Root Folder -->
-            <div class="flex items-center justify-between">
-              <span class="flex items-center gap-1 text-slate-500">
-                <FolderOpen class="w-3 h-3" />
-                <span>Root Folder:</span>
+            <div class="flex items-center justify-between gap-2.5">
+              <span class="text-slate-500 flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+                <FolderOpen class="w-3.5 h-3.5 text-sky-400" />
+                <span class="font-medium">Root Folder:</span>
               </span>
-              <span class="font-mono text-slate-300 truncate max-w-[170px]" :title="site.root_folder">
+              <button
+                @click="openWebsiteFolder(site)"
+                class="font-mono text-slate-300 hover:text-sky-300 truncate text-right flex-1 hover:underline transition-colors text-[10.5px]"
+                :title="site.root_folder"
+              >
                 {{ site.root_folder }}
-              </span>
+              </button>
             </div>
 
-            <!-- Memory & CPU -->
-            <div class="flex items-center justify-between">
-              <span class="flex items-center gap-1 text-slate-500">
-                <Cpu class="w-3 h-3" />
-                <span>Resources:</span>
+            <!-- Resources -->
+            <div class="flex items-center justify-between gap-2.5">
+              <span class="text-slate-500 flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+                <Cpu class="w-3.5 h-3.5 text-emerald-400" />
+                <span class="font-medium">Resources:</span>
               </span>
-              <span class="font-mono text-slate-300 text-[10px]">
-                RAM {{ site.memory_limit || '128M' }} • CPU {{ site.cpu_shares || 512 }}
+              <span class="font-mono text-slate-300 text-[10.5px] truncate text-right">
+                RAM <strong class="text-emerald-400 font-semibold">{{ site.memory_limit || '128M' }}</strong> • CPU {{ site.cpu_shares || 512 }}
               </span>
             </div>
 
             <!-- Database Info (Jika Ada) -->
-            <div v-if="site.db_name" class="flex items-center justify-between pt-1 border-t border-slate-900">
-              <span class="flex items-center gap-1 text-amber-400/80">
-                <Database class="w-3 h-3 text-amber-400" />
-                <span>Database:</span>
+            <div v-if="site.db_name" class="flex items-center justify-between gap-2.5 pt-1 border-t border-slate-900">
+              <span class="text-amber-400/90 flex items-center gap-1.5 shrink-0 whitespace-nowrap font-medium">
+                <Database class="w-3.5 h-3.5 text-amber-400" />
+                <span>Basis Data:</span>
               </span>
-              <span class="font-mono text-amber-300 font-bold truncate max-w-[170px]">
+              <span class="font-mono text-amber-300 font-bold truncate text-right flex-1" :title="site.db_name">
                 {{ site.db_name }}
               </span>
             </div>
 
-            <!-- Git Repository & Commit Info -->
-            <div v-if="site.git_repo" class="flex items-center justify-between pt-1 border-t border-slate-900">
-              <span class="flex items-center gap-1 text-sky-400/90">
-                <GitBranch class="w-3 h-3 text-sky-400" />
-                <span>Git ({{ site.git_branch || 'main' }}):</span>
+            <!-- Git Info (Jika Ada) -->
+            <div v-if="site.git_repo" class="flex items-center justify-between gap-2.5 pt-1 border-t border-slate-900">
+              <span class="text-sky-400/90 flex items-center gap-1.5 shrink-0 whitespace-nowrap font-medium">
+                <GitBranch class="w-3.5 h-3.5 text-sky-400" />
+                <span>GitHub:</span>
               </span>
-              <span class="font-mono text-slate-300 text-[10px] truncate max-w-[160px]" :title="site.git_last_commit || site.git_repo">
-                {{ site.git_last_commit || 'Terkoneksi' }}
+              <span class="font-mono text-slate-300 text-[10px] truncate text-right flex-1" :title="site.git_last_commit || site.git_repo">
+                {{ site.git_branch || 'main' }} • {{ site.git_last_commit ? site.git_last_commit.substring(0, 7) : 'Terkoneksi' }}
               </span>
             </div>
           </div>
         </div>
 
-        <!-- Card Bottom Action Bar -->
+        <!-- Card Bottom Action Bar: Tertata Bersih & Proporsional -->
         <div class="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-slate-800/80">
-          <!-- Left Actions: Start/Stop, Folder, Git, Database, Info -->
-          <div class="flex items-center gap-1">
+          <!-- Left Actions Toolbar: Start/Stop, Folder, Edit, Git, Database, Info -->
+          <div class="flex items-center gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-900">
             <!-- Toggle Start / Stop -->
             <button
               v-if="site.status === 'running'"
               @click="toggleWebsiteStatus(site, 'stop')"
-              class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 transition"
+              class="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 transition"
               title="Hentikan Container Website"
             >
               <Square class="w-3.5 h-3.5 fill-amber-400/20" />
@@ -1028,7 +1046,7 @@ onMounted(() => {
             <!-- Buka Root Folder di File Manager -->
             <button
               @click="openWebsiteFolder(site)"
-              class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+              class="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white transition"
               title="Buka Root Folder di File Manager RAZOS"
             >
               <FolderOpen class="w-3.5 h-3.5" />
@@ -1037,7 +1055,7 @@ onMounted(() => {
             <!-- Edit Konfigurasi Website -->
             <button
               @click="openEditDialog(site)"
-              class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-amber-300 transition"
+              class="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-amber-300 transition"
               title="Edit Konfigurasi Website"
             >
               <Pencil class="w-3.5 h-3.5" />
@@ -1050,7 +1068,7 @@ onMounted(() => {
               class="p-1.5 rounded-lg transition"
               :class="site.git_repo
                 ? 'bg-sky-500/15 hover:bg-sky-500/25 text-sky-300'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200'"
+                : 'bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200'"
               :title="site.git_repo ? 'Tarik Pembaruan GitHub Terbaru (Git Pull)' : 'Hubungkan Repository GitHub'"
             >
               <RotateCw v-if="pullingSiteId === site.id" class="w-3.5 h-3.5 animate-spin text-sky-400" />
@@ -1060,7 +1078,7 @@ onMounted(() => {
             <!-- Pengaturan Git & PAT Token -->
             <button
               @click="openGitModal(site)"
-              class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-sky-300 transition"
+              class="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-sky-300 transition"
               title="Pengaturan GitHub & PAT Token"
             >
               <GitBranch class="w-3.5 h-3.5" />
@@ -1079,30 +1097,30 @@ onMounted(() => {
             <!-- Detail Konfigurasi -->
             <button
               @click="openDetailDialog(site)"
-              class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+              class="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 transition"
               title="Lihat Detail & Kredensial"
             >
               <Info class="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <!-- Right Actions: Launch Web & Delete -->
+          <!-- Right Actions: Launch Web Button & Delete -->
           <div class="flex items-center gap-1.5">
             <a
               :href="'http://' + (site.domain || 'localhost') + ':' + site.port"
               target="_blank"
-              class="px-2.5 py-1.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 font-semibold flex items-center gap-1 text-[11px] transition active:scale-95"
+              class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-slate-950 font-bold flex items-center gap-1.5 text-xs transition shadow-md shadow-sky-500/20 active:scale-95"
             >
               <span>Buka</span>
-              <ExternalLink class="w-3 h-3" />
+              <ExternalLink class="w-3.5 h-3.5 stroke-[2.5]" />
             </a>
 
             <button
               @click="promptDeleteWebsite(site)"
-              class="p-1.5 rounded-lg hover:bg-rose-500/20 text-rose-400 transition"
+              class="p-1.5 rounded-xl hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition"
               title="Hapus Website"
             >
-              <Trash2 class="w-3.5 h-3.5" />
+              <Trash2 class="w-4 h-4" />
             </button>
           </div>
         </div>
