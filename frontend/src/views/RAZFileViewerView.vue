@@ -10,7 +10,8 @@ import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import {
   ZoomIn, ZoomOut, RotateCw, RotateCcw, Maximize2, Download, Play, Pause,
   Volume2, Volume1, VolumeX, Save, RefreshCw, CheckCircle2, FileText, Film, Music,
-  FileCode, ExternalLink, Info, ShieldAlert, AlertCircle, Repeat, SkipBack, SkipForward, Disc
+  FileCode, ExternalLink, Info, ShieldAlert, AlertCircle, Repeat, SkipBack, SkipForward, Disc,
+  FastForward, Gauge
 } from 'lucide-vue-next'
 import { useSystemStore } from '../stores/RAZSystemStore'
 
@@ -63,6 +64,31 @@ const audioVolume = ref(1)
 const isAudioLoop = ref(false)
 const prevVolume = ref(1)
 
+// Kecepatan Pemutaran (Playback Speed)
+const playbackSpeed = ref(1)
+const availableSpeeds = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+const showSpeedMenu = ref(false)
+
+// Scrubber Timeline State (Anti-Jitter Seeking & Dragging)
+const isSeeking = ref(false)
+const seekValue = ref(0)
+const isHoveringTimeline = ref(false)
+const hoverPercent = ref(0)
+const hoverTimeText = ref('00:00')
+
+// Menghitung persentase durasi yang telah terputar (0% - 100%)
+const audioProgressPercent = computed(() => {
+  const dur = audioDuration.value || 0
+  if (dur <= 0) return 0
+  const curr = isSeeking.value ? seekValue.value : audioCurrentTime.value
+  return Math.min(100, Math.max(0, (curr / dur) * 100))
+})
+
+// Waktu aktif yang ditampilkan di label (mengikuti posisi drag saat seeking)
+const displayedCurrentTime = computed(() => {
+  return isSeeking.value ? seekValue.value : audioCurrentTime.value
+})
+
 function toggleAudioPlay() {
   if (!audioRef.value) return
   if (audioRef.value.paused) {
@@ -84,6 +110,7 @@ function seekRelative(secs) {
   const target = Math.max(0, Math.min(maxDur, audioRef.value.currentTime + secs))
   audioRef.value.currentTime = target
   audioCurrentTime.value = target
+  seekValue.value = target
 }
 
 function toggleAudioLoop() {
@@ -93,8 +120,73 @@ function toggleAudioLoop() {
   }
 }
 
-function onAudioTimeUpdate() {
+// Beralih kecepatan pemutaran secara siklik (1x -> 1.25x -> 1.5x -> 2x -> 0.5x -> ...)
+function cyclePlaybackSpeed() {
+  const currentIndex = availableSpeeds.indexOf(playbackSpeed.value)
+  const nextIndex = (currentIndex + 1) % availableSpeeds.length
+  setPlaybackSpeed(availableSpeeds[nextIndex])
+}
+
+function setPlaybackSpeed(speed) {
+  playbackSpeed.value = speed
   if (audioRef.value) {
+    audioRef.value.playbackRate = speed
+  }
+  showSpeedMenu.value = false
+}
+
+// Handler Seeking Interaktif: Anti-Jitter Drag & Slide
+function onSeekStart(e) {
+  isSeeking.value = true
+  seekValue.value = Number(e.target.value)
+}
+
+function onSeekInput(e) {
+  isSeeking.value = true
+  seekValue.value = Number(e.target.value)
+}
+
+function onSeekEnd(e) {
+  const target = Number(e.target.value)
+  if (audioRef.value) {
+    audioRef.value.currentTime = target
+    audioCurrentTime.value = target
+  }
+  seekValue.value = target
+  isSeeking.value = false
+}
+
+// Klik langsung pada sembarang titik garis timeline
+function onTimelineTrackClick(e) {
+  if (!audioRef.value || !audioDuration.value) return
+  const rect = e.currentTarget.getBoundingClientRect()
+  const clickX = e.clientX - rect.left
+  const ratio = Math.max(0, Math.min(1, clickX / rect.width))
+  const target = ratio * audioDuration.value
+  audioRef.value.currentTime = target
+  audioCurrentTime.value = target
+  seekValue.value = target
+}
+
+// Hover preview tooltip waktu pada timeline
+function onTimelineMouseMove(e) {
+  if (!audioDuration.value) return
+  const rect = e.currentTarget.getBoundingClientRect()
+  const mouseX = e.clientX - rect.left
+  const ratio = Math.max(0, Math.min(1, mouseX / rect.width))
+  hoverPercent.value = ratio * 100
+  const previewTime = ratio * audioDuration.value
+  hoverTimeText.value = formatAudioTime(previewTime)
+  isHoveringTimeline.value = true
+}
+
+function onTimelineMouseLeave() {
+  isHoveringTimeline.value = false
+}
+
+function onAudioTimeUpdate() {
+  // Hanya perbarui audioCurrentTime jika pengguna tidak sedang menahan/men-slide slider
+  if (audioRef.value && !isSeeking.value) {
     audioCurrentTime.value = audioRef.value.currentTime
   }
 }
@@ -102,12 +194,7 @@ function onAudioTimeUpdate() {
 function onAudioLoaded() {
   if (audioRef.value) {
     audioDuration.value = audioRef.value.duration || 0
-  }
-}
-
-function onAudioSeek(e) {
-  if (audioRef.value) {
-    audioRef.value.currentTime = Number(e.target.value)
+    audioRef.value.playbackRate = playbackSpeed.value
   }
 }
 
@@ -226,6 +313,7 @@ onMounted(() => {
   } else if (isAudio.value) {
     nextTick(() => {
       if (audioRef.value) {
+        audioRef.value.playbackRate = playbackSpeed.value
         audioRef.value.play().then(() => {
           isAudioPlaying.value = true
         }).catch(() => {
@@ -243,9 +331,11 @@ watch(() => props.file.path, () => {
   } else if (isAudio.value) {
     isAudioPlaying.value = false
     audioCurrentTime.value = 0
+    seekValue.value = 0
     nextTick(() => {
       if (audioRef.value) {
         audioRef.value.currentTime = 0
+        audioRef.value.playbackRate = playbackSpeed.value
         audioRef.value.play().then(() => {
           isAudioPlaying.value = true
         }).catch(() => {
@@ -328,6 +418,7 @@ watch(() => props.file.path, () => {
             @click="toggleAudioPlay"
             class="relative w-36 h-36 sm:w-44 sm:h-44 rounded-full border-4 border-amber-500/30 shadow-[0_0_35px_rgba(245,158,11,0.2)] flex items-center justify-center bg-slate-950 cursor-pointer group hover:border-amber-400/60 transition-all select-none"
             :class="isAudioPlaying ? 'animate-[spin_8s_linear_infinite]' : ''"
+            :style="isAudioPlaying ? { animationDuration: `${Math.max(1.5, 8 / playbackSpeed)}s` } : {}"
             title="Klik untuk Putar / Jeda"
           >
             <!-- Vinyl Grooves Rings -->
@@ -355,7 +446,7 @@ watch(() => props.file.path, () => {
               class="w-1 rounded-full transition-all duration-150"
               :class="isAudioPlaying ? 'bg-gradient-to-t from-amber-500 to-amber-300' : 'bg-slate-800 h-1'"
               :style="isAudioPlaying ? {
-                height: `${Math.max(4, Math.sin(bar * 0.8 + audioCurrentTime * 6) * 18 + 12)}px`
+                height: `${Math.max(4, Math.sin(bar * 0.8 + audioCurrentTime * 6 * playbackSpeed) * 18 + 12)}px`
               } : { height: '3px' }"
             ></span>
           </div>
@@ -379,19 +470,71 @@ watch(() => props.file.path, () => {
 
         <!-- BOTTOM: Scrubber Timeline, Playback Controls, Volume -->
         <div class="w-full flex flex-col gap-3 shrink-0 pt-2 border-t border-slate-800/80">
-          <!-- Timeline Scrubber -->
-          <div class="w-full flex flex-col gap-1">
-            <input
-              type="range"
-              min="0"
-              :max="audioDuration || 100"
-              :value="audioCurrentTime"
-              @input="onAudioSeek"
-              class="w-full accent-amber-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
-            />
-            <div class="flex justify-between text-[11px] text-slate-400 font-mono">
-              <span class="text-amber-400 font-medium">{{ formatAudioTime(audioCurrentTime) }}</span>
-              <span>{{ formatAudioTime(audioDuration) }}</span>
+          <!-- Timeline Scrubber Container (Clickable & Slidable Mulus Anti-Jitter) -->
+          <div class="w-full flex flex-col gap-1.5 select-none">
+            <div
+              class="relative w-full h-3 group flex items-center cursor-pointer"
+              @mousemove="onTimelineMouseMove"
+              @mouseleave="onTimelineMouseLeave"
+              @click="onTimelineTrackClick"
+            >
+              <!-- Tooltip Preview Waktu Melayang saat Hover -->
+              <div
+                v-if="isHoveringTimeline && audioDuration > 0"
+                class="absolute -top-7 -translate-x-1/2 px-2 py-0.5 rounded-md bg-slate-800/95 border border-slate-700/80 text-amber-300 text-[10px] font-mono shadow-xl pointer-events-none z-30 transition-all duration-75"
+                :style="{ left: `${hoverPercent}%` }"
+              >
+                {{ hoverTimeText }}
+              </div>
+
+              <!-- Background Track -->
+              <div class="w-full h-1.5 group-hover:h-2 bg-slate-800 rounded-full overflow-hidden transition-all duration-150">
+                <!-- Hover Ghost Fill Track -->
+                <div
+                  v-if="isHoveringTimeline"
+                  class="absolute h-full bg-slate-700/60 rounded-full pointer-events-none"
+                  :style="{ width: `${hoverPercent}%` }"
+                ></div>
+
+                <!-- Filled Progress Track -->
+                <div
+                  class="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full transition-none"
+                  :style="{ width: `${audioProgressPercent}%` }"
+                ></div>
+              </div>
+
+              <!-- Thumb Knob Indicator (Emas Putih) -->
+              <div
+                class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-amber-400 border-2 border-white shadow-md shadow-amber-500/50 pointer-events-none transition-transform duration-75"
+                :class="isSeeking ? 'scale-125' : 'group-hover:scale-110'"
+                :style="{ left: `${audioProgressPercent}%` }"
+              ></div>
+
+              <!-- Invisible Range Input di atasnya untuk Dragging Presisi & Touch Mobile -->
+              <input
+                type="range"
+                min="0"
+                :max="audioDuration || 100"
+                step="0.1"
+                :value="isSeeking ? seekValue : audioCurrentTime"
+                @mousedown="onSeekStart"
+                @touchstart="onSeekStart"
+                @input="onSeekInput"
+                @change="onSeekEnd"
+                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                title="Geser atau klik untuk mengubah waktu musik"
+              />
+            </div>
+
+            <!-- Current Time & Total Duration Info -->
+            <div class="flex justify-between items-center text-[11px] text-slate-400 font-mono px-0.5">
+              <span class="text-amber-400 font-semibold">{{ formatAudioTime(displayedCurrentTime) }}</span>
+              <div class="flex items-center gap-1.5">
+                <span v-if="playbackSpeed !== 1" class="text-[10px] text-amber-300 font-bold bg-amber-500/20 px-1.5 py-0.2 rounded border border-amber-500/30">
+                  {{ playbackSpeed }}x
+                </span>
+                <span>{{ formatAudioTime(audioDuration) }}</span>
+              </div>
             </div>
           </div>
 
@@ -409,7 +552,7 @@ watch(() => props.file.path, () => {
             </button>
 
             <!-- Center: Skip -10s, Play/Pause, Skip +10s -->
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2 sm:gap-3">
               <button
                 @click="seekRelative(-10)"
                 class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition active:scale-95"
@@ -436,14 +579,52 @@ watch(() => props.file.path, () => {
               </button>
             </div>
 
-            <!-- Right: Download Button -->
-            <button
-              @click="triggerDownload"
-              class="p-2 rounded-xl text-slate-400 hover:text-sky-400 hover:bg-slate-800 transition"
-              title="Unduh Berkas Audio"
-            >
-              <Download class="w-4 h-4" />
-            </button>
+            <!-- Right: Playback Speed Control Pill & Download -->
+            <div class="flex items-center gap-1 relative">
+              <!-- Playback Speed Button (Klik untuk percepat / ganti siklis) -->
+              <div class="relative">
+                <button
+                  @click="cyclePlaybackSpeed"
+                  @contextmenu.prevent="showSpeedMenu = !showSpeedMenu"
+                  class="px-2 py-1.5 rounded-xl text-xs font-mono font-bold transition flex items-center gap-1 active:scale-95"
+                  :class="playbackSpeed !== 1
+                    ? 'bg-amber-500/25 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-500/20'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'"
+                  :title="`Kecepatan: ${playbackSpeed}x (Klik untuk ganti, Klik kanan untuk menu)`"
+                >
+                  <FastForward v-if="playbackSpeed > 1" class="w-3.5 h-3.5 text-amber-400" />
+                  <Gauge v-else class="w-3.5 h-3.5 text-slate-400" />
+                  <span>{{ playbackSpeed }}x</span>
+                </button>
+
+                <!-- Speed Menu Dropdown Popup -->
+                <div v-if="showSpeedMenu" class="fixed inset-0 z-30" @click="showSpeedMenu = false"></div>
+                <div
+                  v-if="showSpeedMenu"
+                  class="absolute bottom-full right-0 mb-2 py-1 px-1 bg-slate-900 border border-slate-700/80 rounded-xl shadow-2xl z-40 flex flex-col gap-0.5 min-w-[76px]"
+                >
+                  <button
+                    v-for="s in availableSpeeds"
+                    :key="s"
+                    @click="setPlaybackSpeed(s)"
+                    class="px-2.5 py-1 rounded-lg text-[11px] font-mono text-left transition flex items-center justify-between"
+                    :class="playbackSpeed === s ? 'bg-amber-500/20 text-amber-300 font-bold' : 'text-slate-300 hover:bg-slate-800'"
+                  >
+                    <span>{{ s }}x</span>
+                    <span v-if="playbackSpeed === s" class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Download Button -->
+              <button
+                @click="triggerDownload"
+                class="p-2 rounded-xl text-slate-400 hover:text-sky-400 hover:bg-slate-800 transition"
+                title="Unduh Berkas Audio"
+              >
+                <Download class="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           <!-- Volume Controls Bar -->

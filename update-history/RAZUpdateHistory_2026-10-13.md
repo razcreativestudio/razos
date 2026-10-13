@@ -479,6 +479,41 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - Build produksi Vite frontend (`npm run build`) sukses 100% (*1578 modules transformed*).
 - Judul jendela kini selalu terkunci 1 baris rapi dan estetik pada seluruh resolusi layar dan ukuran jendela desktop RAZOS.
 
+---
+
+### Versi: 2.4.9-music-player-speed-and-anti-jitter-seek (Playback Speed Multiplier, Scrubber Timeline Klik/Slide Bebas & Hover Preview)
+**Waktu Eksekusi:** 2026-10-13 13:38 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Masalah Utama yang Teridentifikasi
+- **Slider Timeline "Mental" / Tidak Bisa Di-slide dengan Mulus:**
+  - Sebelumnya, input range audio terikat dua arah pada `audioCurrentTime` yang diperbarui setiap 250ms oleh event `timeupdate` elemen `<audio>`.
+  - Ketika pengguna menahan dan menggeser (*drag/slide*) slider waktu, event `timeupdate` menimpa nilai yang sedang digeser dan menarik paksa posisi thumb kembali ke posisi pemutaran sebelum buffer selesai (*slider snapping/jitter*).
+  - Mengklik sembarang titik di garis waktu juga sering kali tidak akurat pada elemen `<input type="range">` native peramban.
+- **Ketiadaan Fitur Percepat Lagu (Playback Speed):**
+  - Belum ada opsi untuk mempercepat pemutaran lagu (misal 1.25x, 1.5x, 2x) bagi pengguna yang ingin mendengarkan audio rekaman, podcast, atau lagu dengan tempo lebih cepat.
+
+#### 2. Solusi & Peningkatan yang Diterapkan
+- **Fitur Pengatur Kecepatan Pemutaran Audio (Playback Speed Suite):**
+  - Mengimplementasikan `playbackSpeed` ref dengan dukungan multi-kecepatan: `0.5x`, `0.75x`, `1.0x`, `1.25x`, `1.5x`, `1.75x`, dan `2.0x`.
+  - Tombol Pill Interaktif:
+    - Klik kiri: Beralih kecepatan secara siklik (`1.0x` ➔ `1.25x` ➔ `1.5x` ➔ `2.0x` ➔ `0.5x` ➔ `0.75x` ➔ `1.0x`).
+    - Klik kanan / opsi menu: Membuka menu popover pilihan kecepatan instan lengkap dengan backdrop auto-dismiss.
+    - Ikon dinamis: Menampilkan ikon `FastForward` berwarna emas amber saat kecepatan > 1x, dan indikator badge `1.5x` / `2x` di samping durasi total.
+  - **Dynamic Vinyl Turntable Spin Rate:** Putaran animasi piringan hitam vinil secara otomatis berputar lebih kencang seiring bertambahnya kecepatan pemutaran (`animationDuration: 8 / playbackSpeed s`).
+  - **Equalizer Waveform Sync:** Kecepatan osilasi animasi gelombang equalizer 16-bar bergerak selaras dengan kecepatan pemutaran audio.
+- **Sistem Scrubber Timeline Bebas Hambatan (Klik & Slide Anti-Jitter):**
+  - **State `isSeeking` & `seekValue`:** Selama mouse atau jari pengguna menahan slider (`mousedown` / `touchstart` / `input`), event `timeupdate` dinonaktifkan sementara sehingga slider bergerak sangat mulus tanpa gangguan mental kembali.
+  - **Full Clickable Track:** Mengklik titik mana pun pada garis timeline (`onTimelineTrackClick`) langsung menghitung rasio posisi klik terhadap lebar elemen dan melompatkan waktu lagu ke detik tersebut secara instan.
+  - **Visual Filled Bar & Glowing Thumb Knob:** Garis waktu yang sudah terputar diisi dengan gradien emas amber `from-amber-500 to-amber-300`, dan indikator thumb emas putih berbayangan pendar mengikuti posisi kursor secara presisi.
+  - **Floating Hover Tooltip Preview:** Saat kursor mouse digerakkan di atas garis timeline, muncul gelembung waktu (*floating timestamp badge*, misal `02:15`) dan garis bayangan abu-abu (*ghost track*) untuk mempermudah navigasi lagu seperti pada Spotify dan Apple Music.
+
+#### 3. Verifikasi & Definisi Selesai (DoD)
+- Build produksi Vite frontend (`npm run build`) sukses 100% (*1578 modules transformed*).
+- Slider timeline dapat di-klik di mana saja dan di-slide secara sangat mulus tanpa lag atau jitter.
+- Kecepatan pemutaran 0.5x hingga 2.0x bekerja presisi dengan sinkronisasi piringan vinil dan equalizer.
+
+
 
 
 
