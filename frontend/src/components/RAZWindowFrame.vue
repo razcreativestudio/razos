@@ -120,27 +120,31 @@ function stopResize() {
 </script>
 
 <template>
-  <div
-    v-show="!win.isMinimized"
-    @mousedown="windowStore.bringToFront(win.id)"
-    :style="win.isMaximized ? {
-      position: 'absolute',
-      left: '0px',
-      top: '0px',
-      width: '100vw',
-      height: 'calc(100vh - 48px)',
-      zIndex: win.zIndex
-    } : {
-      position: 'absolute',
-      left: `${win.x}px`,
-      top: `${win.y}px`,
-      width: `${win.width}px`,
-      height: `${win.height}px`,
-      zIndex: win.zIndex
-    }"
-    class="flex flex-col rounded-xl overflow-hidden raz-glass raz-window select-none transition-shadow duration-200"
-    :class="windowStore.activeWindowId === win.id ? 'ring-1 ring-sky-400/40 shadow-2xl' : 'opacity-95 shadow-lg'"
-  >
+  <transition name="raz-window-transition">
+    <div
+      v-show="!win.isMinimized"
+      @mousedown="windowStore.bringToFront(win.id)"
+      :style="win.isMaximized ? {
+        position: 'absolute',
+        left: '0px',
+        top: '0px',
+        width: '100vw',
+        height: 'calc(100vh - 48px)',
+        zIndex: win.zIndex
+      } : {
+        position: 'absolute',
+        left: `${win.x}px`,
+        top: `${win.y}px`,
+        width: `${win.width}px`,
+        height: `${win.height}px`,
+        zIndex: win.zIndex
+      }"
+      class="flex flex-col rounded-xl overflow-hidden raz-glass raz-window select-none"
+      :class="[
+        windowStore.activeWindowId === win.id ? 'ring-1 ring-sky-400/40 shadow-2xl' : 'opacity-95 shadow-lg',
+        isDragging || isResizing ? 'transition-none' : 'raz-window-fluid'
+      ]"
+    >
     <!-- Header Window / Titlebar -->
     <div
       @mousedown="startDrag"
@@ -195,4 +199,5 @@ function stopResize() {
       <div @mousedown="(e) => startResize(e, 's')" class="absolute bottom-0 left-0 w-full h-1.5 cursor-s-resize"></div>
     </template>
   </div>
+  </transition>
 </template>

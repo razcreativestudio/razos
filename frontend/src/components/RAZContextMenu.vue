@@ -51,12 +51,12 @@ onUnmounted(() => {
 <template>
   <Teleport to="body">
     <transition
-      enter-active-class="transition duration-100 ease-out"
-      enter-from-class="transform scale-95 opacity-0"
-      enter-to-class="transform scale-100 opacity-100"
-      leave-active-class="transition duration-75 ease-in"
-      leave-from-class="transform scale-100 opacity-100"
-      leave-to-class="transform scale-95 opacity-0"
+      enter-active-class="transition duration-150 ease-out"
+      enter-from-class="transform scale-95 -translate-y-1 opacity-0"
+      enter-to-class="transform scale-100 translate-y-0 opacity-100"
+      leave-active-class="transition duration-100 ease-in"
+      leave-from-class="transform scale-100 translate-y-0 opacity-100"
+      leave-to-class="transform scale-95 -translate-y-1 opacity-0"
     >
       <div
         v-if="contextMenuStore.isOpen"
@@ -87,7 +87,7 @@ onUnmounted(() => {
               v-else
               @click="handleItemClick(item)"
               :disabled="item.disabled"
-              class="w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between gap-3 text-left transition group"
+              class="w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between gap-3 text-left transition-all duration-150 group active:scale-[0.98]"
               :class="[
                 item.disabled
                   ? 'opacity-40 cursor-not-allowed text-slate-500'
@@ -101,7 +101,7 @@ onUnmounted(() => {
                 <component
                   :is="item.icon"
                   v-if="item.icon"
-                  class="w-4 h-4 shrink-0 transition"
+                  class="w-4 h-4 shrink-0 transition-transform duration-150 group-hover:scale-110"
                   :class="[
                     item.danger
                       ? 'text-rose-400 group-hover:text-rose-300'

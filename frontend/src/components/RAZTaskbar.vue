@@ -177,14 +177,28 @@ function handleTaskbarContextMenu(e) {
           :key="win.id"
           @click="handleTaskbarItemClick(win.id)"
           @contextmenu.prevent.stop="handleTaskContextMenu($event, win)"
-          class="h-8 px-2.5 flex items-center gap-2 rounded-lg text-xs font-medium transition border"
+          class="h-8.5 px-2.5 py-1 flex flex-col justify-center items-center rounded-lg text-xs font-medium transition-all duration-200 border relative group active:scale-95"
           :class="windowStore.activeWindowId === win.id && !win.isMinimized
-            ? 'bg-slate-800 text-sky-400 border-sky-400/40 shadow'
-            : 'bg-slate-900/50 text-slate-400 hover:text-slate-200 border-slate-700/40'"
-          :title="win.isMinimized ? `${win.title} (Diminimalkan - Klik untuk membuka)` : `${win.title} (Klik untuk minimize)`"
+            ? 'bg-slate-800/90 text-sky-300 border-sky-400/40 shadow-sm'
+            : win.isMinimized
+            ? 'bg-slate-900/40 text-slate-500 hover:text-slate-300 border-slate-800/40'
+            : 'bg-slate-900/60 text-slate-300 hover:text-white border-slate-700/50'"
+          :title="win.isMinimized ? `${win.title} (Diminimalkan - Klik untuk munculkan)` : `${win.title} (Klik untuk minimalkan)`"
         >
-          <img :src="win.icon" :alt="win.title" class="w-3.5 h-3.5" />
-          <span class="truncate max-w-[100px]">{{ win.title }}</span>
+          <div class="flex items-center gap-1.5 pb-0.5">
+            <img :src="win.icon" :alt="win.title" class="w-3.5 h-3.5 transition-transform duration-200 group-hover:scale-110" />
+            <span class="truncate max-w-[100px]">{{ win.title }}</span>
+          </div>
+
+          <!-- Indikator Status Window (Glow Aktif / Terbuka / Minimized) -->
+          <div
+            class="h-0.5 rounded-full transition-all duration-300"
+            :class="windowStore.activeWindowId === win.id && !win.isMinimized
+              ? 'w-6 bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.9)]'
+              : win.isMinimized
+              ? 'w-2 bg-slate-600'
+              : 'w-3.5 bg-slate-400/70'"
+          ></div>
         </button>
       </div>
     </div>

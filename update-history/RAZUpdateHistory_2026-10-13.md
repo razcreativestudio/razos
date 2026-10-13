@@ -226,3 +226,36 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - **Verifikasi Build:**
   - `npm run build` berhasil 100% (*1504 modules transformed*).
   - Dev server aktif dan mutakhir di `http://localhost:3000`.
+
+---
+
+### Versi: 2.4.2-desktop-and-window-animations (Sistem Animasi Minimize/Restore & Interaksi Fluid 60FPS)
+**Waktu Eksekusi:** 2026-10-13 11:59 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Animasi Window Minimize & Restore Menuju Taskbar
+- **Transisi Meluncur & Skala (Genie/Windows Style):**
+  - Mengintegrasikan `<transition name="raz-window-transition">` pada `RAZWindowFrame.vue`.
+  - Menggunakan titik acuan `transform-origin: 50% 100%` (bagian bawah tengah jendela mengarah ke taskbar).
+  - **Saat Minimize:** Jendela mengecil (*scale-down ke 0.85*), meluncur turun ke arah taskbar (*translateY 45px*), dan memudar secara halus (*fade-out*).
+  - **Saat Restore:** Jendela membesar dari taskbar (*scale 0.85 -> 1*), meluncur naik ke koordinat semula, dan memudar masuk (*fade-in*) dengan kurva akselerasi `cubic-bezier(0.16, 1, 0.3, 1)`.
+- **Transisi Ukuran Halus (Fluid Maximize/Restore):**
+  - Mengimplementasikan class `.raz-window-fluid` pada `RAZTheme.css` yang memberikan transisi halus saat jendela dimaksimalkan atau dikembalikan ke ukuran normal.
+  - Dilengkapi deteksi dragging/resizing: saat pengguna sedang menggeser (*drag*) atau mengubah ukuran (*resize*) dengan mouse, transisi dinonaktifkan (`transition-none`) agar kursor mouse tidak mengalami lag/delay.
+
+#### 2. Animasi & Indikator Status Taskbar
+- **Animasi Tombol Interaktif:**
+  - Efek tekan (*click feedback*): `active:scale-95 transition-all duration-150` pada tombol taskbar dan Start menu.
+  - Ikon aplikasi membesar halus saat dihover (`group-hover:scale-110`).
+- **Glow Indikator Dinamis di Bawah Tombol:**
+  - **Jendela Aktif:** Strip cyan glow lebar `w-6 bg-sky-400` dengan bayangan berpendar (*box-shadow glow*).
+  - **Jendela Terbuka di Belakang:** Garis netral `w-3.5 bg-slate-400/70`.
+  - **Jendela Minimized:** Titik kompak redup `w-2 bg-slate-600`.
+
+#### 3. Animasi Pop-In Context Menu
+- Animasi pembukaan context menu lebih presisi: transisi berskala `scale-95 -> scale-100` dengan slight offset vertikal `-translate-y-1` dan fade-in berkecepatan 150ms.
+- Efek mikro-interaksi pada item menu: hover highlight dan pembesaran ikon 10% yang responsif.
+
+#### 4. Verifikasi Build & Stabilitas
+- `npm run build` berhasil 100% (*1504 modules transformed*).
+- Dev server HMR berjalan lancar tanpa error di `http://localhost:3000`.
