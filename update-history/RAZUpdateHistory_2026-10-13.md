@@ -67,3 +67,29 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - **Verifikasi:**
   - `npm run build` berhasil 100% (1501 modules transformed).
   - Dev server otomatis reload dengan HMR aktif di port 3000.
+
+---
+
+### Versi: 2.3.0-standalone-content-viewers (Pemisahan Content View Menjadi Window Mandiri Tanpa Efek Gelap/Blur)
+**Waktu Eksekusi:** 2026-10-13 11:03 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Arsitektur Decoupled Multi-Window File Viewers
+- **Eliminasi Total Modal Backdrop Gelap/Blur:**
+  - Menghapus seluruh modal internal (`fixed inset-0 bg-black/90 backdrop-blur-md`) yang sebelumnya memblokir interaksi dan menggelapkan jendela File Manager saat membuka berkas.
+  - File Manager kini tetap 100% aktif, terang, dan tidak terganggu ketika berkas dibuka.
+- **Implementasi Standalone Universal Viewers (`RAZFileViewerView.vue`):**
+  - Berkas yang dibuka (gambar, video, musik, PDF, atau kode/teks) kini otomatis dimuat ke dalam **Window Frame Mandiri** di desktop RAZOS melalui `windowStore.openFileViewer(item)`.
+  - Terintegrasi penuh dengan desktop window manager: mendukung multi-window stacking, drag & drop, resize, minimize, maximize, dan tombol close independen.
+  - Setiap window viewer memiliki ikon SVG resmi tersendiri (`RAZIconImageViewer.svg`, `RAZIconVideoPlayer.svg`, `RAZIconMusicPlayer.svg`, `RAZIconPdfViewer.svg`, `RAZIconCodeEditor.svg`) dan muncul di bottom desktop taskbar.
+- **Multi-File Concurrent Viewing (Bebas Membuka Berkas Lain):**
+  - Pengguna dapat membuka beberapa berkas sekaligus (misalnya membuka 2 gambar secara berdampingan untuk perbandingan, atau memutar lagu sambil meninjau dokumen teks/PDF) tanpa menutup File Manager.
+- **Fitur Unggulan Tiap Format:**
+  - **Image Viewer:** Zoom in/out (25%-400%), reset 100%, rotate 90°, dan tombol unduh.
+  - **Video Player:** HTML5 native media controller dengan autoplay, picture-in-picture, dan loop.
+  - **Music Player:** Visualizer piringan vinil berputar dengan scrubber timeline, penyesuaian volume, dan mute.
+  - **PDF Viewer:** Embedded viewer dengan tombol tab baru dan download.
+  - **In-Browser Code Editor:** Editor kode/teks monospace dengan syntax styling, status unsaved badge, reload, dan penyimpanan langsung ke backend host.
+- **Verifikasi:**
+  - `npm run build` sukses 100% tanpa error (1502 modules transformed).
+  - Dev server HMR ter-update secara real-time di `localhost:3000`.

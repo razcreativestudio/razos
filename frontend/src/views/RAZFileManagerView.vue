@@ -1,23 +1,20 @@
 <script setup>
 /**
- * RAZOS Google Drive-Style Storage & Cloud File Manager with Built-in Media Viewers
- * Updated: 2026-10-13 (Navigation & Folder Location Integrity Fix)
+ * RAZOS Google Drive-Style Storage & Cloud File Manager with Standalone Multi-Window Viewers
+ * Updated: 2026-10-13 (Decoupled Standalone Content Viewers & Non-Blocking Multi-File Workflow)
  * Deskripsi: Antarmuka File Manager tingkat lanjut memadukan arsitektur Google Drive dan Apple Finder:
+ * - Standalone Content Viewers (No Dark/Blur Overlay): Membuka berkas gambar, video, musik, PDF,
+ *   dan kode di Window Mandiri terpisah via RAZWindowStore. File Manager tetap aktif dan bebas membuka file lain.
  * - Accurate Navigation & Path Normalization: Penanganan path Windows & Linux STB yang presisi tanpa lompat folder,
  *   dukungan auto-discovery My Storage (/DATA atau C:/DATA), breadcrumbs adaptif, dan tombol naik tingkat yang aman.
  * - Fluid Responsive Grid: Menggunakan auto-fill minmax(140px, 1fr) sehingga kartu folder/file tidak pernah gepeng.
  * - Bottom Status Bar: Menampilkan jumlah item, status item aktif, dan tombol aksi cepat tanpa memeras ruang grid.
  * - Custom Modal Detail & Properti: Dialog modal khusus yang elegan (Glassmorphism) untuk rincian metadata berkas.
- * - Built-in Media Viewers & Players:
- *   * Image Viewer: Preview gambar zoomable (WebP, PNG, JPG, SVG, GIF)
- *   * Video Player: Player MP4/WebM dengan kontrol multimedia kustom
- *   * Audio / Music Player: Player MP3/WAV/OGG dengan visualisasi gelombang
- *   * PDF Viewer: Penampil berkas dokumen PDF interaktif
- *   * Docs / Code Editor: Penampil dan editor kode (.txt, .md, .js, .go, .vue, .json, .sh, .yaml)
  * - Sidebar navigasi: My Storage (/DATA), Physical Disks/HDD, Starred/Favorit, Quick Storage Meter.
  */
 import { ref, onMounted, computed } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
+import { useWindowStore } from '../stores/RAZWindowStore'
 import {
   HardDrive, Folder, File, FileText, FileCode, Plus, Trash2, Edit3,
   ChevronRight, ArrowLeft, RefreshCw, X, Save, AlertTriangle, Eye, Usb,
@@ -26,6 +23,7 @@ import {
 } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
+const windowStore = useWindowStore()
 
 // State Data
 const storageDevices = ref([])
@@ -40,33 +38,6 @@ const viewMode = ref('grid') // 'grid' | 'list'
 const searchQuery = ref('')
 const filterType = ref('all') // 'all' | 'folders' | 'code' | 'docs' | 'images' | 'video' | 'audio'
 const activeSidebarSection = ref('drive') // 'drive' | 'starred' | 'devices'
-
-// State Modal Text Editor
-const showEditorModal = ref(false)
-const editingFileName = ref('')
-const editingFilePath = ref('')
-const editingContent = ref('')
-const isSavingFile = ref(false)
-
-// State Modal Image Viewer
-const showImageModal = ref(false)
-const previewImageUrl = ref('')
-const previewImageName = ref('')
-
-// State Modal Video Player
-const showVideoModal = ref(false)
-const previewVideoUrl = ref('')
-const previewVideoName = ref('')
-
-// State Modal Audio / Music Player
-const showAudioModal = ref(false)
-const previewAudioUrl = ref('')
-const previewAudioName = ref('')
-
-// State Modal PDF Viewer
-const showPdfModal = ref(false)
-const previewPdfUrl = ref('')
-const previewPdfName = ref('')
 
 // State Modal Folder & Rename
 const showNewFolderModal = ref(false)
@@ -308,45 +279,14 @@ function handleItemClick(item) {
   selectedItem.value = item
 }
 
-// Otomatis Buka Viewer yang Cocok saat Double Click
+// Buka Berkas di Window Mandiri (Standalone Window Viewers)
 function handleItemDoubleClick(item) {
   if (item.is_dir) {
     fetchFiles(normalizePath(item.path))
-  } else if (isImageFile(item.extension)) {
-    openImageViewer(item)
-  } else if (isVideoFile(item.extension)) {
-    openVideoPlayer(item)
-  } else if (isAudioFile(item.extension)) {
-    openAudioPlayer(item)
-  } else if (isPdfFile(item.extension)) {
-    openPdfViewer(item)
   } else {
-    openFileEditor(item)
+    // Buka konten berkas di Window Mandiri tanpa modal gelap/blur
+    windowStore.openFileViewer(item)
   }
-}
-
-function openImageViewer(item) {
-  previewImageName.value = item.name
-  previewImageUrl.value = `/api/v1/files/raw?path=${encodeURIComponent(item.path)}`
-  showImageModal.value = true
-}
-
-function openVideoPlayer(item) {
-  previewVideoName.value = item.name
-  previewVideoUrl.value = `/api/v1/files/raw?path=${encodeURIComponent(item.path)}`
-  showVideoModal.value = true
-}
-
-function openAudioPlayer(item) {
-  previewAudioName.value = item.name
-  previewAudioUrl.value = `/api/v1/files/raw?path=${encodeURIComponent(item.path)}`
-  showAudioModal.value = true
-}
-
-function openPdfViewer(item) {
-  previewPdfName.value = item.name
-  previewPdfUrl.value = `/api/v1/files/raw?path=${encodeURIComponent(item.path)}`
-  showPdfModal.value = true
 }
 
 function toggleStar(item, e) {
@@ -358,41 +298,6 @@ function toggleStar(item, e) {
     starredPaths.value.add(item.path)
     systemStore.showNotification('Favorit', `Ditambahkan ke berbintang: ${item.name}`, 'success')
   }
-}
-
-// Buka Editor File Teks
-async function openFileEditor(item) {
-  editingFileName.value = item.name
-  editingFilePath.value = item.path
-  try {
-    const res = await fetch(`/api/v1/files/content?path=${encodeURIComponent(item.path)}`)
-    if (res.ok) {
-      const data = await res.json()
-      editingContent.value = data.content
-      showEditorModal.value = true
-    } else {
-      systemStore.showNotification('Gagal', 'Tidak dapat membuka berkas sebagai teks', 'error')
-    }
-  } catch (err) {
-    systemStore.showNotification('Error', 'Gagal membaca berkas', 'error')
-  }
-}
-
-async function saveFileEditor() {
-  isSavingFile.value = true
-  try {
-    const res = await fetch('/api/v1/files/content', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: editingFilePath.value, content: editingContent.value })
-    })
-    if (res.ok) {
-      systemStore.showNotification('Sukses', 'Perubahan berkas berhasil disimpan', 'success')
-      showEditorModal.value = false
-      fetchFiles()
-    }
-  } catch (e) {}
-  isSavingFile.value = false
 }
 
 // Buat Folder Baru
@@ -806,132 +711,6 @@ onMounted(async () => {
               <Trash2 class="w-3.5 h-3.5" />
             </button>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 1. CUSTOM MODAL: Image Viewer -->
-    <div
-      v-if="showImageModal"
-      class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in"
-    >
-      <div class="w-full max-w-4xl max-h-[90vh] raz-glass rounded-2xl border border-slate-700 p-4 shadow-2xl flex flex-col gap-3">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-          <div class="flex items-center gap-2">
-            <Image class="w-5 h-5 text-sky-400" />
-            <span class="font-bold text-slate-100">{{ previewImageName }}</span>
-          </div>
-          <button @click="showImageModal = false" class="p-1 text-slate-400 hover:text-white">
-            <X class="w-5 h-5" />
-          </button>
-        </div>
-        <div class="flex-1 flex items-center justify-center overflow-hidden bg-black/50 rounded-xl p-2">
-          <img :src="previewImageUrl" class="max-w-full max-h-[70vh] object-contain rounded-lg shadow-2xl" />
-        </div>
-      </div>
-    </div>
-
-    <!-- 2. CUSTOM MODAL: Video Player -->
-    <div
-      v-if="showVideoModal"
-      class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in"
-    >
-      <div class="w-full max-w-3xl raz-glass rounded-2xl border border-slate-700 p-4 shadow-2xl flex flex-col gap-3">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-          <div class="flex items-center gap-2">
-            <Film class="w-5 h-5 text-purple-400" />
-            <span class="font-bold text-slate-100">{{ previewVideoName }}</span>
-          </div>
-          <button @click="showVideoModal = false" class="p-1 text-slate-400 hover:text-white">
-            <X class="w-5 h-5" />
-          </button>
-        </div>
-        <div class="w-full aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center">
-          <video :src="previewVideoUrl" controls autoplay class="w-full h-full"></video>
-        </div>
-      </div>
-    </div>
-
-    <!-- 3. CUSTOM MODAL: Music / Audio Player -->
-    <div
-      v-if="showAudioModal"
-      class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in"
-    >
-      <div class="w-full max-w-md raz-glass rounded-2xl border border-slate-700 p-5 shadow-2xl flex flex-col gap-4">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-          <div class="flex items-center gap-2">
-            <Music class="w-5 h-5 text-amber-400" />
-            <span class="font-bold text-slate-100">Audio Player</span>
-          </div>
-          <button @click="showAudioModal = false" class="p-1 text-slate-400 hover:text-white">
-            <X class="w-4 h-4" />
-          </button>
-        </div>
-        <div class="flex flex-col items-center gap-3 py-3">
-          <div class="w-16 h-16 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center shadow-lg animate-pulse">
-            <Music class="w-8 h-8" />
-          </div>
-          <h4 class="font-semibold text-slate-200 text-sm text-center break-all">{{ previewAudioName }}</h4>
-          <audio :src="previewAudioUrl" controls autoplay class="w-full mt-2"></audio>
-        </div>
-      </div>
-    </div>
-
-    <!-- 4. CUSTOM MODAL: PDF Viewer -->
-    <div
-      v-if="showPdfModal"
-      class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in"
-    >
-      <div class="w-full max-w-4xl h-[88vh] raz-glass rounded-2xl border border-slate-700 p-4 shadow-2xl flex flex-col gap-3">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-          <div class="flex items-center gap-2">
-            <FileText class="w-5 h-5 text-rose-400" />
-            <span class="font-bold text-slate-100">{{ previewPdfName }}</span>
-          </div>
-          <button @click="showPdfModal = false" class="p-1 text-slate-400 hover:text-white">
-            <X class="w-5 h-5" />
-          </button>
-        </div>
-        <iframe :src="previewPdfUrl" class="w-full flex-1 rounded-xl bg-slate-900 border border-slate-800"></iframe>
-      </div>
-    </div>
-
-    <!-- 5. CUSTOM MODAL: In-Browser Text & Code Editor -->
-    <div
-      v-if="showEditorModal"
-      class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in"
-    >
-      <div class="w-full max-w-3xl h-[85vh] raz-glass rounded-2xl border border-slate-700 p-4 shadow-2xl flex flex-col gap-3">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
-          <div class="flex items-center gap-2">
-            <FileCode class="w-5 h-5 text-sky-400" />
-            <span class="font-bold text-slate-100">{{ editingFileName }}</span>
-          </div>
-          <button @click="showEditorModal = false" class="p-1 text-slate-400 hover:text-white">
-            <X class="w-4 h-4" />
-          </button>
-        </div>
-
-        <textarea
-          v-model="editingContent"
-          class="flex-1 w-full p-3.5 bg-black/90 text-emerald-400 font-mono text-xs rounded-xl border border-slate-800 outline-none resize-none leading-relaxed"
-        ></textarea>
-
-        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-          <button
-            @click="showEditorModal = false"
-            class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs"
-          >
-            Tutup
-          </button>
-          <button
-            @click="saveFileEditor"
-            :disabled="isSavingFile"
-            class="px-4 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow"
-          >
-            <Save class="w-3.5 h-3.5" />
-            <span>Simpan Perubahan</span>
-          </button>
         </div>
       </div>
     </div>

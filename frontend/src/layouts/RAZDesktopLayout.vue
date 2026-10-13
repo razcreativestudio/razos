@@ -17,6 +17,7 @@ import RAZWebsitesView from '../views/RAZWebsitesView.vue'
 import RAZDatabasesView from '../views/RAZDatabasesView.vue'
 import RAZSettingsView from '../views/RAZSettingsView.vue'
 import RAZFileManagerView from '../views/RAZFileManagerView.vue'
+import RAZFileViewerView from '../views/RAZFileViewerView.vue'
 
 const windowStore = useWindowStore()
 
@@ -64,7 +65,8 @@ const viewMap = {
       <div class="relative w-full h-[calc(100vh-48px)]">
         <template v-for="win in windowStore.openWindows" :key="win.id">
           <RAZWindowFrame :win="win" class="pointer-events-auto">
-            <component :is="viewMap[win.id]" />
+            <RAZFileViewerView v-if="win.id.startsWith('viewer-')" :file="win.fileData" />
+            <component v-else :is="viewMap[win.id]" />
           </RAZWindowFrame>
         </template>
       </div>

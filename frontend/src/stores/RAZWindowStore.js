@@ -1,7 +1,8 @@
 /**
  * RAZOS Window Manager Store (Pinia)
- * Updated: 2026-10-08
- * Deskripsi: State manager untuk window multi-tasking (buka, tutup, minimize, maximize, fokus Z-Index).
+ * Updated: 2026-10-13 (Standalone Universal File & Content Viewer Integration)
+ * Deskripsi: State manager untuk window multi-tasking desktop OS (buka, tutup, minimize, maximize,
+ * fokus Z-Index, dan dynamic standalone file viewers untuk gambar, video, musik, pdf, teks/kode).
  */
 
 import { defineStore } from 'pinia'
@@ -150,11 +151,81 @@ export const useWindowStore = defineStore('window', () => {
     }
   }
 
+  // Buka window universal file viewer (gambar, video, audio, pdf, code/text)
+  function openFileViewer(fileItem) {
+    if (!fileItem || !fileItem.path) return
+    const winId = 'viewer-' + btoa(unescape(encodeURIComponent(fileItem.path))).replace(/=/g, '')
+    
+    // Cek apakah window untuk file ini sudah terbuka
+    const existing = openWindows.value.find(w => w.id === winId)
+    if (existing) {
+      existing.isMinimized = false
+      bringToFront(winId)
+      return
+    }
+
+    const ext = (fileItem.extension || '').toLowerCase()
+    let icon = '/assets/icons/RAZIconCodeEditor.svg'
+    let width = 740
+    let height = 520
+    let minWidth = 400
+    let minHeight = 300
+
+    if (['.webp', '.png', '.jpg', '.jpeg', '.svg', '.gif', '.ico', '.bmp'].includes(ext)) {
+      icon = '/assets/icons/RAZIconImageViewer.svg'
+      width = 720
+      height = 540
+      minWidth = 360
+      minHeight = 280
+    } else if (['.mp4', '.webm', '.mkv', '.mov', '.avi'].includes(ext)) {
+      icon = '/assets/icons/RAZIconVideoPlayer.svg'
+      width = 760
+      height = 500
+      minWidth = 420
+      minHeight = 300
+    } else if (['.mp3', '.wav', '.ogg', '.aac', '.flac', '.m4a'].includes(ext)) {
+      icon = '/assets/icons/RAZIconMusicPlayer.svg'
+      width = 460
+      height = 340
+      minWidth = 360
+      minHeight = 260
+    } else if (ext === '.pdf') {
+      icon = '/assets/icons/RAZIconPdfViewer.svg'
+      width = 800
+      height = 580
+      minWidth = 450
+      minHeight = 350
+    }
+
+    zIndexCounter.value++
+    const offset = (openWindows.value.length * 32) % 200
+
+    const win = {
+      id: winId,
+      title: fileItem.name,
+      icon: icon,
+      fileData: fileItem,
+      width: width,
+      height: height,
+      minWidth: minWidth,
+      minHeight: minHeight,
+      x: 120 + offset,
+      y: 60 + offset,
+      zIndex: zIndexCounter.value,
+      isMinimized: false,
+      isMaximized: false
+    }
+
+    openWindows.value.push(win)
+    activeWindowId.value = winId
+  }
+
   return {
     apps,
     openWindows,
     activeWindowId,
     openApp,
+    openFileViewer,
     closeWindow,
     minimizeWindow,
     toggleMaximize,
