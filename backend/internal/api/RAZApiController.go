@@ -48,6 +48,7 @@ func RegisterRoutes(r *gin.Engine) {
 		// Website Suite & Reverse Proxy
 		v1.GET("/websites", handleGetWebsites)
 		v1.POST("/websites", handleCreateWebsite)
+		v1.PUT("/websites/:id", handleUpdateWebsite)
 		v1.POST("/websites/:id/action", handleWebsiteAction)
 		v1.POST("/websites/:id/git/pull", handleGitPull)
 		v1.POST("/websites/:id/git/config", handleUpdateGitConfig)
@@ -211,6 +212,26 @@ func handleCreateWebsite(c *gin.Context) {
 		return
 	}
 	site, err := website.CreateWebsite(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, site)
+}
+
+func handleUpdateWebsite(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid site ID"})
+		return
+	}
+	var req website.UpdateWebsiteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	site, err := website.UpdateWebsite(id, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

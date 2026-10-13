@@ -611,3 +611,42 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - Pengujian otomatis via REST API (`POST /api/v1/websites/:id/git/config` & `POST /api/v1/websites/:id/git/pull`) lolos 100%.
 - Verifikasi sanitasi token PAT: Terbukti 100% aman (*Token leaked? false*).
 - Dev server Vite HMR aktif dan sinkron di port 3000.
+
+---
+
+### Versi: 2.5.2-website-edit-action-suite (Action Button Edit & Custom Modal Konfigurasi Lengkap Website)
+**Waktu Eksekusi:** 2026-10-13 14:55 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Masalah & Kebutuhan Pengguna
+- **Ketiadaan Tombol Edit pada Kartu Website:**
+  - Sebelumnya, kartu website hanya memiliki tombol start/stop, buka folder, kelola DB, info, dan hapus. Pengguna tidak dapat mengedit konfigurasi website (nama, port, domain, icon, runtime, database, Git repo, atau limit memori) setelah dibuat tanpa menghapus dan membuat ulang website dari awal.
+  - Pengguna meminta: *"tambahkan action button edit"* langsung di action button kartu website.
+
+#### 2. Solusi Arsitektur & Implementasi
+
+##### A. Backend Engine & Dev Middleware (`RAZWebsiteManager.go`, `RAZApiController.go`, `vite.config.js`)
+- **Fungsi Update Backend:**
+  - Implementasi struct `UpdateWebsiteRequest` dan fungsi `UpdateWebsite(id int, req UpdateWebsiteRequest) (*Website, error)`.
+  - Mampu memperbarui field identitas (nama, domain, host port, icon), runtime, root folder, database terhubung, Git credentials, batas RAM & CPU shares, serta environment variables.
+  - Sinkronisasi otomatis rute proxy internal jika domain mengalami perubahan.
+- **REST API Endpoint:**
+  - `PUT /api/v1/websites/:id`: Menangani request update konfigurasi website dan menyimpannya secara persisten ke `RAZWebsites.json`.
+
+##### B. Antarmuka Website Manager (`RAZWebsitesView.vue`)
+- **Action Button Edit pada Kartu Website:**
+  - Menambahkan tombol aksi edit dengan ikon `Pencil` berwarna aksen amber di baris aksi kartu website (di samping tombol buka folder dan kontrol container).
+  - Menambahkan juga tombol *"Edit Konfigurasi"* di footer modal detail website.
+- **Custom Modal Edit Konfigurasi (Glassmorphism Slate-900):**
+  - Mengintegrasikan antarmuka edit multi-tab terstruktur tanpa dialog bawaan browser:
+    - **Tab 1 (Identitas & Port):** Edit nama project, domain/hostname, port host, dan link icon dengan preset.
+    - **Tab 2 (Runtime & Folder):** Edit pilihan runtime stack (HTML statis, PHP 8.2, Node.js, Next.js) dan path root folder dengan tombol pintasan buka ke File Manager.
+    - **Tab 3 (Basis Data):** Konfigurasi koneksi database MariaDB/PostgreSQL atau auto-fill dari database terdaftar di RAZOS.
+    - **Tab 4 (GitHub & PAT):** Konfigurasi URL repository GitHub, branch sasaran, dan Personal Access Token (PAT) dengan toggle visibility mata.
+    - **Tab 5 (Resource & ENV):** Penyesuaian batas RAM (64M-1024M), CPU shares, container command, dan environment variables.
+
+#### 3. Verifikasi & Definisi Selesai (DoD)
+- Kompilasi build frontend Vite (`npm run build`) sukses 100% (*1578 modules transformed*).
+- Pengujian otomatis via REST API (`PUT /api/v1/websites/1`) lolos 100% dengan status HTTP 200 OK.
+- Tombol aksi Edit tampil presisi di kartu website dan memicu Custom Modal Edit secara responsif.
+

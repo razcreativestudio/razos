@@ -506,6 +506,57 @@ server.listen(port, () => console.log('Server berjalan pada port ' + port));
           return
         }
 
+        // PUT: Perbarui konfigurasi website (/api/v1/websites/:id)
+        if (req.method === 'PUT') {
+          const parts = pathname.split('/')
+          const id = parseInt(parts[parts.length - 1] || urlObj.searchParams.get('id'))
+          let body = ''
+          req.on('data', chunk => { body += chunk })
+          req.on('end', () => {
+            try {
+              const data = body ? JSON.parse(body) : {}
+              const list = loadWebsites()
+              const target = list.find(s => s.id === id)
+              if (!target) {
+                res.statusCode = 404
+                return res.end(JSON.stringify({ error: 'Website tidak ditemukan' }))
+              }
+
+              if (data.name) target.name = data.name.trim()
+              if (data.domain) target.domain = data.domain.trim()
+              if (data.port) target.port = parseInt(data.port)
+              if (data.runtime) target.runtime = data.runtime
+              if (data.root_folder) target.root_folder = data.root_folder.trim()
+              if (data.icon) target.icon = data.icon.trim()
+              if (data.command !== undefined) target.command = data.command.trim()
+              if (data.memory_limit) target.memory_limit = data.memory_limit.trim()
+              if (data.cpu_shares) target.cpu_shares = parseInt(data.cpu_shares)
+              if (data.env_vars !== undefined) target.env_vars = data.env_vars
+
+              // Database
+              if (data.database_id !== undefined) target.database_id = data.database_id
+              if (data.db_engine) target.db_engine = data.db_engine
+              if (data.db_host) target.db_host = data.db_host
+              if (data.db_port) target.db_port = parseInt(data.db_port)
+              if (data.db_name !== undefined) target.db_name = data.db_name
+              if (data.db_user !== undefined) target.db_user = data.db_user
+              if (data.db_password !== undefined) target.db_password = data.db_password
+
+              // Git
+              if (data.git_repo !== undefined) target.git_repo = data.git_repo.trim()
+              if (data.git_branch !== undefined) target.git_branch = data.git_branch.trim() || 'main'
+              if (data.git_token !== undefined) target.git_token = data.git_token.trim()
+
+              saveWebsites(list)
+              return res.end(JSON.stringify(target))
+            } catch (err) {
+              res.statusCode = 500
+              return res.end(JSON.stringify({ error: err.message }))
+            }
+          })
+          return
+        }
+
         // DELETE: Hapus website (/api/v1/websites/:id?purge=true)
         if (req.method === 'DELETE') {
           const parts = pathname.split('/')

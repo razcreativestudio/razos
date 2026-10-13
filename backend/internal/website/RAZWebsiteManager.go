@@ -642,6 +642,118 @@ func DeleteWebsite(id int, purgeFiles bool) error {
 	return nil
 }
 
+// UpdateWebsiteRequest payload untuk memperbarui konfigurasi website yang ada
+type UpdateWebsiteRequest struct {
+	Name        string `json:"name"`
+	Domain      string `json:"domain"`
+	Port        int    `json:"port"`
+	Runtime     string `json:"runtime"`
+	RootFolder  string `json:"root_folder"`
+	Icon        string `json:"icon"`
+	Command     string `json:"command"`
+	MemoryLimit string `json:"memory_limit"`
+	CPUShares   int    `json:"cpu_shares"`
+	EnvVars     string `json:"env_vars"`
+
+	// Koneksi Database
+	DatabaseID *int   `json:"database_id"`
+	DbEngine   string `json:"db_engine"`
+	DbHost     string `json:"db_host"`
+	DbPort     int    `json:"db_port"`
+	DbName     string `json:"db_name"`
+	DbUser     string `json:"db_user"`
+	DbPassword string `json:"db_password"`
+
+	// Konfigurasi Git
+	GitRepo   string `json:"git_repo"`
+	GitBranch string `json:"git_branch"`
+	GitToken  string `json:"git_token"`
+}
+
+// UpdateWebsite memperbarui konfigurasi website yang tersimpan di sistem
+func UpdateWebsite(id int, req UpdateWebsiteRequest) (*Website, error) {
+	siteMu.Lock()
+	defer siteMu.Unlock()
+	loadSitesFromDisk()
+
+	var target *Website
+	for i := range sites {
+		if sites[i].ID == id {
+			target = &sites[i]
+			break
+		}
+	}
+
+	if target == nil {
+		return nil, fmt.Errorf("website dengan ID %d tidak ditemukan", id)
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if name != "" {
+		target.Name = name
+	}
+
+	oldDomain := target.Domain
+	if req.Domain != "" {
+		target.Domain = strings.TrimSpace(req.Domain)
+	}
+	if req.Port > 0 {
+		target.HostPort = req.Port
+	}
+	if req.Runtime != "" {
+		target.Runtime = req.Runtime
+	}
+	if req.RootFolder != "" {
+		target.RootFolder = strings.TrimSpace(req.RootFolder)
+	}
+	if req.Icon != "" {
+		target.Icon = strings.TrimSpace(req.Icon)
+	}
+	target.Command = strings.TrimSpace(req.Command)
+	if req.MemoryLimit != "" {
+		target.MemoryLimit = strings.TrimSpace(req.MemoryLimit)
+	}
+	if req.CPUShares > 0 {
+		target.CPUShares = req.CPUShares
+	}
+	target.EnvVars = req.EnvVars
+
+	// Update Database
+	target.DatabaseID = req.DatabaseID
+	target.DbEngine = req.DbEngine
+	target.DbHost = req.DbHost
+	target.DbPort = req.DbPort
+	target.DbName = req.DbName
+	target.DbUser = req.DbUser
+	if req.DbPassword != "" {
+		target.DbPassword = req.DbPassword
+	}
+
+	// Update Git
+	target.GitRepo = strings.TrimSpace(req.GitRepo)
+	target.GitBranch = strings.TrimSpace(req.GitBranch)
+	if target.GitBranch == "" && target.GitRepo != "" {
+		target.GitBranch = "main"
+	}
+	if req.GitToken != "" {
+		target.GitToken = strings.TrimSpace(req.GitToken)
+	}
+
+	// Sinkronkan rute reverse proxy jika domain berubah
+	if oldDomain != target.Domain {
+		if oldDomain != "" {
+			proxy.GetRouter().RemoveRoute(oldDomain)
+		}
+		if target.Domain != "" {
+			proxy.GetRouter().AddRoute(target.Domain, target.HostPort)
+		}
+	}
+
+	saveSitesToDisk()
+	return target, nil
+}
+
+
 // buildGitAuthURL menyisipkan GitHub Personal Access Token (PAT) ke URL HTTPS jika tersedia
 func buildGitAuthURL(repoURL, token string) string {
 	repoURL = strings.TrimSpace(repoURL)

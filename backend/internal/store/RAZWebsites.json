@@ -8,7 +8,7 @@
     "runtime": "php",
     "container_name": "site-portal-berita-web",
     "root_folder": "C:/DATA/websites/portal-berita-raz",
-    "icon": "https://cdn.simpleicons.org/php/777BB4",
+    "icon": "https://cdn.simpleicons.org/html5/E34F26",
     "command": "",
     "memory_limit": "128M",
     "cpu_shares": 512,

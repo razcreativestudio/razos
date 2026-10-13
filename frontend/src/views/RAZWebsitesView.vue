@@ -21,7 +21,8 @@ import {
   Play, Square, RotateCw, FolderOpen, Database, Cpu, HardDrive,
   Copy, Check, ShieldCheck, Search, Filter, Terminal, Sparkles,
   Info, AlertTriangle, ArrowRight, CheckCircle2,
-  GitBranch, GitPullRequest, Key, Eye, EyeOff, Download, RefreshCw
+  GitBranch, GitPullRequest, Key, Eye, EyeOff, Download, RefreshCw,
+  Pencil
 } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
@@ -77,6 +78,37 @@ const gitModalShowToken = ref(false)
 const gitModalIsPulling = ref(false)
 const gitModalLogs = ref('')
 const pullingSiteId = ref(null)
+
+// State Modal Edit Website
+const showEditModal = ref(false)
+const editSiteId = ref(null)
+const editSiteName = ref('')
+const editDomain = ref('')
+const editPort = ref(8101)
+const editIcon = ref('')
+const editRuntime = ref('static')
+const editRootFolder = ref('')
+const editCommand = ref('')
+const editMemLimit = ref('128M')
+const editCpuShares = ref(512)
+const editEnvVars = ref('')
+
+const editEnableDb = ref(false)
+const editSelectedDbId = ref('')
+const editDbEngine = ref('mariadb')
+const editDbHost = ref('127.0.0.1')
+const editDbPort = ref(3306)
+const editDbName = ref('')
+const editDbUser = ref('raz_user')
+const editDbPass = ref('')
+
+const editGitRepo = ref('')
+const editGitBranch = ref('main')
+const editGitToken = ref('')
+const editShowGitToken = ref(false)
+
+const editActiveTab = ref('general')
+const isSavingEdit = ref(false)
 
 // State Modal Hapus Website
 const showDeleteModal = ref(false)
@@ -406,6 +438,109 @@ async function toggleWebsiteStatus(site, action) {
   }
 }
 
+// Buka Modal Edit Konfigurasi Website
+function openEditDialog(site) {
+  editSiteId.value = site.id
+  editSiteName.value = site.name || ''
+  editDomain.value = site.domain || ''
+  editPort.value = site.port || 8101
+  editIcon.value = site.icon || '/assets/icons/RAZIconWebsites.svg'
+  editRuntime.value = site.runtime || 'static'
+  editRootFolder.value = site.root_folder || ''
+  editCommand.value = site.command || ''
+  editMemLimit.value = site.memory_limit || '128M'
+  editCpuShares.value = site.cpu_shares || 512
+  editEnvVars.value = site.env_vars || ''
+
+  editEnableDb.value = !!site.db_name
+  editSelectedDbId.value = site.database_id ? String(site.database_id) : ''
+  editDbEngine.value = site.db_engine || 'mariadb'
+  editDbHost.value = site.db_host || '127.0.0.1'
+  editDbPort.value = site.db_port || 3306
+  editDbName.value = site.db_name || ''
+  editDbUser.value = site.db_user || 'raz_user'
+  editDbPass.value = site.db_password || ''
+
+  editGitRepo.value = site.git_repo || ''
+  editGitBranch.value = site.git_branch || 'main'
+  editGitToken.value = site.git_token || ''
+  editShowGitToken.value = false
+
+  editActiveTab.value = 'general'
+  fetchDatabases()
+  showEditModal.value = true
+}
+
+// Auto-fill dari database terdaftar saat form edit
+function onEditRegisteredDbSelect() {
+  if (!editSelectedDbId.value) return
+  const db = databases.value.find(d => d.id === parseInt(editSelectedDbId.value))
+  if (db) {
+    editDbEngine.value = db.engine || 'mariadb'
+    editDbHost.value = db.host || '127.0.0.1'
+    editDbPort.value = db.port || 3306
+    editDbName.value = db.name
+    editDbUser.value = db.user || 'raz_user'
+  }
+}
+
+// Simpan Perubahan Edit Konfigurasi Website
+async function confirmUpdateWebsite() {
+  if (!editSiteName.value.trim()) {
+    systemStore.showNotification('Peringatan', 'Nama website wajib diisi', 'error')
+    editActiveTab.value = 'general'
+    return
+  }
+
+  isSavingEdit.value = true
+  const payload = {
+    name: editSiteName.value.trim(),
+    domain: editDomain.value.trim(),
+    port: parseInt(editPort.value) || 8101,
+    icon: editIcon.value.trim(),
+    runtime: editRuntime.value,
+    root_folder: editRootFolder.value.trim(),
+    command: editCommand.value.trim(),
+    memory_limit: editMemLimit.value,
+    cpu_shares: parseInt(editCpuShares.value) || 512,
+    env_vars: editEnvVars.value.trim(),
+    database_id: editEnableDb.value && editSelectedDbId.value ? parseInt(editSelectedDbId.value) : null,
+    db_engine: editEnableDb.value ? editDbEngine.value : '',
+    db_host: editEnableDb.value ? editDbHost.value : '',
+    db_port: editEnableDb.value ? parseInt(editDbPort.value) : 3306,
+    db_name: editEnableDb.value ? editDbName.value : '',
+    db_user: editEnableDb.value ? editDbUser.value : '',
+    db_password: editEnableDb.value ? editDbPass.value : '',
+    git_repo: editGitRepo.value.trim(),
+    git_branch: editGitBranch.value.trim() || 'main',
+    git_token: editGitToken.value.trim()
+  }
+
+  try {
+    const res = await fetch(`/api/v1/websites/${editSiteId.value}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    if (res.ok) {
+      const updated = await res.json()
+      systemStore.showNotification(
+        'Sukses',
+        `Konfigurasi website "${updated.name}" berhasil diperbarui!`,
+        'success'
+      )
+      showEditModal.value = false
+      fetchWebsites()
+    } else {
+      const err = await res.json().catch(() => ({}))
+      systemStore.showNotification('Gagal', err.error || 'Gagal memperbarui website', 'error')
+    }
+  } catch (e) {
+    systemStore.showNotification('Error', 'Gagal menghubungi backend', 'error')
+  }
+  isSavingEdit.value = false
+}
+
 // Buka dialog konfirmasi hapus website
 function promptDeleteWebsite(site) {
   siteToDelete.value = site
@@ -698,6 +833,15 @@ onMounted(() => {
               title="Buka Root Folder di File Manager RAZOS"
             >
               <FolderOpen class="w-3.5 h-3.5" />
+            </button>
+
+            <!-- Edit Konfigurasi Website -->
+            <button
+              @click="openEditDialog(site)"
+              class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-amber-300 transition"
+              title="Edit Konfigurasi Website"
+            >
+              <Pencil class="w-3.5 h-3.5" />
             </button>
 
             <!-- Quick Git Pull -->
@@ -1416,10 +1560,18 @@ onMounted(() => {
           >
             Tutup
           </button>
+          <button
+            @click="showDetailModal = false; openEditDialog(selectedSiteDetail)"
+            class="px-3.5 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
+            title="Edit Konfigurasi Website"
+          >
+            <Pencil class="w-3.5 h-3.5" />
+            <span>Edit Konfigurasi</span>
+          </button>
           <a
             :href="'http://' + (selectedSiteDetail.domain || 'localhost') + ':' + selectedSiteDetail.port"
             target="_blank"
-            class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition shadow"
+            class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition shadow active:scale-95"
           >
             <span>Buka Website</span>
             <ExternalLink class="w-3.5 h-3.5" />
@@ -1570,6 +1722,400 @@ onMounted(() => {
               <span>{{ gitModalIsPulling ? 'Menarik Kode...' : 'Tarik Kode Sekarang (Pull)' }}</span>
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CUSTOM MODAL: Edit Konfigurasi Website -->
+    <div
+      v-if="showEditModal && editSiteId"
+      class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in"
+    >
+      <div class="w-full max-w-2xl raz-glass rounded-2xl border border-amber-500/40 p-5 shadow-2xl flex flex-col gap-4 max-h-[92vh] overflow-hidden">
+        <!-- Header -->
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
+              <Pencil class="w-4 h-4" />
+            </div>
+            <div>
+              <h4 class="font-bold text-slate-100 text-sm sm:text-base flex items-center gap-2">
+                <span>Edit Konfigurasi Website</span>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 font-mono">
+                  #{{ editSiteId }}
+                </span>
+              </h4>
+              <p class="text-[11px] text-slate-400">Perbarui identitas, domain, port, runtime, root folder, database, atau Git.</p>
+            </div>
+          </div>
+          <button @click="showEditModal = false" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="flex items-center gap-1 overflow-x-auto bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-[11px] shrink-0">
+          <button
+            v-for="t in [
+              { id: 'general', label: '1. Identitas & Port' },
+              { id: 'runtime', label: '2. Runtime & Folder' },
+              { id: 'database', label: '3. Basis Data' },
+              { id: 'git', label: '4. GitHub & PAT' },
+              { id: 'advanced', label: '5. Resource & ENV' }
+            ]"
+            :key="t.id"
+            @click="editActiveTab = t.id"
+            class="px-3 py-1.5 rounded-lg font-medium transition shrink-0"
+            :class="editActiveTab === t.id
+              ? 'bg-amber-500 text-slate-950 font-bold shadow'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'"
+          >
+            {{ t.label }}
+          </button>
+        </div>
+
+        <!-- Body Form (Scrollable) -->
+        <div class="flex-1 overflow-y-auto space-y-3.5 pr-1 text-xs">
+          <!-- TAB 1: General (Identitas, Domain, Port, Icon) -->
+          <div v-if="editActiveTab === 'general'" class="space-y-3.5 animate-in fade-in">
+            <div>
+              <label class="block font-medium text-slate-300 mb-1">Nama Website / Project <span class="text-rose-400">*</span></label>
+              <input
+                v-model="editSiteName"
+                type="text"
+                class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 text-xs outline-none focus:border-amber-400 transition"
+                placeholder="Contoh: Toko Online UMKM"
+              />
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block font-medium text-slate-300 mb-1">Domain / Hostname Lokal</label>
+                <input
+                  v-model="editDomain"
+                  type="text"
+                  class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-amber-400 transition"
+                  placeholder="toko.razos.local"
+                />
+              </div>
+
+              <div>
+                <label class="block font-medium text-slate-300 mb-1">Port Launching Host</label>
+                <input
+                  v-model.number="editPort"
+                  type="number"
+                  min="80"
+                  max="65535"
+                  class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-amber-300 font-mono text-xs outline-none focus:border-amber-400 transition"
+                />
+              </div>
+            </div>
+
+            <!-- Icon URL & Presets -->
+            <div>
+              <label class="block font-medium text-slate-300 mb-1">Link Ikon Website</label>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model="editIcon"
+                  type="text"
+                  class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 text-xs outline-none focus:border-amber-400 transition"
+                  placeholder="URL Ikon (misal: https://cdn.simpleicons.org/...)"
+                />
+                <div class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center p-1.5 shrink-0">
+                  <img :src="editIcon" class="w-full h-full object-contain" @error="$event.target.src = '/assets/icons/RAZIconWebsites.svg'" />
+                </div>
+              </div>
+              <div class="flex flex-wrap items-center gap-1.5 mt-2">
+                <button
+                  v-for="p in presetIcons"
+                  :key="p.name"
+                  type="button"
+                  @click="editIcon = p.url"
+                  class="px-2 py-0.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-[10px] text-slate-300 flex items-center gap-1 transition"
+                >
+                  <img :src="p.url" class="w-3 h-3 object-contain" />
+                  <span>{{ p.name }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 2: Runtime & Root Folder -->
+          <div v-else-if="editActiveTab === 'runtime'" class="space-y-3.5 animate-in fade-in">
+            <div>
+              <label class="block font-medium text-slate-300 mb-2">Pilih Runtime Stack Website</label>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div
+                  v-for="rt in [
+                    { id: 'static', title: 'HTML Statis (Nginx)', desc: 'Ultra ringan (~32MB RAM), berkas HTML/CSS/JS.' },
+                    { id: 'php', title: 'PHP 8.2 + Database', desc: 'WordPress, Laravel, atau script PHP dinamis.' },
+                    { id: 'nodejs', title: 'Node.js Server', desc: 'Runtime Node 18/20 untuk Express/Fastify/API.' },
+                    { id: 'nextjs', title: 'Next.js Framework', desc: 'React SSR full-stack port 3000.' }
+                  ]"
+                  :key="rt.id"
+                  @click="editRuntime = rt.id"
+                  class="p-3 rounded-xl border cursor-pointer transition flex items-start gap-3"
+                  :class="editRuntime === rt.id
+                    ? 'bg-amber-500/15 border-amber-400 text-amber-300'
+                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'"
+                >
+                  <div>
+                    <h5 class="font-bold text-slate-200">{{ rt.title }}</h5>
+                    <p class="text-[11px] text-slate-400 mt-0.5">{{ rt.desc }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="block font-medium text-slate-300 mb-1">Root Folder Penyimpanan Berkas Website</label>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model="editRootFolder"
+                  type="text"
+                  class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-amber-400 transition"
+                />
+                <button
+                  type="button"
+                  @click="windowStore.openApp('file-manager')"
+                  class="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-1 shrink-0"
+                  title="Lihat di File Manager"
+                >
+                  <FolderOpen class="w-3.5 h-3.5" />
+                  <span>Buka</span>
+                </button>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-1">
+                Lokasi folder fisik berkas website di hosting atau storage RAZOS.
+              </p>
+            </div>
+          </div>
+
+          <!-- TAB 3: Basis Data -->
+          <div v-else-if="editActiveTab === 'database'" class="space-y-3.5 animate-in fade-in">
+            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
+              <div class="flex items-center gap-2.5">
+                <Database class="w-5 h-5 text-amber-400" />
+                <div>
+                  <h5 class="font-bold text-slate-200">Koneksikan Basis Data untuk Website</h5>
+                  <p class="text-[11px] text-slate-400">Hubungkan website dengan MariaDB atau PostgreSQL server.</p>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                v-model="editEnableDb"
+                class="w-5 h-5 accent-amber-400 rounded cursor-pointer"
+              />
+            </div>
+
+            <div v-if="editEnableDb" class="space-y-3.5">
+              <div v-if="databases.length > 0">
+                <label class="block font-medium text-slate-300 mb-1">Gunakan Database Terdaftar di RAZOS (Pintasan)</label>
+                <select
+                  v-model="editSelectedDbId"
+                  @change="onEditRegisteredDbSelect"
+                  class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs outline-none focus:border-amber-400"
+                >
+                  <option value="">-- Input Konfigurasi Kustom / Database Baru --</option>
+                  <option v-for="db in databases" :key="db.id" :value="String(db.id)">
+                    {{ db.name }} ({{ db.engine.toUpperCase() }} - Port {{ db.port }}) - User: {{ db.user }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">Database Engine</label>
+                  <select
+                    v-model="editDbEngine"
+                    class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs outline-none focus:border-amber-400"
+                  >
+                    <option value="mariadb">MariaDB / MySQL</option>
+                    <option value="postgres">PostgreSQL</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">Host & Port Database</label>
+                  <div class="flex items-center gap-2">
+                    <input
+                      v-model="editDbHost"
+                      type="text"
+                      placeholder="127.0.0.1"
+                      class="flex-1 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
+                    />
+                    <input
+                      v-model.number="editDbPort"
+                      type="number"
+                      placeholder="3306"
+                      class="w-20 px-2 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400 text-center"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">Nama Database</label>
+                  <input
+                    v-model="editDbName"
+                    type="text"
+                    placeholder="db_nama_website"
+                    class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
+                  />
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">Username</label>
+                  <input
+                    v-model="editDbUser"
+                    type="text"
+                    placeholder="raz_user"
+                    class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
+                  />
+                </div>
+                <div>
+                  <label class="block font-medium text-slate-300 mb-1">Password</label>
+                  <input
+                    v-model="editDbPass"
+                    type="password"
+                    placeholder="••••••••"
+                    class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-xs outline-none focus:border-amber-400"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 4: GitHub & PAT -->
+          <div v-else-if="editActiveTab === 'git'" class="space-y-3.5 animate-in fade-in">
+            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
+              <div class="flex items-center gap-2">
+                <GitBranch class="w-4 h-4 text-sky-400" />
+                <div>
+                  <h5 class="font-bold text-slate-200 text-xs">Konfigurasi GitHub & Git Pull</h5>
+                  <p class="text-[10px] text-slate-400">Atur repositori Git untuk auto-pull kode ke root folder.</p>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                <div class="sm:col-span-2">
+                  <label class="block text-[11px] font-medium text-slate-300 mb-1">GitHub Repository URL</label>
+                  <input
+                    v-model="editGitRepo"
+                    type="text"
+                    class="w-full px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-sky-400 transition"
+                    placeholder="https://github.com/username/repo-web"
+                  />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-medium text-slate-300 mb-1">Branch</label>
+                  <input
+                    v-model="editGitBranch"
+                    type="text"
+                    class="w-full px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-sky-400 transition"
+                    placeholder="main"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-medium text-slate-300 mb-1">GitHub Personal Access Token (PAT)</label>
+                <div class="relative">
+                  <input
+                    :type="editShowGitToken ? 'text' : 'password'"
+                    v-model="editGitToken"
+                    class="w-full pl-8 pr-9 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-sky-400 transition"
+                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx (opsional untuk public, wajib untuk private)"
+                  />
+                  <Key class="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <button
+                    type="button"
+                    @click="editShowGitToken = !editShowGitToken"
+                    class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition"
+                  >
+                    <EyeOff v-if="editShowGitToken" class="w-3.5 h-3.5" />
+                    <Eye v-else class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 5: Resource Limit & ENV -->
+          <div v-else-if="editActiveTab === 'advanced'" class="space-y-3.5 animate-in fade-in">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block font-medium text-slate-300 mb-1">Memory Limit (RAM)</label>
+                <input
+                  v-model="editMemLimit"
+                  type="text"
+                  placeholder="128M"
+                  class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-amber-400"
+                />
+                <div class="flex flex-wrap gap-1 mt-1.5">
+                  <button
+                    v-for="m in memoryPresets"
+                    :key="m.val"
+                    type="button"
+                    @click="editMemLimit = m.val"
+                    class="px-2 py-0.5 rounded-lg text-[10px] bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300"
+                  >
+                    {{ m.val }}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label class="block font-medium text-slate-300 mb-1">CPU Shares (Prioritas CPU)</label>
+                <input
+                  v-model.number="editCpuShares"
+                  type="number"
+                  placeholder="512"
+                  class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-amber-400"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label class="block font-medium text-slate-300 mb-1">Perintah Eksekusi Container (Command)</label>
+              <input
+                v-model="editCommand"
+                type="text"
+                placeholder="Contoh: node server.js atau python app.py"
+                class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-amber-400"
+              />
+            </div>
+
+            <div>
+              <label class="block font-medium text-slate-300 mb-1">Variabel Lingkungan (ENV Vars)</label>
+              <textarea
+                v-model="editEnvVars"
+                rows="3"
+                placeholder="KEY=VALUE&#10;NODE_ENV=production"
+                class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-amber-400 resize-none"
+              ></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="flex items-center justify-between border-t border-slate-800 pt-3 shrink-0">
+          <button
+            @click="showEditModal = false"
+            class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+          >
+            Batal
+          </button>
+
+          <button
+            @click="confirmUpdateWebsite"
+            :disabled="isSavingEdit"
+            class="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20 active:scale-95 disabled:opacity-50"
+          >
+            <RotateCw v-if="isSavingEdit" class="w-3.5 h-3.5 animate-spin" />
+            <Check v-else class="w-3.5 h-3.5 stroke-[2.5]" />
+            <span>{{ isSavingEdit ? 'Menyimpan...' : 'Simpan Perubahan' }}</span>
+          </button>
         </div>
       </div>
     </div>
