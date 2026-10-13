@@ -1,25 +1,28 @@
 <script setup>
 /**
- * RAZOS Google Drive-Style Storage & Cloud File Manager with Standalone Multi-Window Viewers
- * Updated: 2026-10-13 (Decoupled Standalone Content Viewers & Non-Blocking Multi-File Workflow)
- * Deskripsi: Antarmuka File Manager tingkat lanjut memadukan arsitektur Google Drive dan Apple Finder:
+ * RAZOS Google Drive-Style Storage & Windows File Explorer Hybrid File Manager
+ * Updated: 2026-10-13 (Windows Explorer-Style Interactive Address Bar & History Navigation)
+ * Deskripsi: Antarmuka File Manager tingkat lanjut memadukan arsitektur Windows File Explorer dan Google Drive:
+ * - Windows Explorer Interactive Address Bar: Bilah alamat dwi-fungsi (Breadcrumbs interaktif & Editable Text Input).
+ *   Pengguna dapat mengklik segmen breadcrumb atau mengklik area teks untuk mengetik/paste path langsung (Enter untuk pergi).
+ * - History Navigation Trio: Tombol Back, Forward, dan Up dengan history stack tracking yang presisi.
+ * - Quick Address Actions: Tombol Copy Path (dengan notifikasi clipboard) dan Refresh folder langsung di dalam address bar.
  * - Standalone Content Viewers (No Dark/Blur Overlay): Membuka berkas gambar, video, musik, PDF,
  *   dan kode di Window Mandiri terpisah via RAZWindowStore. File Manager tetap aktif dan bebas membuka file lain.
- * - Accurate Navigation & Path Normalization: Penanganan path Windows & Linux STB yang presisi tanpa lompat folder,
- *   dukungan auto-discovery My Storage (/DATA atau C:/DATA), breadcrumbs adaptif, dan tombol naik tingkat yang aman.
+ * - Accurate Navigation & Path Normalization: Penanganan path Windows & Linux STB yang presisi tanpa lompat folder.
  * - Fluid Responsive Grid: Menggunakan auto-fill minmax(140px, 1fr) sehingga kartu folder/file tidak pernah gepeng.
  * - Bottom Status Bar: Menampilkan jumlah item, status item aktif, dan tombol aksi cepat tanpa memeras ruang grid.
  * - Custom Modal Detail & Properti: Dialog modal khusus yang elegan (Glassmorphism) untuk rincian metadata berkas.
- * - Sidebar navigasi: My Storage (/DATA), Physical Disks/HDD, Starred/Favorit, Quick Storage Meter.
  */
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
 import { useWindowStore } from '../stores/RAZWindowStore'
 import {
   HardDrive, Folder, File, FileText, FileCode, Plus, Trash2, Edit3,
-  ChevronRight, ArrowLeft, RefreshCw, X, Save, AlertTriangle, Eye, Usb,
+  ChevronRight, ArrowLeft, ArrowRight, ArrowUp, RefreshCw, X, Save, AlertTriangle, Eye, Usb,
   Grid, List, Search, Star, Download, Info, CheckCircle2, Clock, Upload,
-  Share2, MoreVertical, LayoutGrid, Server, Image, Film, Music, FileCheck, Play
+  Share2, MoreVertical, LayoutGrid, Server, Image, Film, Music, FileCheck, Play,
+  Copy, Check
 } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
@@ -32,6 +35,85 @@ const files = ref([])
 const isLoading = ref(false)
 const selectedItem = ref(null)
 const starredPaths = ref(new Set())
+
+// State Address Bar & Navigasi Windows Explorer Style
+const historyStack = ref([])
+const historyIndex = ref(-1)
+const isEditingAddress = ref(false)
+const addressInputValue = ref('/DATA')
+const addressInputRef = ref(null)
+const pathCopied = ref(false)
+
+const canGoBack = computed(() => historyIndex.value > 0)
+const canGoForward = computed(() => historyIndex.value < historyStack.value.length - 1)
+
+function goBack() {
+  if (canGoBack.value) {
+    historyIndex.value--
+    fetchFiles(historyStack.value[historyIndex.value], true)
+  }
+}
+
+function goForward() {
+  if (canGoForward.value) {
+    historyIndex.value++
+    fetchFiles(historyStack.value[historyIndex.value], true)
+  }
+}
+
+function startEditingAddress() {
+  isEditingAddress.value = true
+  addressInputValue.value = currentPath.value
+  nextTick(() => {
+    if (addressInputRef.value) {
+      addressInputRef.value.focus()
+      addressInputRef.value.select()
+    }
+  })
+}
+
+function submitAddress() {
+  if (!isEditingAddress.value) return
+  isEditingAddress.value = false
+  const target = addressInputValue.value.trim()
+  if (target) {
+    fetchFiles(target)
+  }
+}
+
+function cancelEditingAddress() {
+  isEditingAddress.value = false
+  addressInputValue.value = currentPath.value
+}
+
+function onAddressInputBlur() {
+  // Berikan jeda toleransi klik tombol Go
+  setTimeout(() => {
+    if (isEditingAddress.value) {
+      cancelEditingAddress()
+    }
+  }, 150)
+}
+
+async function copyCurrentPath() {
+  try {
+    await navigator.clipboard.writeText(currentPath.value)
+    pathCopied.value = true
+    systemStore.showNotification('Disalin', `Path "${currentPath.value}" disalin ke clipboard`, 'success')
+    setTimeout(() => {
+      pathCopied.value = false
+    }, 2000)
+  } catch (err) {
+    systemStore.showNotification('Gagal', 'Tidak dapat menyalin path ke clipboard', 'error')
+  }
+}
+
+const currentFolderShortName = computed(() => {
+  const norm = normalizePath(currentPath.value)
+  if (norm === '/' || norm === 'C:/') return 'Root'
+  const parts = norm.split('/').filter(Boolean)
+  return parts.length > 0 ? parts[parts.length - 1] : 'folder'
+})
 
 // View Options
 const viewMode = ref('grid') // 'grid' | 'list'
@@ -135,8 +217,8 @@ const storageUsagePercent = computed(() => {
   return parseFloat(((usedStorageBytes.value / totalStorageBytes.value) * 100).toFixed(1))
 })
 
-// Fetch Daftar Berkas dengan Normalisasi Aman
-async function fetchFiles(targetPath = currentPath.value) {
+// Fetch Daftar Berkas dengan Normalisasi Aman & History Tracking
+async function fetchFiles(targetPath = currentPath.value, isHistoryNav = false) {
   const cleanPath = normalizePath(targetPath)
   isLoading.value = true
   selectedItem.value = null
@@ -145,13 +227,29 @@ async function fetchFiles(targetPath = currentPath.value) {
     if (res.ok) {
       files.value = await res.json()
       currentPath.value = cleanPath
+      addressInputValue.value = cleanPath
+
+      // Rekam jejak ke history stack jika bukan navigasi back/forward
+      if (!isHistoryNav) {
+        if (historyIndex.value < historyStack.value.length - 1) {
+          historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
+        }
+        if (historyStack.value.length === 0 || historyStack.value[historyStack.value.length - 1] !== cleanPath) {
+          historyStack.value.push(cleanPath)
+          historyIndex.value = historyStack.value.length - 1
+        }
+      }
     } else {
+      // Notifikasi peringatan jika path tidak ditemukan
+      systemStore.showNotification('Peringatan', `Direktori "${cleanPath}" tidak ditemukan`, 'warning')
       // Fallback aman ke default storage jika path yang diminta invalid
       if (cleanPath !== defaultStoragePath.value) {
         fetchFiles(defaultStoragePath.value)
       }
     }
-  } catch (err) {}
+  } catch (err) {
+    systemStore.showNotification('Gagal', `Gagal memuat direktori: ${err.message}`, 'error')
+  }
   isLoading.value = false
 }
 
@@ -437,93 +535,177 @@ onMounted(async () => {
 
     <!-- MAIN DRIVE CONTENT AREA -->
     <div class="flex-1 flex flex-col overflow-hidden bg-slate-950">
-      <!-- TOP SEARCH & TOOLBAR -->
-      <div class="h-14 border-b border-slate-800/80 px-4 flex items-center justify-between gap-3 bg-slate-900/40 shrink-0">
-        <!-- Search Input Bar -->
-        <div class="flex-1 max-w-sm relative">
-          <Search class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Cari berkas..."
-            class="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400/30 transition"
-          />
-        </div>
-
-        <!-- Controls: Category Chips & View Toggle -->
-        <div class="flex items-center gap-2 shrink-0">
-          <!-- Filter Tabs Media Viewers -->
-          <div class="hidden xl:flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800/80 text-[11px]">
-            <button
-              v-for="f in [{ id: 'all', label: 'Semua' }, { id: 'folders', label: 'Folder' }, { id: 'images', label: 'Gambar' }, { id: 'video', label: 'Video' }, { id: 'audio', label: 'Audio' }, { id: 'docs', label: 'Dokumen' }, { id: 'code', label: 'Kode' }]"
-              :key="f.id"
-              @click="filterType = f.id"
-              class="px-2.5 py-1 rounded-lg transition font-medium"
-              :class="filterType === f.id ? 'bg-sky-500/20 text-sky-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
-            >
-              {{ f.label }}
-            </button>
-          </div>
-
-          <!-- Grid vs List Toggle -->
-          <div class="flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-slate-800/80">
-            <button
-              @click="viewMode = 'grid'"
-              class="p-1.5 rounded-lg transition"
-              :class="viewMode === 'grid' ? 'bg-slate-800 text-sky-400 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
-              title="Grid View"
-            >
-              <LayoutGrid class="w-4 h-4" />
-            </button>
-            <button
-              @click="viewMode = 'list'"
-              class="p-1.5 rounded-lg transition"
-              :class="viewMode === 'list' ? 'bg-slate-800 text-sky-400 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
-              title="List View"
-            >
-              <List class="w-4 h-4" />
-            </button>
-          </div>
-
+      <!-- WINDOWS FILE EXPLORER TOP NAVIGATION & ADDRESS BAR -->
+      <div class="h-12 border-b border-slate-800/80 px-3 flex items-center gap-2 bg-slate-900/60 shrink-0">
+        <!-- Navigation Trio (Back, Forward, Up) -->
+        <div class="flex items-center gap-0.5 shrink-0">
           <button
-            @click="fetchFiles(currentPath)"
-            class="p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800/80 transition"
-            title="Refresh"
+            @click="goBack"
+            :disabled="!canGoBack"
+            class="p-1.5 rounded-lg transition"
+            :class="canGoBack ? 'hover:bg-slate-800 text-slate-200 cursor-pointer active:scale-95' : 'text-slate-600 opacity-40 cursor-not-allowed'"
+            title="Kembali (Back)"
           >
-            <RefreshCw class="w-4 h-4" :class="isLoading ? 'animate-spin' : ''" />
+            <ArrowLeft class="w-4 h-4" />
           </button>
-        </div>
-      </div>
-
-      <!-- BREADCRUMBS BAR -->
-      <div class="px-4 py-2 border-b border-slate-800/60 flex items-center justify-between text-xs font-mono bg-slate-900/30 shrink-0">
-        <div class="flex items-center gap-1.5 overflow-x-auto text-slate-400">
+          <button
+            @click="goForward"
+            :disabled="!canGoForward"
+            class="p-1.5 rounded-lg transition"
+            :class="canGoForward ? 'hover:bg-slate-800 text-slate-200 cursor-pointer active:scale-95' : 'text-slate-600 opacity-40 cursor-not-allowed'"
+            title="Maju (Forward)"
+          >
+            <ArrowRight class="w-4 h-4" />
+          </button>
           <button
             @click="navigateUp"
             :disabled="!canNavigateUp"
             class="p-1.5 rounded-lg transition"
-            :class="canNavigateUp ? 'hover:bg-slate-800 text-slate-300 hover:text-white cursor-pointer active:scale-95' : 'text-slate-600 opacity-40 cursor-not-allowed'"
-            title="Naik Satu Tingkat"
+            :class="canNavigateUp ? 'hover:bg-slate-800 text-slate-200 cursor-pointer active:scale-95' : 'text-slate-600 opacity-40 cursor-not-allowed'"
+            title="Naik Satu Tingkat (Up)"
           >
-            <ArrowLeft class="w-3.5 h-3.5" />
+            <ArrowUp class="w-4 h-4" />
           </button>
-          <template v-for="(crumb, idx) in breadcrumbs" :key="idx">
-            <span
-              @click="fetchFiles(crumb.path)"
-              class="px-2 py-0.5 rounded-lg hover:bg-slate-800/80 cursor-pointer hover:text-sky-400 transition flex items-center gap-1"
-              :class="idx === breadcrumbs.length - 1 ? 'text-sky-400 font-bold bg-sky-500/10 border border-sky-500/20' : 'text-slate-400'"
-            >
-              <HardDrive v-if="idx === 0 && crumb.name.includes('Disk')" class="w-3 h-3 text-slate-400 shrink-0" />
-              <Folder v-else-if="idx === 0 || crumb.name.includes('Storage')" class="w-3 h-3 text-sky-400 shrink-0" />
-              <span>{{ crumb.name }}</span>
-            </span>
-            <ChevronRight v-if="idx < breadcrumbs.length - 1" class="w-3 h-3 text-slate-600 shrink-0" />
-          </template>
         </div>
 
-        <span class="text-[11px] text-slate-500 font-mono hidden sm:inline">
-          {{ filteredFiles.length }} item
-        </span>
+        <!-- Address Bar (Windows Explorer Style) -->
+        <div
+          class="flex-1 min-w-0 h-9 bg-slate-950/80 border border-slate-800/90 hover:border-slate-700/80 focus-within:border-sky-500/80 focus-within:ring-1 focus-within:ring-sky-500/20 rounded-xl px-2.5 flex items-center gap-2 transition group text-xs font-mono shadow-inner"
+        >
+          <!-- Current Location Icon -->
+          <HardDrive v-if="currentPath.includes('Disk') || /^[a-zA-Z]:/.test(currentPath)" class="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <Folder v-else class="w-3.5 h-3.5 text-sky-400 shrink-0" />
+
+          <!-- Editable Input Mode -->
+          <div v-if="isEditingAddress" class="flex-1 h-full flex items-center">
+            <input
+              ref="addressInputRef"
+              v-model="addressInputValue"
+              @keydown.enter="submitAddress"
+              @keydown.esc="cancelEditingAddress"
+              @blur="onAddressInputBlur"
+              type="text"
+              class="w-full bg-transparent border-0 outline-none text-sky-200 text-xs font-mono h-full px-0 select-all"
+              placeholder="Ketik path direktori (misal: /DATA atau C:/DATA)..."
+            />
+          </div>
+
+          <!-- Breadcrumbs Interactive Mode -->
+          <div
+            v-else
+            @click="startEditingAddress"
+            class="flex-1 h-full flex items-center gap-1 overflow-x-auto cursor-text select-none py-0.5"
+            style="scrollbar-width: none;"
+            title="Klik untuk mengedit address bar"
+          >
+            <template v-for="(crumb, idx) in breadcrumbs" :key="idx">
+              <button
+                @click.stop="fetchFiles(crumb.path)"
+                class="px-1.5 py-0.5 rounded hover:bg-slate-800/90 text-slate-300 hover:text-sky-300 transition flex items-center gap-1 shrink-0 font-medium"
+                :class="idx === breadcrumbs.length - 1 ? 'text-sky-400 font-bold' : ''"
+              >
+                <span>{{ crumb.name }}</span>
+              </button>
+              <ChevronRight v-if="idx < breadcrumbs.length - 1" class="w-3 h-3 text-slate-600 shrink-0" />
+            </template>
+            <!-- Area kosong untuk memudahkan klik edit address -->
+            <div class="flex-1 min-w-[24px] h-full cursor-text"></div>
+          </div>
+
+          <!-- Right Action Controls in Address Bar -->
+          <div class="flex items-center gap-0.5 shrink-0">
+            <!-- Go Button when editing -->
+            <button
+              v-if="isEditingAddress"
+              @mousedown.prevent="submitAddress"
+              class="p-1 rounded-lg bg-sky-500/20 text-sky-400 hover:bg-sky-500/30 transition"
+              title="Pergi ke Path"
+            >
+              <ArrowRight class="w-3.5 h-3.5" />
+            </button>
+
+            <!-- Copy Path Button -->
+            <button
+              v-if="!isEditingAddress"
+              @click.stop="copyCurrentPath"
+              class="p-1 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-slate-200 transition"
+              :class="pathCopied ? 'text-emerald-400' : ''"
+              title="Salin Path Direktori"
+            >
+              <Check v-if="pathCopied" class="w-3.5 h-3.5 text-emerald-400" />
+              <Copy v-else class="w-3.5 h-3.5" />
+            </button>
+
+            <!-- Refresh Button -->
+            <button
+              @click.stop="fetchFiles(currentPath)"
+              class="p-1 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-slate-200 transition"
+              title="Muat Ulang Folder"
+            >
+              <RefreshCw class="w-3.5 h-3.5" :class="isLoading ? 'animate-spin text-sky-400' : ''" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Search Box (Windows Explorer Search Style) -->
+        <div class="w-40 sm:w-56 h-9 relative shrink-0">
+          <Search class="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            v-model="searchQuery"
+            type="text"
+            :placeholder="`Cari di ${currentFolderShortName}...`"
+            class="w-full h-full pl-8 pr-7 rounded-xl bg-slate-950/80 border border-slate-800/90 text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400/20 transition"
+          />
+          <button
+            v-if="searchQuery"
+            @click="searchQuery = ''"
+            class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+          >
+            <X class="w-3 h-3" />
+          </button>
+        </div>
+      </div>
+
+      <!-- FILTER & VIEW MODE RIBBON BAR -->
+      <div class="h-10 border-b border-slate-800/60 px-4 flex items-center justify-between gap-3 bg-slate-900/30 text-xs font-mono shrink-0">
+        <!-- Filter Tabs Media Viewers -->
+        <div class="flex items-center gap-1 overflow-x-auto py-0.5" style="scrollbar-width: none;">
+          <button
+            v-for="f in [{ id: 'all', label: 'Semua' }, { id: 'folders', label: 'Folder' }, { id: 'images', label: 'Gambar' }, { id: 'video', label: 'Video' }, { id: 'audio', label: 'Audio' }, { id: 'docs', label: 'Dokumen' }, { id: 'code', label: 'Kode' }]"
+            :key="f.id"
+            @click="filterType = f.id"
+            class="px-2.5 py-1 rounded-lg transition font-sans text-xs"
+            :class="filterType === f.id ? 'bg-sky-500/20 text-sky-400 font-bold border border-sky-500/20' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'"
+          >
+            {{ f.label }}
+          </button>
+        </div>
+
+        <!-- Right Side: Item Count & Grid/List View Mode -->
+        <div class="flex items-center gap-3 shrink-0">
+          <span class="text-[11px] text-slate-500 hidden sm:inline">
+            {{ filteredFiles.length }} item
+          </span>
+
+          <div class="flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-slate-800/80">
+            <button
+              @click="viewMode = 'grid'"
+              class="p-1 rounded-lg transition"
+              :class="viewMode === 'grid' ? 'bg-slate-800 text-sky-400 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
+              title="Grid View"
+            >
+              <LayoutGrid class="w-3.5 h-3.5" />
+            </button>
+            <button
+              @click="viewMode = 'list'"
+              class="p-1 rounded-lg transition"
+              :class="viewMode === 'list' ? 'bg-slate-800 text-sky-400 shadow-sm' : 'text-slate-400 hover:text-slate-200'"
+              title="List View"
+            >
+              <List class="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- MAIN EXPLORER AREA (GRID VS LIST) -->

@@ -9,7 +9,7 @@
 - **Antarmuka Desktop Multi-Window:** Pengalaman desktop lengkap dengan windowing, resize, minimize, taskbar, dan system tray.
 - **Antarmuka Mobile Android Launcher:** Beralih otomatis ke launcher sentuh lengkap dengan App Drawer dan App Switcher saat dibuka via smartphone.
 - **Dukungan Fullscreen & PWA:** Dapat diinstal ke homescreen ponsel atau desktop tanpa address bar peramban.
-- **File Manager & Cloud Storage (Google Drive / CasaOS Style):** File explorer tingkat lanjut dengan inspeksi drive fisik riil (HDD/MicroSD), dual layout (Grid & List proporsional), bintang/favorit, serta built-in media viewers & player (Image zoom viewer, Video player, Music audio player, PDF viewer, dan in-browser Code/Docs editor).
+- **File Manager & Cloud Storage (Google Drive / Windows File Explorer Hybrid):** File explorer tingkat lanjut dengan Windows-style Interactive Address Bar (Breadcrumbs interaktif, editable path text input, history navigation Back/Forward/Up, Copy Path, dan Refresh), inspeksi drive fisik riil (HDD/MicroSD), fluid auto-fill grid & list, bintang/favorit, serta standalone multi-window media viewers & players (Image zoom/rotate, Video player, Music visualizer player, PDF viewer, dan in-browser Code editor).
 - **App Store 520+ Docker & Manual Custom Container:** Katalog 520+ aplikasi Docker siap pakai dengan halaman detail dokumentasi README.md, serta fitur Manual Install Docker Compose/Run ala CasaOS.
 - **Task Manager & System Health:** Monitoring penggunaan sumber daya per-aplikasi secara real-time dengan kill-switch instan.
 - **Pembersih Sistem 1-Klik:** RAM Cleaner dan Docker Storage Cleaner terintegrasi untuk menjaga kestabilan perangkat ber-RAM kecil.

@@ -93,3 +93,37 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - **Verifikasi:**
   - `npm run build` sukses 100% tanpa error (1502 modules transformed).
   - Dev server HMR ter-update secara real-time di `localhost:3000`.
+
+---
+
+### Versi: 2.3.1-windows-style-address-bar (Bilah Alamat Interaktif Ala Windows File Explorer & History Navigation)
+**Waktu Eksekusi:** 2026-10-13 11:10 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Implementasi Windows Explorer Interactive Address Bar
+- **Bilah Alamat Dwi-Fungsi (Breadcrumb vs Editable Input):**
+  - **Mode Breadcrumb (Default):** Menampilkan deretan segmen folder interaktif dengan ikon HardDrive/Folder dan pemisah chevron (`>`). Setiap segmen dapat langsung diklik untuk melompat ke direktori tersebut.
+  - **Mode Editable Input (Klik Area / Shortcut):** Mengklik area kosong di bilah alamat beralih otomatis ke kotak input teks dengan path absolut lengkap (misal `C:/DATA/razos` atau `/DATA/apps`).
+  - **Auto-Focus & Text Selection:** Teks path langsung terseleksi (*select all*) saat mode edit aktif sehingga pengguna dapat langsung mengetik atau menempelkan (*paste*) path tujuan.
+  - **Keyboard Action:** Menekan tombol `Enter` mengeksekusi navigasi ke path yang diketik, sedangkan tombol `Esc` atau `blur` membatalkan pengeditan dan mengembalikan tampilan ke mode breadcrumb.
+- **Aksi Cepat di Dalam Address Bar:**
+  - **Tombol Go (`ArrowRight`):** Muncul saat mode edit aktif untuk navigasi instan.
+  - **Tombol Copy Path (`Copy`):** Menyalin path direktori absolut ke clipboard sistem dengan notifikasi custom toast `systemStore.showNotification` tanpa modal browser native.
+  - **Tombol Refresh Folder (`RefreshCw`):** Memuat ulang daftar berkas direktori aktif dengan animasi putar saat loading.
+
+#### 2. History Navigation Trio (Back, Forward, Up)
+- **Riwayat Navigasi Komprehensif (`historyStack` & `historyIndex`):**
+  - **Tombol Back (`ArrowLeft`):** Melangkah mundur ke riwayat folder sebelumnya, otomatis nonaktif (*disabled*) jika berada di awal riwayat.
+  - **Tombol Forward (`ArrowRight`):** Melangkah maju ke riwayat folder berikutnya, otomatis nonaktif jika berada di ujung riwayat.
+  - **Tombol Up (`ArrowUp`):** Naik satu tingkat ke folder induk (*parent directory*), otomatis nonaktif jika berada di root sistem.
+- **Deteksi Path & Fallback Aman:**
+  - Jika pengguna memasukkan path direktori yang tidak ada atau tidak valid, sistem menampilkan notifikasi peringatan dan mengembalikan pengguna secara aman ke direktori default penyimpanan.
+
+#### 3. Penataan Tata Letak (Explorer Ribbon & Search Box)
+- **Windows Explorer Search Bar:**
+  - Bilah pencarian beraksen modern dengan placeholder dinamis berbasis folder aktif (`Cari di [nama folder]...`) dan tombol clear (X).
+- **Secondary Ribbon Bar:**
+  - Memisahkan tombol filter kategori (Semua, Folder, Gambar, Video, Audio, Dokumen, Kode) dan pemilih tampilan (Grid / List) ke dalam ribbon bar terpisah yang rapi dan lapang.
+- **Verifikasi Build:**
+  - `npm run build` berhasil 100% (1502 modules transformed).
+  - Dev server reload secara lancar via HMR di `localhost:3000`.
