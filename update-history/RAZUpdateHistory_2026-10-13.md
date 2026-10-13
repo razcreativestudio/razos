@@ -43,3 +43,27 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - **Verifikasi:**
   - `npm run build` sukses 100% tanpa error kompilasi.
   - Hot Module Replacement (HMR) aktif di dev server `localhost:3000`.
+
+---
+
+### Versi: 2.2.2-folder-navigation-integrity-fix (Perbaikan Lokasi Folder & Integritas Navigasi Anti Salah Folder)
+**Waktu Eksekusi:** 2026-10-13 10:44 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Perbaikan Navigasi Breadcrumbs & Tombol Kembali (Up Navigation)
+- **Eliminasi Bug Driver Letter Bare Windows:** Memperbaiki bug di mana navigasi mundur dari subfolder Windows (`C:/DATA`) menghasilkan string `"C:"` tanpa slash, yang memicu Node.js `fs.readdirSync("C:")` membaca direktori kerja aktif frontend (`node_modules`, `src`) bukannya root harddisk. Seluruh pemotongan path kini dinormalisasi menjadi `"C:/"` dengan trailing slash.
+- **Controlled Up Navigation:** Menambahkan state `canNavigateUp` sehingga saat berada di root (`C:/` atau `/`), tombol panah kembali dinonaktifkan secara anggun (disabled dengan visual redup) untuk mencegah lompat folder liar.
+- **Akurat & Terstruktur Breadcrumbs:**
+  - Menampilkan segmen hirarkis yang benar (`C: Disk` -> `My Storage (/DATA)` -> `subfolder`).
+  - Setiap segmen memiliki icon penanda (HardDrive / Folder Cloud) dan path absolut forward slash yang konsisten (`filepath.ToSlash`).
+
+#### 2. Resolusi Lokasi Default "My Storage (/DATA)"
+- **Pemisahan My Storage & Storage Disks:**
+  - Tombol **"My Storage (/DATA)"** di sidebar kini selalu diarahkan ke direktori kerja utama penyimpanan RAZOS (`C:/DATA` di Windows atau `/DATA` di Linux STB). Tidak lagi keliru membuka root harddisk `C:\` sistem operasi.
+  - Penelusuran harddisk fisik host (misal `C: Local Disk`) tetap tersedia di bagian bawah **Storage Disks**, sehingga pengguna dapat beralih antara cloud storage dan root harddisk secara terisolasi tanpa tertukar.
+- **Normalisasi Backend & Dev Middleware:**
+  - Menyelaraskan fungsi `resolveSafePath` di `frontend/vite.config.js` dan `RAZStorageEngine.go` untuk menangani path kosong, `/DATA`, atau drive letter secara seragam.
+  - Seluruh item berkas dan folder kini dikembalikan dengan path forward-slash (`/`) untuk mencegah konflik backslash di browser.
+- **Verifikasi:**
+  - `npm run build` berhasil 100% (1501 modules transformed).
+  - Dev server otomatis reload dengan HMR aktif di port 3000.

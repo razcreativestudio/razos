@@ -218,27 +218,43 @@ function razosApiPlugin() {
         res.end(JSON.stringify(devices))
       })
 
+      // Helper Normalisasi Path
+      function resolveSafePath(p) {
+        if (!p) p = ''
+        let clean = p.replace(/\\/g, '/')
+        if (process.platform === 'win32') {
+          if (!clean || clean === '.' || clean === '/' || clean === '/DATA' || clean === 'DATA') {
+            if (fs.existsSync('C:/DATA')) return 'C:/DATA'
+            return process.cwd().replace(/\\/g, '/')
+          }
+          if (/^[a-zA-Z]:$/.test(clean)) {
+            clean += '/'
+          }
+        } else {
+          if (!clean || clean === '.' || clean === '/DATA') {
+            clean = fs.existsSync('/DATA') ? '/DATA' : '/'
+          }
+        }
+        return clean
+      }
+
       // 8. Endpoint Files List (/api/v1/files/list)
       server.middlewares.use('/api/v1/files/list', (req, res) => {
         const urlObj = new URL(req.url, 'http://localhost')
-        let targetPath = urlObj.searchParams.get('path') || '.'
-        
-        // Normalisasi path jika '/' diminta pada Windows
-        if (process.platform === 'win32') {
-          if (targetPath === '/' || targetPath === '/DATA') {
-            if (fs.existsSync('C:/DATA')) {
-              targetPath = 'C:/DATA'
-            } else {
-              targetPath = '.'
-            }
-          }
-        }
+        const rawPath = urlObj.searchParams.get('path') || ''
+        const targetPath = resolveSafePath(rawPath)
 
         try {
+          if (!fs.existsSync(targetPath)) {
+            res.statusCode = 404
+            return res.end(JSON.stringify({ error: `Direktori tidak ditemukan: ${targetPath}` }))
+          }
+
           const dirEntries = fs.readdirSync(targetPath, { withFileTypes: true })
+          const cleanParent = targetPath.endsWith('/') ? targetPath : targetPath + '/'
+
           const items = dirEntries.map(e => {
-            const sep = targetPath.endsWith('/') || targetPath.endsWith('\\') ? '' : '/'
-            const full = targetPath + sep + e.name
+            const full = (cleanParent + e.name).replace(/\\/g, '/')
             let size = 0
             let mtime = new Date()
             try {
@@ -274,10 +290,10 @@ function razosApiPlugin() {
         req.on('end', () => {
           try {
             const data = JSON.parse(body)
-            const parent = data.parent_path || data.parent || '.'
+            const parent = resolveSafePath(data.parent_path || data.parent || '.')
             const name = data.folder_name || data.name
-            const sep = parent.endsWith('/') || parent.endsWith('\\') ? '' : '/'
-            const target = parent + sep + name
+            const cleanParent = parent.endsWith('/') ? parent : parent + '/'
+            const target = (cleanParent + name).replace(/\\/g, '/')
             fs.mkdirSync(target, { recursive: true })
             res.setHeader('Content-Type', 'application/json')
             res.end(JSON.stringify({ status: 'created', path: target }))
@@ -295,7 +311,8 @@ function razosApiPlugin() {
           return res.end('Method Not Allowed')
         }
         const urlObj = new URL(req.url, 'http://localhost')
-        const targetPath = urlObj.searchParams.get('path')
+        const rawPath = urlObj.searchParams.get('path')
+        const targetPath = resolveSafePath(rawPath)
         try {
           if (fs.existsSync(targetPath)) {
             fs.rmSync(targetPath, { recursive: true, force: true })
@@ -322,7 +339,9 @@ function razosApiPlugin() {
         req.on('end', () => {
           try {
             const data = JSON.parse(body)
-            fs.renameSync(data.old_path, data.new_path)
+            const oldPath = resolveSafePath(data.old_path)
+            const newPath = resolveSafePath(data.new_path)
+            fs.renameSync(oldPath, newPath)
             res.setHeader('Content-Type', 'application/json')
             res.end(JSON.stringify({ status: 'renamed' }))
           } catch (err) {
@@ -336,7 +355,8 @@ function razosApiPlugin() {
       server.middlewares.use('/api/v1/files/content', (req, res) => {
         if (req.method === 'GET') {
           const urlObj = new URL(req.url, 'http://localhost')
-          const targetPath = urlObj.searchParams.get('path')
+          const rawPath = urlObj.searchParams.get('path')
+          const targetPath = resolveSafePath(rawPath)
           try {
             const content = fs.readFileSync(targetPath, 'utf-8')
             res.setHeader('Content-Type', 'application/json')
@@ -351,7 +371,8 @@ function razosApiPlugin() {
           req.on('end', () => {
             try {
               const data = JSON.parse(body)
-              fs.writeFileSync(data.path, data.content, 'utf-8')
+              const targetPath = resolveSafePath(data.path)
+              fs.writeFileSync(targetPath, data.content, 'utf-8')
               res.setHeader('Content-Type', 'application/json')
               res.end(JSON.stringify({ status: 'saved' }))
             } catch (err) {
@@ -365,7 +386,8 @@ function razosApiPlugin() {
       // 13. Endpoint File Raw Stream untuk Media Viewers (/api/v1/files/raw)
       server.middlewares.use('/api/v1/files/raw', (req, res) => {
         const urlObj = new URL(req.url, 'http://localhost')
-        const targetPath = urlObj.searchParams.get('path')
+        const rawPath = urlObj.searchParams.get('path')
+        const targetPath = resolveSafePath(rawPath)
         try {
           if (!fs.existsSync(targetPath)) {
             res.statusCode = 404

@@ -92,7 +92,7 @@ func GetStorageDevices() ([]StorageDevice, error) {
 
 // ListDirectory membaca isi direktori target dengan proteksi path sanitization
 func ListDirectory(targetPath string) ([]FileItem, error) {
-	if targetPath == "" {
+	if targetPath == "" || targetPath == "." || targetPath == "/" || targetPath == "/DATA" {
 		if _, err := os.Stat("C:\\DATA"); err == nil {
 			targetPath = "C:\\DATA"
 		} else if _, err := os.Stat("/DATA"); err == nil {
@@ -100,6 +100,11 @@ func ListDirectory(targetPath string) ([]FileItem, error) {
 		} else {
 			targetPath = "."
 		}
+	}
+
+	// Normalisasi Windows root drive letter misal "C:" menjadi "C:\"
+	if len(targetPath) == 2 && targetPath[1] == ':' {
+		targetPath += "\\"
 	}
 
 	cleanPath := filepath.Clean(targetPath)
@@ -120,9 +125,12 @@ func ListDirectory(targetPath string) ([]FileItem, error) {
 			ext = strings.ToLower(filepath.Ext(entry.Name()))
 		}
 
+		// Gunakan forward slash seragam agar tidak terjadi konflik path di browser
+		itemPath := filepath.ToSlash(filepath.Join(cleanPath, entry.Name()))
+
 		items = append(items, FileItem{
 			Name:      entry.Name(),
-			Path:      filepath.Join(cleanPath, entry.Name()),
+			Path:      itemPath,
 			IsDir:     entry.IsDir(),
 			Size:      info.Size(),
 			ModTime:   info.ModTime(),

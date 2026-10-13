@@ -1,20 +1,20 @@
 <script setup>
 /**
  * RAZOS Google Drive-Style Storage & Cloud File Manager with Built-in Media Viewers
- * Updated: 2026-10-13 (UI Redesign: Fluid Grid Auto-Fill, Bottom Status Bar & Custom Properties Modal)
+ * Updated: 2026-10-13 (Navigation & Folder Location Integrity Fix)
  * Deskripsi: Antarmuka File Manager tingkat lanjut memadukan arsitektur Google Drive dan Apple Finder:
+ * - Accurate Navigation & Path Normalization: Penanganan path Windows & Linux STB yang presisi tanpa lompat folder,
+ *   dukungan auto-discovery My Storage (/DATA atau C:/DATA), breadcrumbs adaptif, dan tombol naik tingkat yang aman.
  * - Fluid Responsive Grid: Menggunakan auto-fill minmax(140px, 1fr) sehingga kartu folder/file tidak pernah gepeng.
  * - Bottom Status Bar: Menampilkan jumlah item, status item aktif, dan tombol aksi cepat tanpa memeras ruang grid.
- * - Custom Modal Detail & Properti: Dialog modal khusus yang elegan (Glassmorphism) untuk rincian metadata berkas tanpa panel samping yang mempersempit explorer.
+ * - Custom Modal Detail & Properti: Dialog modal khusus yang elegan (Glassmorphism) untuk rincian metadata berkas.
  * - Built-in Media Viewers & Players:
  *   * Image Viewer: Preview gambar zoomable (WebP, PNG, JPG, SVG, GIF)
  *   * Video Player: Player MP4/WebM dengan kontrol multimedia kustom
  *   * Audio / Music Player: Player MP3/WAV/OGG dengan visualisasi gelombang
  *   * PDF Viewer: Penampil berkas dokumen PDF interaktif
  *   * Docs / Code Editor: Penampil dan editor kode (.txt, .md, .js, .go, .vue, .json, .sh, .yaml)
- * - Sidebar navigasi: My Drive (/DATA), Physical Disks/HDD, Starred/Favorit, Quick Storage Meter.
- * - Multi-view mode: Grid Thumbnail Card vs List Table view.
- * - Live Search filter & file type filter (Semua, Dokumen, Gambar, Video, Audio, Kode, Folder).
+ * - Sidebar navigasi: My Storage (/DATA), Physical Disks/HDD, Starred/Favorit, Quick Storage Meter.
  */
 import { ref, onMounted, computed } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
@@ -98,6 +98,24 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+// Path Default untuk My Storage (/DATA)
+const defaultStoragePath = ref('/DATA')
+
+// Helper Fungsi Normalisasi Path Universal (Windows & Linux STB)
+function normalizePath(p) {
+  if (!p) return '/'
+  let clean = p.replace(/\\/g, '/').replace(/\/+/g, '/')
+  // Jika format drive letter Windows "C:" tanpa slash, tambahkan slash "C:/"
+  if (/^[a-zA-Z]:$/.test(clean)) {
+    clean += '/'
+  }
+  // Hilangkan trailing slash jika bukan root drive atau bukan root "/"
+  if (clean.length > 3 && clean.endsWith('/')) {
+    clean = clean.slice(0, -1)
+  }
+  return clean
+}
+
 // Fetch Devices / Partisi Storage
 async function fetchDevices() {
   try {
@@ -105,17 +123,31 @@ async function fetchDevices() {
     if (res.ok) {
       const data = await res.json()
       storageDevices.value = data
-      if (data.length > 0) {
-        // Cari /DATA jika ada, atau gunakan drive fisik pertama
-        const dataDev = data.find(d => d.mountpoint === '/DATA' || d.label.includes('DATA'))
-        const defaultDev = dataDev ? dataDev : data[0]
-        if (!currentPath.value || currentPath.value === '/DATA') {
-          currentPath.value = defaultDev.mountpoint
-          fetchFiles(defaultDev.mountpoint)
+      
+      // Deteksi lokasi primary storage (/DATA)
+      const dataDev = data.find(d => d.mountpoint === '/DATA' || d.label.includes('DATA'))
+      if (dataDev) {
+        defaultStoragePath.value = dataDev.mountpoint
+      } else {
+        // Pada host Windows dev, arahkan ke C:/DATA jika ada drive C
+        const hasCDrive = data.some(d => d.device.startsWith('C:') || d.mountpoint.startsWith('C:'))
+        if (hasCDrive) {
+          defaultStoragePath.value = 'C:/DATA'
         }
       }
+
+      // Inisialisasi awal ke My Storage (/DATA) jika belum diset
+      if (!currentPath.value || currentPath.value === '/' || currentPath.value === 'C:/') {
+        currentPath.value = defaultStoragePath.value
+        fetchFiles(defaultStoragePath.value)
+      }
     }
-  } catch (err) {}
+  } catch (err) {
+    if (!currentPath.value) {
+      currentPath.value = 'C:/DATA'
+      fetchFiles('C:/DATA')
+    }
+  }
 }
 
 // Komputasi Total Penyimpanan Riil dari seluruh Disk/Partisi yang terbaca
@@ -132,18 +164,20 @@ const storageUsagePercent = computed(() => {
   return parseFloat(((usedStorageBytes.value / totalStorageBytes.value) * 100).toFixed(1))
 })
 
-// Fetch Daftar Berkas
+// Fetch Daftar Berkas dengan Normalisasi Aman
 async function fetchFiles(targetPath = currentPath.value) {
+  const cleanPath = normalizePath(targetPath)
   isLoading.value = true
   selectedItem.value = null
   try {
-    const res = await fetch(`/api/v1/files/list?path=${encodeURIComponent(targetPath)}`)
+    const res = await fetch(`/api/v1/files/list?path=${encodeURIComponent(cleanPath)}`)
     if (res.ok) {
       files.value = await res.json()
-      currentPath.value = targetPath
+      currentPath.value = cleanPath
     } else {
-      if (targetPath !== '.') {
-        fetchFiles('.')
+      // Fallback aman ke default storage jika path yang diminta invalid
+      if (cleanPath !== defaultStoragePath.value) {
+        fetchFiles(defaultStoragePath.value)
       }
     }
   } catch (err) {}
@@ -196,48 +230,78 @@ const filteredFiles = computed(() => {
   })
 })
 
-// Breadcrumbs Navigasi
+// Breadcrumbs Navigasi yang Akurat & Terstruktur
 const breadcrumbs = computed(() => {
-  const norm = currentPath.value.replace(/\\/g, '/')
-  const isDriveRoot = norm.match(/^[a-zA-Z]:\/?$/) || norm === '/'
-  
-  const parts = norm.split('/').filter(p => p.length > 0)
+  const norm = normalizePath(currentPath.value)
   const result = []
 
-  let accumulated = ''
-  parts.forEach((part, idx) => {
-    if (idx === 0 && part.includes(':')) {
-      accumulated = part + '/'
-      result.push({ name: part, path: accumulated })
-    } else {
-      accumulated = (accumulated.endsWith('/') ? accumulated : accumulated + '/') + part
-      result.push({ name: part, path: accumulated })
-    }
-  })
+  // Skenario Windows Path (diawali "C:/" atau "C:/DATA/...")
+  const winMatch = norm.match(/^([a-zA-Z]:)(\/.*)?$/)
+  if (winMatch) {
+    const driveLetter = winMatch[1]
+    const rest = winMatch[2] || ''
 
-  if (result.length === 0) {
-    result.push({ name: 'Root', path: currentPath.value })
+    // Root drive node
+    result.push({ name: `${driveLetter} Disk`, path: `${driveLetter}/` })
+
+    const segments = rest.split('/').filter(s => s.length > 0)
+    let accumulated = `${driveLetter}`
+    segments.forEach((seg) => {
+      accumulated += '/' + seg
+      // Beri badge khusus jika ini folder DATA (Cloud Storage)
+      const label = (accumulated.toUpperCase() === 'C:/DATA') ? 'My Storage (/DATA)' : seg
+      result.push({ name: label, path: accumulated })
+    })
+    return result
   }
+
+  // Skenario Linux / Unix Path (diawali "/")
+  result.push({ name: 'System Root', path: '/' })
+  const segments = norm.split('/').filter(s => s.length > 0)
+  let accumulated = ''
+  segments.forEach((seg) => {
+    accumulated += '/' + seg
+    const label = (accumulated === '/DATA') ? 'My Storage (/DATA)' : seg
+    result.push({ name: label, path: accumulated })
+  })
   return result
 })
 
+// Cek apakah tombol panah kembali bisa diklik (tidak sedang di root)
+const canNavigateUp = computed(() => {
+  const norm = normalizePath(currentPath.value)
+  if (norm === '/' || /^[a-zA-Z]:\/$/.test(norm)) return false
+  return true
+})
+
+// Navigasi Naik Satu Tingkat
 function navigateUp() {
-  const norm = currentPath.value.replace(/\\/g, '/').replace(/\/$/, '')
-  // Cek apakah sudah di root drive C: atau /
-  if (norm.match(/^[a-zA-Z]:$/) || norm === '' || norm === '/') {
+  const norm = normalizePath(currentPath.value)
+  if (!canNavigateUp.value) return
+
+  // Skenario Windows: potong segmen terakhir dengan aman
+  const winMatch = norm.match(/^([a-zA-Z]:)(\/.*)?$/)
+  if (winMatch) {
+    const driveLetter = winMatch[1]
+    const rest = winMatch[2] || ''
+    const segments = rest.split('/').filter(s => s.length > 0)
+    if (segments.length <= 1) {
+      // Tinggal 1 segmen (misal "C:/DATA"), kembali ke root "C:/"
+      fetchFiles(`${driveLetter}/`)
+      return
+    }
+    segments.pop()
+    fetchFiles(`${driveLetter}/${segments.join('/')}`)
     return
   }
+
+  // Skenario Linux: potong dari slash terakhir
   const lastSlash = norm.lastIndexOf('/')
   if (lastSlash <= 0) {
-    if (norm.includes(':')) {
-      fetchFiles(norm.substring(0, 2) + '/')
-    } else {
-      fetchFiles('/')
-    }
+    fetchFiles('/')
     return
   }
-  const up = norm.substring(0, lastSlash)
-  fetchFiles(up)
+  fetchFiles(norm.substring(0, lastSlash))
 }
 
 function handleItemClick(item) {
@@ -247,7 +311,7 @@ function handleItemClick(item) {
 // Otomatis Buka Viewer yang Cocok saat Double Click
 function handleItemDoubleClick(item) {
   if (item.is_dir) {
-    fetchFiles(item.path)
+    fetchFiles(normalizePath(item.path))
   } else if (isImageFile(item.extension)) {
     openImageViewer(item)
   } else if (isVideoFile(item.extension)) {
@@ -385,9 +449,8 @@ async function confirmRename() {
   } catch (e) {}
 }
 
-onMounted(() => {
-  fetchDevices()
-  fetchFiles()
+onMounted(async () => {
+  await fetchDevices()
 })
 </script>
 
@@ -408,12 +471,12 @@ onMounted(() => {
         <!-- Navigation Links -->
         <div class="flex flex-col gap-1 text-xs">
           <button
-            @click="() => { activeSidebarSection = 'drive'; const primary = storageDevices[0]?.mountpoint || '/DATA'; fetchFiles(primary); }"
+            @click="() => { activeSidebarSection = 'drive'; fetchFiles(defaultStoragePath); }"
             class="px-3 py-2.5 rounded-xl flex items-center gap-3 transition font-medium text-left"
             :class="activeSidebarSection === 'drive' ? 'bg-sky-500/20 text-sky-400 font-bold' : 'text-slate-300 hover:bg-slate-800/60'"
           >
             <Folder class="w-4 h-4 text-sky-400 fill-sky-400/20" />
-            <span>My Storage</span>
+            <span>My Storage (/DATA)</span>
           </button>
 
           <button
@@ -435,7 +498,7 @@ onMounted(() => {
               :key="idx"
               @click="() => { activeSidebarSection = 'devices'; fetchFiles(dev.mountpoint); }"
               class="p-2 rounded-xl bg-slate-950/60 hover:bg-slate-800/60 border border-slate-800/60 cursor-pointer transition flex flex-col gap-1"
-              :class="currentPath.startsWith(dev.mountpoint) ? 'ring-1 ring-sky-400/40 bg-sky-950/20' : ''"
+              :class="currentPath.startsWith(dev.mountpoint) && activeSidebarSection === 'devices' ? 'ring-1 ring-sky-400/40 bg-sky-950/20' : ''"
             >
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1.5 truncate">
@@ -532,7 +595,9 @@ onMounted(() => {
         <div class="flex items-center gap-1.5 overflow-x-auto text-slate-400">
           <button
             @click="navigateUp"
-            class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
+            :disabled="!canNavigateUp"
+            class="p-1.5 rounded-lg transition"
+            :class="canNavigateUp ? 'hover:bg-slate-800 text-slate-300 hover:text-white cursor-pointer active:scale-95' : 'text-slate-600 opacity-40 cursor-not-allowed'"
             title="Naik Satu Tingkat"
           >
             <ArrowLeft class="w-3.5 h-3.5" />
@@ -540,12 +605,14 @@ onMounted(() => {
           <template v-for="(crumb, idx) in breadcrumbs" :key="idx">
             <span
               @click="fetchFiles(crumb.path)"
-              class="px-2 py-0.5 rounded-md hover:bg-slate-800/80 cursor-pointer hover:text-sky-400 transition"
-              :class="idx === breadcrumbs.length - 1 ? 'text-slate-100 font-bold bg-slate-800/50' : 'text-slate-400'"
+              class="px-2 py-0.5 rounded-lg hover:bg-slate-800/80 cursor-pointer hover:text-sky-400 transition flex items-center gap-1"
+              :class="idx === breadcrumbs.length - 1 ? 'text-sky-400 font-bold bg-sky-500/10 border border-sky-500/20' : 'text-slate-400'"
             >
-              {{ crumb.name }}
+              <HardDrive v-if="idx === 0 && crumb.name.includes('Disk')" class="w-3 h-3 text-slate-400 shrink-0" />
+              <Folder v-else-if="idx === 0 || crumb.name.includes('Storage')" class="w-3 h-3 text-sky-400 shrink-0" />
+              <span>{{ crumb.name }}</span>
             </span>
-            <ChevronRight v-if="idx < breadcrumbs.length - 1" class="w-3 h-3 text-slate-600" />
+            <ChevronRight v-if="idx < breadcrumbs.length - 1" class="w-3 h-3 text-slate-600 shrink-0" />
           </template>
         </div>
 
