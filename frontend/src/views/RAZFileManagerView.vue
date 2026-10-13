@@ -36,7 +36,34 @@ const currentPath = ref('/DATA')
 const files = ref([])
 const isLoading = ref(false)
 const selectedItem = ref(null)
-const starredPaths = ref(new Set())
+
+// State Starred / Favorit Persisten (Tersimpan Permanen di localStorage)
+const starredItems = ref([])
+
+function loadStarredItems() {
+  try {
+    const raw = localStorage.getItem('razos_starred_items')
+    if (raw) {
+      starredItems.value = JSON.parse(raw)
+    }
+  } catch (e) {
+    starredItems.value = []
+  }
+}
+
+function saveStarredItems() {
+  try {
+    localStorage.setItem('razos_starred_items', JSON.stringify(starredItems.value))
+  } catch (e) {}
+}
+
+function isItemStarred(itemPath) {
+  if (!itemPath) return false
+  return starredItems.value.some(it => it.path === itemPath)
+}
+
+// Inisialisasi awal koleksi berbintang
+loadStarredItems()
 
 // State Address Bar & Navigasi Windows Explorer Style
 const historyStack = ref([])
@@ -294,13 +321,11 @@ function isDocFile(ext) {
 
 // Filtered & Searched Files
 const filteredFiles = computed(() => {
-  return files.value.filter(item => {
+  // Jika tab Berbintang aktif, gunakan koleksi global starredItems, jika tidak gunakan files folder aktif
+  const sourceList = activeSidebarSection.value === 'starred' ? starredItems.value : files.value
+  return sourceList.filter(item => {
     const matchSearch = item.name.toLowerCase().includes(searchQuery.value.toLowerCase())
     if (!matchSearch) return false
-
-    if (activeSidebarSection.value === 'starred') {
-      if (!starredPaths.value.has(item.path)) return false
-    }
 
     if (filterType.value === 'folders') return item.is_dir
     if (filterType.value === 'images') return !item.is_dir && isImageFile(item.extension)
@@ -315,6 +340,9 @@ const filteredFiles = computed(() => {
 
 // Breadcrumbs Navigasi yang Akurat & Terstruktur
 const breadcrumbs = computed(() => {
+  if (activeSidebarSection.value === 'starred') {
+    return [{ name: '⭐ Berbintang (Starred)', path: '' }]
+  }
   const norm = normalizePath(currentPath.value)
   const result = []
 
@@ -395,6 +423,9 @@ function handleItemClick(item) {
 function handleItemDoubleClick(item) {
   if (!item) return
   if (item.is_dir) {
+    if (activeSidebarSection.value === 'starred') {
+      activeSidebarSection.value = 'drive'
+    }
     fetchFiles(normalizePath(item.path))
   } else {
     // Failsafe: pastikan fungsi windowStore.openFileViewer tersedia (bebas dari cache lama browser)
@@ -408,13 +439,23 @@ function handleItemDoubleClick(item) {
 
 function toggleStar(item, e) {
   e?.stopPropagation()
-  if (starredPaths.value.has(item.path)) {
-    starredPaths.value.delete(item.path)
+  if (!item || !item.path) return
+  const idx = starredItems.value.findIndex(it => it.path === item.path)
+  if (idx >= 0) {
+    starredItems.value.splice(idx, 1)
     systemStore.showNotification('Favorit', `Dihapus dari berbintang: ${item.name}`, 'info')
   } else {
-    starredPaths.value.add(item.path)
+    starredItems.value.push({
+      name: item.name,
+      path: item.path,
+      is_dir: !!item.is_dir,
+      size: item.size || 0,
+      extension: item.extension || '',
+      mod_time: item.mod_time || new Date().toISOString()
+    })
     systemStore.showNotification('Favorit', `Ditambahkan ke berbintang: ${item.name}`, 'success')
   }
+  saveStarredItems()
 }
 
 // Buat Folder Baru
@@ -513,7 +554,7 @@ function handleFileItemContextMenu(e, item) {
       action: () => copyItemPath(item)
     },
     {
-      label: starredPaths.value.has(item.path) ? 'Hapus dari Bintang' : 'Beri Bintang',
+      label: isItemStarred(item.path) ? 'Hapus dari Bintang' : 'Beri Bintang',
       icon: Star,
       action: () => toggleStar(item)
     },
@@ -598,7 +639,7 @@ onMounted(async () => {
         <!-- Navigation Links -->
         <div class="flex flex-col gap-1 text-xs">
           <button
-            @click="() => { activeSidebarSection = 'drive'; fetchFiles(defaultStoragePath); }"
+            @click="() => { activeSidebarSection = 'drive'; if (currentPath !== defaultStoragePath) fetchFiles(defaultStoragePath); }"
             class="px-3 py-2.5 rounded-xl flex items-center gap-3 transition font-medium text-left"
             :class="activeSidebarSection === 'drive' ? 'bg-sky-500/20 text-sky-400 font-bold' : 'text-slate-300 hover:bg-slate-800/60'"
           >
@@ -612,7 +653,12 @@ onMounted(async () => {
             :class="activeSidebarSection === 'starred' ? 'bg-sky-500/20 text-sky-400 font-bold' : 'text-slate-300 hover:bg-slate-800/60'"
           >
             <Star class="w-4 h-4 text-amber-400" />
-            <span>Berbintang (Starred)</span>
+            <div class="flex items-center justify-between flex-1">
+              <span>Berbintang (Starred)</span>
+              <span v-if="starredItems.length > 0" class="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold">
+                {{ starredItems.length }}
+              </span>
+            </div>
           </button>
         </div>
 
@@ -697,7 +743,8 @@ onMounted(async () => {
           class="flex-1 min-w-0 h-9 bg-slate-950/80 border border-slate-800/90 hover:border-slate-700/80 focus-within:border-sky-500/80 focus-within:ring-1 focus-within:ring-sky-500/20 rounded-xl px-2.5 flex items-center gap-2 transition group text-xs font-mono shadow-inner"
         >
           <!-- Current Location Icon -->
-          <HardDrive v-if="currentPath.includes('Disk') || /^[a-zA-Z]:/.test(currentPath)" class="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <Star v-if="activeSidebarSection === 'starred'" class="w-3.5 h-3.5 text-amber-400 shrink-0 fill-amber-400" />
+          <HardDrive v-else-if="currentPath.includes('Disk') || /^[a-zA-Z]:/.test(currentPath)" class="w-3.5 h-3.5 text-slate-400 shrink-0" />
           <Folder v-else class="w-3.5 h-3.5 text-sky-400 shrink-0" />
 
           <!-- Editable Input Mode -->
@@ -877,10 +924,10 @@ onMounted(async () => {
                   <button
                     @click.stop="(e) => toggleStar(item, e)"
                     class="p-1 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-amber-400 transition"
-                    :class="starredPaths.has(item.path) ? 'text-amber-400 opacity-100' : 'opacity-0 group-hover:opacity-100'"
+                    :class="isItemStarred(item.path) ? 'text-amber-400 opacity-100' : 'opacity-0 group-hover:opacity-100'"
                     title="Bintang / Favorit"
                   >
-                    <Star class="w-3.5 h-3.5" :class="starredPaths.has(item.path) ? 'fill-amber-400' : ''" />
+                    <Star class="w-3.5 h-3.5" :class="isItemStarred(item.path) ? 'fill-amber-400' : ''" />
                   </button>
                 </div>
               </div>
@@ -922,7 +969,7 @@ onMounted(async () => {
                 >
                   <td class="py-2.5 px-3 font-medium flex items-center gap-2.5">
                     <button @click.stop="(e) => toggleStar(item, e)" class="text-slate-500 hover:text-amber-400">
-                      <Star class="w-3.5 h-3.5" :class="starredPaths.has(item.path) ? 'text-amber-400 fill-amber-400' : ''" />
+                      <Star class="w-3.5 h-3.5" :class="isItemStarred(item.path) ? 'text-amber-400 fill-amber-400' : ''" />
                     </button>
                     <Folder v-if="item.is_dir" class="w-4 h-4 text-sky-400 fill-sky-400/20" />
                     <Image v-else-if="isImageFile(item.extension)" class="w-4 h-4 text-sky-400" />
@@ -961,9 +1008,20 @@ onMounted(async () => {
 
           <!-- Empty Notice -->
           <div v-if="filteredFiles.length === 0 && !isLoading" class="p-12 text-center text-slate-500 flex flex-col items-center gap-2">
-            <Folder class="w-12 h-12 text-slate-700" />
-            <p class="font-medium text-slate-400">Tidak ada berkas yang cocok</p>
-            <span class="text-xs text-slate-600">Folder kosong atau kata kunci pencarian tidak ditemukan.</span>
+            <template v-if="activeSidebarSection === 'starred'">
+              <div class="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-2">
+                <Star class="w-8 h-8 fill-amber-400/30" />
+              </div>
+              <p class="font-bold text-slate-200 text-sm">Belum Ada Berkas Berbintang</p>
+              <span class="text-xs text-slate-400 max-w-sm leading-relaxed">
+                Tandai berkas atau folder favorit Anda dari direktori mana pun dengan mengklik ikon bintang (<Star class="w-3 h-3 inline text-amber-400 fill-amber-400" />) agar tersimpan rapi dan mudah diakses di sini.
+              </span>
+            </template>
+            <template v-else>
+              <Folder class="w-12 h-12 text-slate-700" />
+              <p class="font-medium text-slate-400">Tidak ada berkas yang cocok</p>
+              <span class="text-xs text-slate-600">Folder kosong atau kata kunci pencarian tidak ditemukan.</span>
+            </template>
           </div>
         </div>
 

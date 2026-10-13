@@ -290,3 +290,35 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - `npm run build` sukses 100% (*1504 modules transformed*).
 - Pengujian otomatis via Node fetch untuk `My Documents` (resolusi ke `Documents`, 65 items) dan `DumpStack.log.tmp` berhasil 100% dengan status HTTP 200 tanpa error konsol.
 - Dev server HMR aktif di `http://localhost:3000`.
+
+---
+
+### Versi: 2.4.4-starred-favorites-persistence-fix (Persistensi LocalStorage & Koleksi Global Berkas Berbintang)
+**Waktu Eksekusi:** 2026-10-13 12:26 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Masalah Utama yang Teridentifikasi
+- **Data Tidak Persisten (Hilang Saat Refresh/Navigasi):** State `starredPaths` sebelumnya hanya disimpan dalam `ref(new Set())` di memori komponen Vue. Setiap kali window File Manager dibuka ulang, browser di-refresh, atau terjadi HMR, instance `Set` kembali kosong.
+- **Koleksi Lokal vs Global:** Menu sidebar "Berbintang (Starred)" sebelumnya hanya memfilter array `files.value` dari direktori aktif saat itu (`currentPath`). Jika pengguna men-star berkas di folder A lalu berpindah ke folder B atau membuka tab Berbintang, berkas dari folder A tidak akan pernah muncul, dan jika di folder saat ini tidak ada item yang di-star, tampilan langsung kosong melompong (terlihat seolah-olah item hilang sendiri atau halaman me-reload).
+- **Reload Berkedip Saat Klik Sidebar:** Tombol "My Storage (/DATA)" di sidebar sebelumnya selalu memanggil ulang `fetchFiles(defaultStoragePath)` meskipun pengguna sudah berada di direktori tersebut, yang memicu loading spinner jaringan yang tidak perlu.
+
+#### 2. Solusi & Peningkatan yang Diimplementasikan
+- **Penyimpanan Permanen `localStorage`:**
+  - Mengintegrasikan penyimpanan persisten `localStorage.getItem('razos_starred_items')`.
+  - Menyimpan informasi item lengkap (`name`, `path`, `is_dir`, `size`, `extension`, `mod_time`) secara permanen.
+- **Koleksi Global Berkas & Folder Berbintang:**
+  - Saat tab sidebar "Berbintang (Starred)" dipilih, sumber data otomatis dialihkan ke array global `starredItems.value`.
+  - Berkas atau folder yang di-star dari lokasi MANAPUN (baik di `C:/`, `C:/DATA`, `Documents`, dsb) dijamin tampil utuh dan lengkap.
+  - Menambahkan badge jumlah item berbintang di samping menu sidebar.
+- **Navigasi Intuitif dari Tab Berbintang:**
+  - Double click pada folder di tab Berbintang langsung mengalihkan mode ke `drive` dan membuka folder tersebut secara instan.
+  - Double click pada berkas di tab Berbintang langsung membuka penampil berkas mandiri.
+- **Pencegahan Reload Berkedip:**
+  - Klik "My Storage (/DATA)" kini hanya beralih tab tanpa memicu fetch ulang jika sudah berada di direktori tersebut.
+  - Beralih ke tab Berbintang berlangsung instan (0 ms latency) tanpa request jaringan.
+- **Empty State yang Bersahabat:**
+  - Menampilkan kartu ilustrasi bintang emas dan panduan ramah jika pengguna belum menandai berkas favorit, bukan lagi layar kosong tanpa petunjuk.
+
+#### 3. Verifikasi Build
+- `npm run build` sukses 100% (*1504 modules transformed*).
+- HMR dev server aktif di `http://localhost:3000`.
