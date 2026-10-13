@@ -70,6 +70,25 @@ function handleTaskContextMenu(e, win) {
   ], win.title)
 }
 
+// Handler klik item taskbar dengan failsafe jika instance store lama
+function handleTaskbarItemClick(winId) {
+  if (typeof windowStore.toggleWindowFromTaskbar === 'function') {
+    windowStore.toggleWindowFromTaskbar(winId)
+  } else {
+    const win = windowStore.openWindows.find(w => w.id === winId)
+    if (win) {
+      if (win.isMinimized) {
+        win.isMinimized = false
+        windowStore.bringToFront(winId)
+      } else if (windowStore.activeWindowId === winId) {
+        windowStore.minimizeWindow(winId)
+      } else {
+        windowStore.bringToFront(winId)
+      }
+    }
+  }
+}
+
 // Context menu klik kanan pada area kosong taskbar
 function handleTaskbarContextMenu(e) {
   contextMenuStore.show(e, [
@@ -82,12 +101,28 @@ function handleTaskbarContextMenu(e) {
     {
       label: 'Tampilkan Desktop',
       icon: EyeOff,
-      action: () => windowStore.minimizeAllWindows()
+      action: () => {
+        if (typeof windowStore.minimizeAllWindows === 'function') {
+          windowStore.minimizeAllWindows()
+        } else {
+          windowStore.openWindows.forEach(w => { w.isMinimized = true })
+          windowStore.activeWindowId = null
+        }
+      }
     },
     {
       label: 'Pulihkan Semua Jendela',
       icon: Layers,
-      action: () => windowStore.restoreAllWindows()
+      action: () => {
+        if (typeof windowStore.restoreAllWindows === 'function') {
+          windowStore.restoreAllWindows()
+        } else {
+          windowStore.openWindows.forEach(w => { w.isMinimized = false })
+          if (windowStore.openWindows.length > 0) {
+            windowStore.bringToFront(windowStore.openWindows[windowStore.openWindows.length - 1].id)
+          }
+        }
+      }
     },
     { separator: true },
     {
@@ -140,7 +175,7 @@ function handleTaskbarContextMenu(e) {
         <button
           v-for="win in windowStore.openWindows"
           :key="win.id"
-          @click="windowStore.toggleWindowFromTaskbar(win.id)"
+          @click="handleTaskbarItemClick(win.id)"
           @contextmenu.prevent.stop="handleTaskContextMenu($event, win)"
           class="h-8 px-2.5 flex items-center gap-2 rounded-lg text-xs font-medium transition border"
           :class="windowStore.activeWindowId === win.id && !win.isMinimized

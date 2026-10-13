@@ -206,3 +206,23 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 #### 3. Verifikasi Build & Stabilitas
 - `npm run build` sukses 100% tanpa error (*1504 modules transformed*).
 - HMR dev server langsung memuat pembaruan secara real-time pada `http://localhost:3000`.
+
+---
+
+### Versi: 2.4.1-pinia-hmr-and-failsafe-resilience (Integrasi Pinia acceptHMRUpdate & Failsafe Execution)
+**Waktu Eksekusi:** 2026-10-13 11:40 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Sinkronisasi Instan Pinia HMR Store
+- **Masalah:** Saat fungsi baru ditambahkan ke Pinia Store (`RAZWindowStore.js`), Vite HMR me-reload komponen Vue tetapi Pinia mempertahankan closure memori singleton yang sudah ada di tab browser pengguna. Hal ini memicu pesan `TypeError: is not a function` jika browser belum di-refresh penuh.
+- **Penyelesaian:**
+  - Mengintegrasikan modul resmi `acceptHMRUpdate` dari Pinia ke seluruh store inti: `RAZWindowStore.js`, `RAZContextMenuStore.js`, dan `RAZSystemStore.js`.
+  - Sekarang saat ada pembaruan fungsi di store, Vite HMR secara otomatis mengganti dan memperbarui method di memori browser tanpa memerlukan refresh manual.
+
+#### 2. Arsitektur Failsafe Dua Lapis (Zero Console Error)
+- **Fallback Eksekusi:**
+  - Menambahkan pengecekan typeof dan fallback internal pada `handleTaskbarItemClick` di `RAZTaskbar.vue` dan aksi context menu di `RAZDesktopLayout.vue`.
+  - Membungkus eksekusi `item.action()` pada `RAZContextMenu.vue` dalam blok `try-catch` sehingga tidak ada `Uncaught TypeError` yang tembus ke browser console.
+- **Verifikasi Build:**
+  - `npm run build` berhasil 100% (*1504 modules transformed*).
+  - Dev server aktif dan mutakhir di `http://localhost:3000`.

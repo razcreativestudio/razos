@@ -4,7 +4,7 @@
  * Deskripsi: State management untuk polling data metrik host dan status windowing.
  */
 
-import { defineStore } from 'pinia'
+import { defineStore, acceptHMRUpdate } from 'pinia'
 import { ref } from 'vue'
 
 export const useSystemStore = defineStore('system', () => {
@@ -97,3 +97,7 @@ export const useSystemStore = defineStore('system', () => {
     cleanStorage
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useSystemStore, import.meta.hot))
+}

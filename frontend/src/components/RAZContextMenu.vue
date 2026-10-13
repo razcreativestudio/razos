@@ -14,10 +14,14 @@ const contextMenuStore = useContextMenuStore()
 
 function handleItemClick(item) {
   if (item.disabled) return
-  if (typeof item.action === 'function') {
-    item.action()
-  }
   contextMenuStore.hide()
+  if (typeof item.action === 'function') {
+    try {
+      item.action()
+    } catch (err) {
+      console.warn('Gagal mengeksekusi aksi context menu:', err)
+    }
+  }
 }
 
 // Tutup menu saat klik sembarang di luar atau tekan tombol Escape

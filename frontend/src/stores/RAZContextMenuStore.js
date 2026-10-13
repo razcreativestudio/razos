@@ -6,7 +6,7 @@
  * Dilengkapi kalkulasi posisi otomatis (boundary-aware) agar menu tidak keluar dari layar/viewport.
  */
 
-import { defineStore } from 'pinia'
+import { defineStore, acceptHMRUpdate } from 'pinia'
 import { ref } from 'vue'
 
 export const useContextMenuStore = defineStore('contextMenu', () => {
@@ -75,3 +75,7 @@ export const useContextMenuStore = defineStore('contextMenu', () => {
     hide
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useContextMenuStore, import.meta.hot))
+}

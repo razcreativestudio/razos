@@ -70,12 +70,28 @@ function handleDesktopContextMenu(e) {
     {
       label: 'Tampilkan Desktop',
       icon: EyeOff,
-      action: () => windowStore.minimizeAllWindows()
+      action: () => {
+        if (typeof windowStore.minimizeAllWindows === 'function') {
+          windowStore.minimizeAllWindows()
+        } else {
+          windowStore.openWindows.forEach(w => { w.isMinimized = true })
+          windowStore.activeWindowId = null
+        }
+      }
     },
     {
       label: 'Pulihkan Semua Jendela',
       icon: Layers,
-      action: () => windowStore.restoreAllWindows()
+      action: () => {
+        if (typeof windowStore.restoreAllWindows === 'function') {
+          windowStore.restoreAllWindows()
+        } else {
+          windowStore.openWindows.forEach(w => { w.isMinimized = false })
+          if (windowStore.openWindows.length > 0) {
+            windowStore.bringToFront(windowStore.openWindows[windowStore.openWindows.length - 1].id)
+          }
+        }
+      }
     },
     { separator: true },
     {

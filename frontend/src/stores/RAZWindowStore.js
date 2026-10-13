@@ -5,7 +5,7 @@
  * fokus Z-Index, dan dynamic standalone file viewers untuk gambar, video, musik, pdf, teks/kode).
  */
 
-import { defineStore } from 'pinia'
+import { defineStore, acceptHMRUpdate } from 'pinia'
 import { ref } from 'vue'
 
 export const useWindowStore = defineStore('window', () => {
@@ -273,3 +273,7 @@ export const useWindowStore = defineStore('window', () => {
     restoreAllWindows
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useWindowStore, import.meta.hot))
+}
