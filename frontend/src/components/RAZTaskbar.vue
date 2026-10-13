@@ -7,10 +7,15 @@
 import { ref, computed } from 'vue'
 import { useWindowStore } from '../stores/RAZWindowStore'
 import { useSystemStore } from '../stores/RAZSystemStore'
-import { Maximize2, Cpu, HardDrive, Thermometer, Clock } from 'lucide-vue-next'
+import { useContextMenuStore } from '../stores/RAZContextMenuStore'
+import {
+  Maximize2, Cpu, HardDrive, Thermometer, Clock, Minus, Square,
+  X, Layers, EyeOff, Settings
+} from 'lucide-vue-next'
 
 const windowStore = useWindowStore()
 const systemStore = useSystemStore()
+const contextMenuStore = useContextMenuStore()
 
 const isStartMenuOpen = ref(false)
 
@@ -32,10 +37,73 @@ function handleStartItemClick(appId) {
   isStartMenuOpen.value = false
   windowStore.openApp(appId)
 }
+
+// Context menu klik kanan pada item taskbar aplikasi aktif
+function handleTaskContextMenu(e, win) {
+  contextMenuStore.show(e, [
+    {
+      label: win.isMinimized ? 'Pulihkan Jendela' : 'Fokus ke Depan',
+      icon: Maximize2,
+      action: () => {
+        win.isMinimized = false
+        windowStore.bringToFront(win.id)
+      }
+    },
+    {
+      label: 'Minimalkan',
+      icon: Minus,
+      disabled: win.isMinimized,
+      action: () => windowStore.minimizeWindow(win.id)
+    },
+    {
+      label: win.isMaximized ? 'Ukuran Normal' : 'Maksimalkan',
+      icon: Square,
+      action: () => windowStore.toggleMaximize(win.id)
+    },
+    { separator: true },
+    {
+      label: 'Tutup Jendela',
+      icon: X,
+      danger: true,
+      action: () => windowStore.closeWindow(win.id)
+    }
+  ], win.title)
+}
+
+// Context menu klik kanan pada area kosong taskbar
+function handleTaskbarContextMenu(e) {
+  contextMenuStore.show(e, [
+    {
+      label: 'Task Manager',
+      icon: Cpu,
+      action: () => windowStore.openApp('task-manager')
+    },
+    { separator: true },
+    {
+      label: 'Tampilkan Desktop',
+      icon: EyeOff,
+      action: () => windowStore.minimizeAllWindows()
+    },
+    {
+      label: 'Pulihkan Semua Jendela',
+      icon: Layers,
+      action: () => windowStore.restoreAllWindows()
+    },
+    { separator: true },
+    {
+      label: 'Pengaturan Sistem',
+      icon: Settings,
+      action: () => windowStore.openApp('settings')
+    }
+  ], 'Menu Taskbar')
+}
 </script>
 
 <template>
-  <div class="fixed bottom-0 left-0 w-full h-12 raz-glass border-t border-slate-700/60 z-50 flex items-center justify-between px-3">
+  <div
+    class="fixed bottom-0 left-0 w-full h-12 raz-glass border-t border-slate-700/60 z-50 flex items-center justify-between px-3 select-none"
+    @contextmenu.prevent="handleTaskbarContextMenu"
+  >
     <!-- Left: Start Button -->
     <div class="relative flex items-center gap-2">
       <button
@@ -72,11 +140,13 @@ function handleStartItemClick(appId) {
         <button
           v-for="win in windowStore.openWindows"
           :key="win.id"
-          @click="win.isMinimized ? (win.isMinimized = false, windowStore.bringToFront(win.id)) : windowStore.bringToFront(win.id)"
+          @click="windowStore.toggleWindowFromTaskbar(win.id)"
+          @contextmenu.prevent.stop="handleTaskContextMenu($event, win)"
           class="h-8 px-2.5 flex items-center gap-2 rounded-lg text-xs font-medium transition border"
           :class="windowStore.activeWindowId === win.id && !win.isMinimized
             ? 'bg-slate-800 text-sky-400 border-sky-400/40 shadow'
             : 'bg-slate-900/50 text-slate-400 hover:text-slate-200 border-slate-700/40'"
+          :title="win.isMinimized ? `${win.title} (Diminimalkan - Klik untuk membuka)` : `${win.title} (Klik untuk minimize)`"
         >
           <img :src="win.icon" :alt="win.title" class="w-3.5 h-3.5" />
           <span class="truncate max-w-[100px]">{{ win.title }}</span>

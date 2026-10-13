@@ -17,6 +17,7 @@
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
 import { useWindowStore } from '../stores/RAZWindowStore'
+import { useContextMenuStore } from '../stores/RAZContextMenuStore'
 import {
   HardDrive, Folder, File, FileText, FileCode, Plus, Trash2, Edit3,
   ChevronRight, ArrowLeft, ArrowRight, ArrowUp, RefreshCw, X, Save, AlertTriangle, Eye, Usb,
@@ -27,6 +28,7 @@ import {
 
 const systemStore = useSystemStore()
 const windowStore = useWindowStore()
+const contextMenuStore = useContextMenuStore()
 
 // State Data
 const storageDevices = ref([])
@@ -457,6 +459,111 @@ async function confirmRename() {
   } catch (e) {}
 }
 
+// Unduh Berkas Langsung
+function downloadFile(item) {
+  if (!item || item.is_dir) return
+  const a = document.createElement('a')
+  a.href = `/api/v1/files/raw?path=${encodeURIComponent(item.path)}`
+  a.download = item.name
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}
+
+// Salin Path Berkas / Folder ke Clipboard
+async function copyItemPath(item) {
+  if (!item) return
+  try {
+    await navigator.clipboard.writeText(item.path)
+    systemStore.showNotification('Disalin', `Path "${item.path}" disalin ke clipboard`, 'success')
+  } catch (e) {
+    systemStore.showNotification('Gagal', 'Tidak dapat menyalin path ke clipboard', 'error')
+  }
+}
+
+// Context Menu Klik Kanan pada Berkas atau Folder
+function handleFileItemContextMenu(e, item) {
+  selectedItem.value = item
+  const menuList = [
+    {
+      label: item.is_dir ? 'Masuk Folder' : 'Buka Berkas',
+      icon: item.is_dir ? Folder : Eye,
+      action: () => handleItemDoubleClick(item)
+    },
+    {
+      label: 'Info & Properti',
+      icon: Info,
+      action: () => openInfoModal(item)
+    },
+    {
+      label: 'Salin Path',
+      icon: Copy,
+      action: () => copyItemPath(item)
+    },
+    {
+      label: starredPaths.value.has(item.path) ? 'Hapus dari Bintang' : 'Beri Bintang',
+      icon: Star,
+      action: () => toggleStar(item)
+    },
+    {
+      label: 'Ubah Nama',
+      icon: Edit3,
+      action: () => openRenameDialog(item)
+    }
+  ]
+
+  if (!item.is_dir) {
+    menuList.push({
+      label: 'Unduh Berkas',
+      icon: Download,
+      action: () => downloadFile(item)
+    })
+  }
+
+  menuList.push({ separator: true })
+  menuList.push({
+    label: 'Hapus',
+    icon: Trash2,
+    danger: true,
+    action: () => deleteItem(item)
+  })
+
+  contextMenuStore.show(e, menuList, item.name)
+}
+
+// Context Menu Klik Kanan pada Area Kosong Explorer
+function handleCanvasContextMenu(e) {
+  contextMenuStore.show(e, [
+    {
+      label: 'Folder Baru',
+      icon: Plus,
+      action: () => { showNewFolderModal.value = true }
+    },
+    {
+      label: 'Muat Ulang (Refresh)',
+      icon: RefreshCw,
+      action: () => fetchFiles(currentPath.value)
+    },
+    { separator: true },
+    {
+      label: 'Tampilan Grid',
+      icon: LayoutGrid,
+      action: () => { viewMode.value = 'grid' }
+    },
+    {
+      label: 'Tampilan List',
+      icon: List,
+      action: () => { viewMode.value = 'list' }
+    },
+    { separator: true },
+    {
+      label: 'Salin Path Direktori',
+      icon: Copy,
+      action: () => copyCurrentPath()
+    }
+  ], 'File Manager')
+}
+
 onMounted(async () => {
   await fetchDevices()
 })
@@ -715,7 +822,7 @@ onMounted(async () => {
 
       <!-- MAIN EXPLORER AREA (GRID VS LIST) -->
       <div class="flex-1 flex flex-col overflow-hidden">
-        <div class="flex-1 p-4 overflow-y-auto">
+        <div class="flex-1 p-4 overflow-y-auto" @contextmenu.prevent="handleCanvasContextMenu">
           <!-- GRID VIEW (Fluid Responsive Auto-Fill Layout) -->
           <div v-if="viewMode === 'grid'" class="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3">
             <div
@@ -723,6 +830,7 @@ onMounted(async () => {
               :key="idx"
               @click="handleItemClick(item)"
               @dblclick="handleItemDoubleClick(item)"
+              @contextmenu.prevent.stop="handleFileItemContextMenu($event, item)"
               class="p-3 rounded-2xl border transition-all duration-200 cursor-pointer flex flex-col justify-between group relative select-none min-h-[140px]"
               :class="selectedItem?.path === item.path
                 ? 'bg-sky-500/20 border-sky-400 ring-2 ring-sky-400/40 shadow-lg'
@@ -796,6 +904,7 @@ onMounted(async () => {
                   :key="idx"
                   @click="handleItemClick(item)"
                   @dblclick="handleItemDoubleClick(item)"
+                  @contextmenu.prevent.stop="handleFileItemContextMenu($event, item)"
                   class="hover:bg-slate-800/60 cursor-pointer transition"
                   :class="selectedItem?.path === item.path ? 'bg-sky-500/10 text-sky-300' : ''"
                 >

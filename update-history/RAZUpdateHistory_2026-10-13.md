@@ -149,3 +149,60 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - **Verifikasi:**
   - `npm run build` sukses 100% (1502 modules transformed).
   - Vite dev server me-restart server secara otomatis dan bersih di port 3000.
+
+---
+
+### Versi: 2.4.0-taskbar-toggle-and-systemwide-context-menus (Taskbar Minimize/Restore Toggle & Sistem Context Menu Global)
+**Waktu Eksekusi:** 2026-10-13 11:34 WIB  
+**Pelaksana:** AI Agent Core Engineering
+
+#### 1. Perilaku Taskbar Klik Cerdas (Toggle Minimize & Restore Ala Windows/macOS)
+- **Logika State Interaktif:**
+  - Mengimplementasikan `toggleWindowFromTaskbar(winId)` pada `RAZWindowStore.js` dan menghubungkannya ke tombol aplikasi taskbar di `RAZTaskbar.vue`.
+  - **Saat Jendela Minimized:** Mengklik tombol taskbar akan langsung memulihkan (*restore*) jendela ke layar dan membawanya ke fokus paling depan (`bringToFront`).
+  - **Saat Jendela Aktif di Depan:** Mengklik tombol taskbar akan langsung meminimalkan (*minimize*) jendela ke taskbar.
+  - **Saat Jendela di Belakang Jendela Lain:** Mengklik tombol taskbar akan membawa jendela tersebut ke paling depan dan memberikannya fokus tanpa perlu minimize terlebih dahulu.
+
+#### 2. Arsitektur Universal Custom Context Menu (`RAZContextMenu.vue` & `RAZContextMenuStore.js`)
+- **Desain Glassmorphism Slate-900 Terpadu:**
+  - Menghapus ketergantungan pada context menu native peramban di seluruh ekosistem desktop.
+  - Boundary-aware positioning: posisi `x` dan `y` dihitung otomatis agar menu tidak pernah terpotong di tepi kanan atau bawah layar peramban.
+  - Mendukung ikon Lucide, separator baris, status tombol bahaya (*danger* warna merah rose-400), serta auto-close pada klik luar atau tombol <kbd>Esc</kbd>.
+- **Cakupan Menu Klik Kanan Komprehensif:**
+  1. **Desktop Wallpaper (Area Kosong):**
+     - Muat Ulang Desktop (Refresh metrics)
+     - Pintasan cepat buka: Files & Storage, Web Terminal, Task Manager
+     - Tampilkan Desktop (Minimalkan Semua Jendela)
+     - Pulihkan Semua Jendela
+     - Pengaturan Sistem
+  2. **Ikon Shortcut Desktop:**
+     - Buka Aplikasi
+     - Informasi Aplikasi & Dimensi Window
+  3. **Taskbar (Area Kosong):**
+     - Buka Task Manager
+     - Tampilkan Desktop (Minimalkan Semua Jendela)
+     - Pulihkan Semua Jendela
+     - Pengaturan Sistem
+  4. **Item Aplikasi Aktif di Taskbar:**
+     - Fokus ke Depan / Pulihkan Jendela
+     - Minimalkan Jendela
+     - Maksimalkan / Ukuran Normal
+     - Tutup Jendela (Aksi Cepat Berbahaya)
+  5. **Berkas & Folder di File Manager:**
+     - Buka / Masuk Folder
+     - Detail & Properti Berkas
+     - Salin Path Direktori / Berkas ke Clipboard
+     - Beri / Hapus Bintang (Favorit)
+     - Ubah Nama Berkas (Rename)
+     - Unduh Berkas Langsung
+     - Hapus Berkas / Folder
+  6. **Canvas Area Kosong File Manager:**
+     - Buat Folder Baru
+     - Muat Ulang (Refresh)
+     - Beralih Tampilan Grid
+     - Beralih Tampilan List
+     - Salin Path Direktori Aktif
+
+#### 3. Verifikasi Build & Stabilitas
+- `npm run build` sukses 100% tanpa error (*1504 modules transformed*).
+- HMR dev server langsung memuat pembaruan secara real-time pada `http://localhost:3000`.

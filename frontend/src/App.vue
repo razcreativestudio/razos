@@ -9,6 +9,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useSystemStore } from './stores/RAZSystemStore'
 import RAZDesktopLayout from './layouts/RAZDesktopLayout.vue'
 import RAZMobileLayout from './layouts/RAZMobileLayout.vue'
+import RAZContextMenu from './components/RAZContextMenu.vue'
 import { CheckCircle2, AlertCircle, Info } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
@@ -69,5 +70,8 @@ onUnmounted(() => {
         </div>
       </div>
     </transition>
+
+    <!-- Global Enterprise Context Menu -->
+    <RAZContextMenu />
   </div>
 </template>

@@ -220,6 +220,44 @@ export const useWindowStore = defineStore('window', () => {
     activeWindowId.value = winId
   }
 
+  // Toggle window dari taskbar (minimize jika aktif di depan, atau restore/bringToFront jika minimize/di belakang)
+  function toggleWindowFromTaskbar(winId) {
+    const win = openWindows.value.find(w => w.id === winId)
+    if (!win) return
+
+    if (win.isMinimized) {
+      // Jika sedang diminimalkan, munculkan kembali dan fokuskan
+      win.isMinimized = false
+      bringToFront(winId)
+    } else {
+      // Jika jendela sedang aktif di paling depan, minimalkan
+      if (activeWindowId.value === winId) {
+        minimizeWindow(winId)
+      } else {
+        // Jika jendela terbuka tapi tertutup jendela lain, bawa ke paling depan
+        bringToFront(winId)
+      }
+    }
+  }
+
+  // Minimalkan semua jendela yang terbuka (Show Desktop)
+  function minimizeAllWindows() {
+    openWindows.value.forEach(w => {
+      w.isMinimized = true
+    })
+    activeWindowId.value = null
+  }
+
+  // Pulihkan semua jendela yang diminimalkan
+  function restoreAllWindows() {
+    openWindows.value.forEach(w => {
+      w.isMinimized = false
+    })
+    if (openWindows.value.length > 0) {
+      bringToFront(openWindows.value[openWindows.value.length - 1].id)
+    }
+  }
+
   return {
     apps,
     openWindows,
@@ -229,6 +267,9 @@ export const useWindowStore = defineStore('window', () => {
     closeWindow,
     minimizeWindow,
     toggleMaximize,
-    bringToFront
+    bringToFront,
+    toggleWindowFromTaskbar,
+    minimizeAllWindows,
+    restoreAllWindows
   }
 })
