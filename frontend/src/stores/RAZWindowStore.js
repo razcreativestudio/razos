@@ -84,7 +84,7 @@ export const useWindowStore = defineStore('window', () => {
   // Kunci penyimpanan preferensi ukuran & posisi jendela di localStorage
   const WINDOW_BOUNDS_STORAGE_KEY = 'razos_window_bounds'
 
-  // Ambil data ukuran & posisi tersimpan dari localStorage dengan sanitasi angka
+  // Ambil data ukuran, posisi, dan status maximized tersimpan dari localStorage dengan sanitasi angka
   function getSavedBounds(id) {
     try {
       const raw = localStorage.getItem(WINDOW_BOUNDS_STORAGE_KEY)
@@ -100,7 +100,8 @@ export const useWindowStore = defineStore('window', () => {
             width: Number.isFinite(w) && w >= 200 ? w : null,
             height: Number.isFinite(h) && h >= 150 ? h : null,
             x: Number.isFinite(x) ? x : null,
-            y: Number.isFinite(y) ? y : null
+            y: Number.isFinite(y) ? y : null,
+            isMaximized: item.isMaximized === true
           }
         }
       }
@@ -108,28 +109,38 @@ export const useWindowStore = defineStore('window', () => {
     return null
   }
 
-  // Simpan data ukuran & koordinat posisi jendela ke localStorage dengan sanitasi angka
+  // Simpan data ukuran, koordinat posisi, dan status maximized jendela ke localStorage dengan sanitasi angka
   function saveWindowBounds(id, bounds) {
     if (!id || !bounds) return
-    const w = Number(bounds.width)
-    const h = Number(bounds.height)
-    const x = Number(bounds.x)
-    const y = Number(bounds.y)
-    if (!Number.isFinite(w) || !Number.isFinite(h) || !Number.isFinite(x) || !Number.isFinite(y)) return
     try {
       const raw = localStorage.getItem(WINDOW_BOUNDS_STORAGE_KEY)
       const parsed = raw ? JSON.parse(raw) : {}
+      const existing = parsed[id] || {}
+
+      const w = Number(bounds.width)
+      const h = Number(bounds.height)
+      const x = Number(bounds.x)
+      const y = Number(bounds.y)
+      const isMax = bounds.isMaximized !== undefined ? !!bounds.isMaximized : (existing.isMaximized === true)
+
+      // Pertahankan ukuran dan koordinat unmaximized jika data saat ini valid
+      const validW = Number.isFinite(w) && w >= 200 ? Math.round(w) : (existing.width || 700)
+      const validH = Number.isFinite(h) && h >= 150 ? Math.round(h) : (existing.height || 480)
+      const validX = Number.isFinite(x) ? Math.round(x) : (existing.x ?? 60)
+      const validY = Number.isFinite(y) ? Math.round(y) : (existing.y ?? 40)
+
       parsed[id] = {
-        width: Math.round(w),
-        height: Math.round(h),
-        x: Math.round(x),
-        y: Math.round(y)
+        width: validW,
+        height: validH,
+        x: validX,
+        y: validY,
+        isMaximized: isMax
       }
       localStorage.setItem(WINDOW_BOUNDS_STORAGE_KEY, JSON.stringify(parsed))
     } catch (e) {}
   }
 
-  // Buka window aplikasi dengan memulihkan ukuran dan posisi terakhir
+  // Buka window aplikasi dengan memulihkan ukuran, posisi, dan status maximize terakhir
   function openApp(appId) {
     const existing = openWindows.value.find(w => w.id === appId)
     if (existing) {
@@ -154,6 +165,7 @@ export const useWindowStore = defineStore('window', () => {
 
     const winX = (saved && saved.x !== null && saved.x !== undefined) ? Math.min(Math.max(20, saved.x), maxX) : (60 + (offset % 200))
     const winY = (saved && saved.y !== null && saved.y !== undefined) ? Math.min(Math.max(20, saved.y), maxY) : (40 + (offset % 150))
+    const isMaximized = saved?.isMaximized === true
 
     const win = {
       ...appDef,
@@ -163,22 +175,23 @@ export const useWindowStore = defineStore('window', () => {
       y: winY,
       zIndex: zIndexCounter.value,
       isMinimized: false,
-      isMaximized: false
+      isMaximized: isMaximized
     }
 
     openWindows.value.push(win)
     activeWindowId.value = appId
   }
 
-  // Tutup window dan simpan ukuran/posisi terakhirnya
+  // Tutup window dan simpan ukuran, posisi, serta status maximize terakhirnya
   function closeWindow(appId) {
     const win = openWindows.value.find(w => w.id === appId)
-    if (win && !win.isMaximized) {
+    if (win) {
       saveWindowBounds(appId, {
         width: win.width,
         height: win.height,
         x: win.x,
-        y: win.y
+        y: win.y,
+        isMaximized: win.isMaximized === true
       })
     }
     openWindows.value = openWindows.value.filter(w => w.id !== appId)
@@ -200,11 +213,18 @@ export const useWindowStore = defineStore('window', () => {
     }
   }
 
-  // Toggle maximize
+  // Toggle maximize dan simpan status terbaru
   function toggleMaximize(appId) {
     const win = openWindows.value.find(w => w.id === appId)
     if (win) {
       win.isMaximized = !win.isMaximized
+      saveWindowBounds(appId, {
+        width: win.width,
+        height: win.height,
+        x: win.x,
+        y: win.y,
+        isMaximized: win.isMaximized === true
+      })
       bringToFront(appId)
     }
   }
@@ -273,21 +293,26 @@ export const useWindowStore = defineStore('window', () => {
 
     zIndexCounter.value++
     const offset = (openWindows.value.length * 32) % 200
+    const saved = getSavedBounds(winId)
+
+    const winWidth = saved?.width || width
+    const winHeight = saved?.height || height
+    const isMaximized = saved?.isMaximized === true
 
     const win = {
       id: winId,
       title: fileItem.name,
       icon: icon,
       fileData: fileItem,
-      width: width,
-      height: height,
+      width: winWidth,
+      height: winHeight,
       minWidth: minWidth,
       minHeight: minHeight,
-      x: 120 + offset,
-      y: 60 + offset,
+      x: (saved && saved.x !== null && saved.x !== undefined) ? saved.x : (120 + offset),
+      y: (saved && saved.y !== null && saved.y !== undefined) ? saved.y : (60 + offset),
       zIndex: zIndexCounter.value,
       isMinimized: false,
-      isMaximized: false
+      isMaximized: isMaximized
     }
 
     openWindows.value.push(win)
@@ -316,8 +341,9 @@ export const useWindowStore = defineStore('window', () => {
     const maxX = Math.max(20, (window.innerWidth || 1200) - winWidth - 20)
     const maxY = Math.max(20, (window.innerHeight || 800) - winHeight - 60)
 
-    const winX = saved?.x !== undefined ? Math.min(Math.max(20, saved.x), maxX) : Math.max(40, 100 + offset)
-    const winY = saved?.y !== undefined ? Math.min(Math.max(20, saved.y), maxY) : Math.max(30, 60 + offset)
+    const winX = (saved && saved.x !== null && saved.x !== undefined) ? Math.min(Math.max(20, saved.x), maxX) : Math.max(40, 100 + offset)
+    const winY = (saved && saved.y !== null && saved.y !== undefined) ? Math.min(Math.max(20, saved.y), maxY) : Math.max(30, 60 + offset)
+    const isMaximized = saved?.isMaximized === true
 
     const win = {
       id: config.id,
@@ -331,7 +357,7 @@ export const useWindowStore = defineStore('window', () => {
       y: winY,
       zIndex: zIndexCounter.value,
       isMinimized: false,
-      isMaximized: false,
+      isMaximized: isMaximized,
       customData: config.data || null,
       customType: config.type || config.id
     }

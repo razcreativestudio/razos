@@ -140,6 +140,23 @@ function onDrag(e) {
   }
 }
 
+function handleToggleMaximize() {
+  if (!props.win.isMaximized) {
+    unmaximizedBounds.value = {
+      width: props.win.width,
+      height: props.win.height,
+      x: props.win.x,
+      y: props.win.y
+    }
+  } else {
+    props.win.width = unmaximizedBounds.value.width
+    props.win.height = unmaximizedBounds.value.height
+    props.win.x = unmaximizedBounds.value.x
+    props.win.y = unmaximizedBounds.value.y
+  }
+  windowStore.toggleMaximize(props.win.id)
+}
+
 function stopDrag() {
   isDragging.value = false
   window.removeEventListener('mousemove', onDrag)
@@ -147,11 +164,18 @@ function stopDrag() {
   window.removeEventListener('touchmove', onDrag)
   window.removeEventListener('touchend', stopDrag)
 
-  // Jika dilepas di bagian atas layar, eksekusi maximize otomatis
+  // Jika dilepas di bagian atas layar, eksekusi maximize otomatis (Windows 11 Snap Gesture)
   if (isSnapTopPreview.value) {
     isSnapTopPreview.value = false
     props.win.isMaximized = true
     windowStore.bringToFront(props.win.id)
+    windowStore.saveWindowBounds(props.win.id, {
+      width: unmaximizedBounds.value.width,
+      height: unmaximizedBounds.value.height,
+      x: unmaximizedBounds.value.x,
+      y: unmaximizedBounds.value.y,
+      isMaximized: true
+    })
   } else if (!props.win.isMaximized) {
     unmaximizedBounds.value = {
       width: props.win.width,
@@ -160,7 +184,13 @@ function stopDrag() {
       y: props.win.y
     }
     // Simpan ukuran dan posisi terakhir ke localStorage
-    windowStore.saveWindowBounds(props.win.id, unmaximizedBounds.value)
+    windowStore.saveWindowBounds(props.win.id, {
+      width: props.win.width,
+      height: props.win.height,
+      x: props.win.x,
+      y: props.win.y,
+      isMaximized: false
+    })
   }
 }
 
@@ -221,7 +251,13 @@ function stopResize() {
       y: props.win.y
     }
     // Simpan ukuran baru hasil resize ke localStorage
-    windowStore.saveWindowBounds(props.win.id, unmaximizedBounds.value)
+    windowStore.saveWindowBounds(props.win.id, {
+      width: props.win.width,
+      height: props.win.height,
+      x: props.win.x,
+      y: props.win.y,
+      isMaximized: false
+    })
   }
 }
 </script>
@@ -257,10 +293,11 @@ function stopResize() {
         </transition>
       </Teleport>
 
-      <!-- Header Window / Titlebar -->
+      <!-- Header Window / Titlebar (Double Click to Maximize/Restore) -->
       <div
         @mousedown="startDrag"
         @touchstart.passive="startDrag"
+        @dblclick="handleToggleMaximize"
         class="h-10 bg-slate-900/90 border-b border-slate-700/50 flex items-center justify-between px-3 cursor-move"
       >
         <!-- Title & Icon (Truncate Single Line Anti-Wrap) -->
@@ -282,7 +319,7 @@ function stopResize() {
 
           <!-- Maximize / Restore -->
           <button
-            @click.stop="windowStore.toggleMaximize(win.id)"
+            @click.stop="handleToggleMaximize"
             class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition active:scale-95"
             :title="win.isMaximized ? 'Restore' : 'Maximize'"
           >

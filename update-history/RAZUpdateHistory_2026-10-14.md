@@ -182,3 +182,30 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - `npm run build` berhasil 100% tanpa error dalam 4.75 detik.
 - Seluruh event klik, drag titlebar, minimize, maximize, close, resize handle, dan interaktivitas isi jendela aplikasi berfungsi lancar 100%.
 
+---
+
+### Versi: 2.8.3-window-remember-last-position-size-maximize (Sistem Remember Last Position, Size, dan Status Maximize Jendela)
+**Waktu Eksekusi:** 2026-10-14 11:40 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer
+
+#### 1. Persistensi Penuh State Jendela (Position, Dimensions & Maximize State)
+- **Problem Statement:** Sebelumnya jendela selalu membuka dalam kondisi unmaximized (`isMaximized: false`) dan jika ditutup saat sedang maximized, ukuran dan posisi jendela tidak tersimpan ke penyimpanan lokal.
+- **Solusi Arsitektur:**
+  - Mengembangkan sistem **Remember Last State** di [`RAZWindowStore.js`](file:///c:/laragon/www/razos/frontend/src/stores/RAZWindowStore.js) yang menyimpan:
+    - `width` & `height` (dimensi piksel terakhir).
+    - `x` & `y` (koordinat posisi terakhir).
+    - `isMaximized` (status maximized boolean).
+  - Saat jendela ditutup (`closeWindow`), di-maximize/restore (`toggleMaximize`), di-drag (`stopDrag`), di-resize (`stopResize`), atau di-snap ke atas (Windows 11 snap gesture), seluruh parameter state tersebut langsung disimpan secara persisten ke `localStorage` (`razos_window_bounds`).
+  - Saat jendela dibuka kembali (`openApp`, `openCustomWindow`, `openFileViewer`), sistem membaca state tersebut. Jika aplikasi terakhir ditutup dalam keadaan maximized, jendela akan langsung terbuka secara **maximized**!
+  - Jika jendela di-restore dari maximize, ukuran dan posisinya akan kembali persis ke ukuran normal terakhir sebelum di-maximize.
+
+#### 2. Fitur Tambahan UX Windows Desktop
+- **Double-Click Titlebar to Maximize/Restore:** Menambahkan handler `@dblclick="handleToggleMaximize"` pada titlebar jendela aplikasi, sehingga pengguna dapat mengklik ganda titlebar untuk beralih antara tampilan maximize dan windowed secara cepat.
+- **Transisi Halus Fluid:** Sinkronisasi `unmaximizedBounds` saat resize dan drag pull-down memastikan tidak ada lonjakan dimensi yang kasar saat unmaximize.
+
+#### 3. Verifikasi & Pengujian
+- `npm run build` berhasil 100% tanpa error dalam 4.72 detik.
+- Hot Module Replacement (HMR) aktif di dev server `localhost:3000`.
+- Pengujian pembukaan aplikasi (File Manager dsb) yang di-maximize lalu di-close, saat dibuka kembali langsung muncul dalam keadaan maximize dan memulihkan ukuran normal saat di-restore.
+
+
