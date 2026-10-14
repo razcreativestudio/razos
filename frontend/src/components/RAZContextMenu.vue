@@ -8,6 +8,7 @@
  */
 
 import { onMounted, onUnmounted } from 'vue'
+import { Check } from 'lucide-vue-next'
 import { useContextMenuStore } from '../stores/RAZContextMenuStore'
 
 const contextMenuStore = useContextMenuStore()
@@ -111,13 +112,19 @@ onUnmounted(() => {
                 <span class="truncate font-medium">{{ item.label }}</span>
               </div>
 
-              <!-- Shortcut Hint Text (Opsional) -->
-              <span
-                v-if="item.shortcut"
-                class="text-[10px] font-mono text-slate-500 tracking-tighter shrink-0"
-              >
-                {{ item.shortcut }}
-              </span>
+              <!-- Shortcut Hint Text atau Status Checkmark (Opsional) -->
+              <div class="flex items-center gap-1.5 shrink-0">
+                <span
+                  v-if="item.shortcut"
+                  class="text-[10px] font-mono text-slate-500 tracking-tighter"
+                >
+                  {{ item.shortcut }}
+                </span>
+                <Check
+                  v-if="item.checked"
+                  class="w-3.5 h-3.5 text-sky-400 shrink-0"
+                />
+              </div>
             </button>
           </template>
         </div>

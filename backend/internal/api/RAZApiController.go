@@ -7,8 +7,13 @@
 package api
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/razos/razos/internal/database"
@@ -75,6 +80,10 @@ func RegisterRoutes(r *gin.Engine) {
 		v1.POST("/files/content", handleSaveFileContent)
 		v1.GET("/files/raw", handleGetRawFile)
 		v1.GET("/files/thumbnail", handleGetThumbnail)
+
+		// Konfigurasi Desktop & Posisi Ikon Lintas Perangkat
+		v1.GET("/desktop/config", handleGetDesktopConfig)
+		v1.POST("/desktop/config", handleSaveDesktopConfig)
 
 		// Health Check
 		v1.GET("/health", func(c *gin.Context) {
@@ -526,6 +535,91 @@ func handleGetThumbnail(c *gin.Context) {
 	}
 
 	c.File(targetPath)
+}
+
+// RAZDesktopConfig mendefinisikan skema data konfigurasi desktop lintas perangkat
+type RAZDesktopConfig struct {
+	IconSize  string                 `json:"icon_size"`
+	Positions map[string]interface{} `json:"positions"`
+	UpdatedAt string                 `json:"updated_at"`
+}
+
+func getDesktopConfigPath() string {
+	paths := []string{
+		"backend/internal/store/RAZDesktopConfig.json",
+		"internal/store/RAZDesktopConfig.json",
+		"/DATA/razos/store/RAZDesktopConfig.json",
+	}
+	for _, p := range paths {
+		if _, err := os.Stat(filepath.Dir(p)); err == nil {
+			return p
+		}
+	}
+	return "backend/internal/store/RAZDesktopConfig.json"
+}
+
+// handleGetDesktopConfig mengembalikan konfigurasi icon desktop (ukuran dan posisi grid)
+func handleGetDesktopConfig(c *gin.Context) {
+	filePath := getDesktopConfigPath()
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"icon_size":  "medium",
+			"positions":  gin.H{},
+			"updated_at": time.Now().UTC().Format(time.RFC3339),
+		})
+		return
+	}
+	var cfg RAZDesktopConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"icon_size":  "medium",
+			"positions":  gin.H{},
+			"updated_at": time.Now().UTC().Format(time.RFC3339),
+		})
+		return
+	}
+	if cfg.IconSize == "" {
+		cfg.IconSize = "medium"
+	}
+	if cfg.Positions == nil {
+		cfg.Positions = make(map[string]interface{})
+	}
+	c.JSON(http.StatusOK, cfg)
+}
+
+// handleSaveDesktopConfig menyimpan konfigurasi icon desktop ke storage persisten
+func handleSaveDesktopConfig(c *gin.Context) {
+	var body RAZDesktopConfig
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Format JSON tidak valid"})
+		return
+	}
+	if body.IconSize == "" {
+		body.IconSize = "medium"
+	}
+	if body.Positions == nil {
+		body.Positions = make(map[string]interface{})
+	}
+	body.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+
+	filePath := getDesktopConfigPath()
+	_ = os.MkdirAll(filepath.Dir(filePath), 0755)
+
+	data, err := json.MarshalIndent(body, "", "  ")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   body,
+	})
 }
 
 

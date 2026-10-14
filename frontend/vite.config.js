@@ -147,6 +147,41 @@ function razosApiPlugin() {
         }
       }
 
+      // Helper Persistensi Konfigurasi Desktop & Posisi Ikon Lintas Perangkat
+      function getDesktopConfigFile() {
+        const paths = [
+          '../backend/internal/store/RAZDesktopConfig.json',
+          'backend/internal/store/RAZDesktopConfig.json'
+        ]
+        for (const p of paths) {
+          if (fs.existsSync(p)) return p
+        }
+        return '../backend/internal/store/RAZDesktopConfig.json'
+      }
+
+      function loadDesktopConfig() {
+        try {
+          const filePath = getDesktopConfigFile()
+          if (fs.existsSync(filePath)) {
+            const data = fs.readFileSync(filePath, 'utf-8')
+            return JSON.parse(data)
+          }
+        } catch (e) {}
+        return { icon_size: 'medium', positions: {} }
+      }
+
+      function saveDesktopConfig(cfg) {
+        try {
+          const filePath = getDesktopConfigFile()
+          const dir = path.dirname(filePath)
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+          fs.writeFileSync(filePath, JSON.stringify(cfg, null, 2), 'utf-8')
+          return true
+        } catch (e) {
+          return false
+        }
+      }
+
       // Helper URL Git dengan Personal Access Token (PAT)
       function buildGitAuthUrl(repoUrl, token) {
         if (!repoUrl) return ''
@@ -1487,6 +1522,38 @@ server.listen(port, () => console.log('Server berjalan pada port ' + port));
             res.end(err.message)
           }
         }
+      })
+
+      // Endpoint Konfigurasi Desktop & Posisi Ikon Lintas Perangkat (/api/v1/desktop/config)
+      server.middlewares.use('/api/v1/desktop/config', (req, res) => {
+        res.setHeader('Content-Type', 'application/json')
+        if (req.method === 'GET') {
+          const cfg = loadDesktopConfig()
+          return res.end(JSON.stringify(cfg))
+        }
+        if (req.method === 'POST') {
+          let body = ''
+          req.on('data', chunk => { body += chunk })
+          req.on('end', () => {
+            try {
+              const data = body ? JSON.parse(body) : {}
+              const current = loadDesktopConfig()
+              const updated = {
+                icon_size: data.icon_size || current.icon_size || 'medium',
+                positions: data.positions !== undefined ? data.positions : (current.positions || {}),
+                updated_at: new Date().toISOString()
+              }
+              saveDesktopConfig(updated)
+              return res.end(JSON.stringify({ status: 'success', data: updated }))
+            } catch (err) {
+              res.statusCode = 500
+              return res.end(JSON.stringify({ status: 'error', message: err.message }))
+            }
+          })
+          return
+        }
+        res.statusCode = 405
+        res.end(JSON.stringify({ error: 'Method not allowed' }))
       })
     }
   }

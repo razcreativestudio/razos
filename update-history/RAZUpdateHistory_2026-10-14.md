@@ -124,3 +124,36 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 #### 4. Verifikasi & Build
 - `npm run build` sukses 100% tanpa error dalam 4.23 detik.
 - Hot Module Replacement (HMR) aktif di dev server `localhost:3000`.
+
+---
+
+### Versi: 2.8.1-multi-device-desktop-icon-persistence-sizing (Persistensi Ikon Desktop Lintas Perangkat & Pengaturan Ukuran Ikon Context Menu)
+**Waktu Eksekusi:** 2026-10-14 11:05 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer
+
+#### 1. Persistensi Posisi Ikon Lintas Perangkat (Multi-Device Server Persistence)
+- **Problem Statement:** Jika posisi ikon desktop hanya disimpan di `localStorage` peramban lokal, saat pengguna login atau mengakses RAZOS dari perangkat lain (ponsel pintar, tablet, atau komputer kerja lain), tata letak ikon akan kembali default atau tidak tersinkron.
+- **Solusi Arsitektur:**
+  - Menyediakan file storage persisten server: `backend/internal/store/RAZDesktopConfig.json`.
+  - Membuat REST API endpoint `GET /api/v1/desktop/config` dan `POST /api/v1/desktop/config` pada Go Controller (`RAZApiController.go`) dan middleware server Vite (`vite.config.js`).
+  - Frontend menerapkan strategi *optimistic local cache* via `localStorage` untuk kecepatan respon instan, dan langsung men-sync perubahan (posisi ikon dan ukuran ikon) secara bidirectional ke backend server.
+  - Setiap perubahan letak drop ikon atau pengaturan ukuran otomatis tersimpan persisten ke backend server dan langsung konsisten di seluruh perangkat.
+
+#### 2. Sistem Pengaturan Ukuran Ikon Desktop (Small, Medium, Large)
+- **Pilihan Ukuran Dinamis:**
+  - **Ikon Kecil (Small):** Grid slot `80px x 84px`, ikon `w-9 h-9`, tipografi `text-[10px]`. Cocok untuk layar padat atau pengguna yang memiliki banyak shortcut aplikasi.
+  - **Ikon Sedang (Medium - Default):** Grid slot `92px x 96px`, ikon `w-12 h-12`, tipografi `text-[11px]`. Seimbang, proporsional, dan estetis.
+  - **Ikon Besar (Large):** Grid slot `108px x 114px`, ikon `w-16 h-16`, tipografi `text-xs`. Sangat jelas dan ramah sentuhan (touchscreen / resolusi tinggi).
+- **Kalkulasi Grid Adaptif:**
+  - Fungsi `calculateGridCell`, batas maksimum kolom `maxCol`, batas maksimum baris `maxRow`, dan indikator preview snap-to-grid semuanya terikat secara reaktif pada `iconGridMetrics`.
+
+#### 3. Integrasi Context Menu Desktop (Klik Kanan pada Desktop)
+- **Seksi Tampilan Ikon Windows Style:**
+  - Menambahkan menu pilihan ukuran: **Ikon Besar (Large)**, **Ikon Sedang (Medium)**, dan **Ikon Kecil (Small)**.
+  - Mengintegrasikan penanda checkmark aktif (`Check` icon dari Lucide) pada item context menu yang sedang terpilih melalui dukungan properti `item.checked` di `RAZContextMenu.vue`.
+  - Menambahkan aksi **Ratakan Ikon ke Grid (Auto Arrange)** untuk merapikan seluruh ikon ke slot awal kolom demi kolom secara otomatis.
+
+#### 4. Verifikasi & Build
+- `npm run build` sukses 100% tanpa error dalam 4.22 detik.
+- Pengujian API `GET` & `POST` `/api/v1/desktop/config` terverifikasi sukses dengan validasi payload JSON di `backend/internal/store/RAZDesktopConfig.json`.
+- Hot Module Replacement (HMR) berjalan lancar pada dev server `localhost:3000`.

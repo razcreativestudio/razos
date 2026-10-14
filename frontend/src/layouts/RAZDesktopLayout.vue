@@ -5,7 +5,7 @@
  * Deskripsi: Layout Desktop mode untuk breakpoint > 768px, memadukan desktop icon shortcuts,
  * window manager frame multi-jendela, dan taskbar bawah dengan sistem jendela mandiri tanpa background blur.
  */
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useWindowStore } from '../stores/RAZWindowStore'
 import { useSystemStore } from '../stores/RAZSystemStore'
 import { useContextMenuStore } from '../stores/RAZContextMenuStore'
@@ -14,7 +14,7 @@ import RAZTaskbar from '../components/RAZTaskbar.vue'
 import {
   RefreshCw, Folder, Terminal, Cpu, Settings, EyeOff, Layers, Play, Info,
   Trash2, ExternalLink, AlertTriangle, X, Globe, Clock, Activity, HardDrive,
-  Network, Search
+  Network, Search, Grid, Maximize2, Minimize2
 } from 'lucide-vue-next'
 
 // Import View Aplikasi
@@ -55,11 +55,37 @@ const viewMap = {
 // Context Menu Klik Kanan pada Area Desktop Kosong
 function handleDesktopContextMenu(e) {
   contextMenuStore.show(e, [
+    // Sub-opsi Pengaturan Ukuran Ikon Desktop (Windows Style)
+    {
+      label: 'Ikon Besar (Large)',
+      icon: Maximize2,
+      checked: desktopIconSize.value === 'large',
+      action: () => changeIconSize('large')
+    },
+    {
+      label: 'Ikon Sedang (Medium)',
+      icon: Grid,
+      checked: desktopIconSize.value === 'medium',
+      action: () => changeIconSize('medium')
+    },
+    {
+      label: 'Ikon Kecil (Small)',
+      icon: Minimize2,
+      checked: desktopIconSize.value === 'small',
+      action: () => changeIconSize('small')
+    },
+    {
+      label: 'Ratakan Ikon ke Grid',
+      icon: RefreshCw,
+      action: () => autoArrangeIcons()
+    },
+    { separator: true },
     {
       label: 'Muat Ulang Desktop',
       icon: RefreshCw,
       action: () => {
         systemStore.fetchMetrics()
+        fetchDesktopConfig()
         systemStore.showNotification('Desktop', 'Tampilan desktop telah disegarkan', 'success')
       }
     },
@@ -275,29 +301,141 @@ function formatBytes(bytes) {
 // ==========================================
 // WINDOWS DESKTOP GRID & DRAG-AND-DROP SYSTEM
 // ==========================================
+const DESKTOP_CONFIG_STORAGE_KEY = 'razos_desktop_config'
 const DESKTOP_POS_STORAGE_KEY = 'razos_desktop_icon_positions'
-const CELL_W = 96  // Lebar slot grid desktop (px)
-const CELL_H = 100 // Tinggi slot grid desktop (px)
+
+// Pilihan Ukuran Ikon Desktop: 'small', 'medium', 'large'
+const desktopIconSize = ref('medium')
+
+// Kalkulasi Dimensi Grid Slot & Style berdasarkan Ukuran Ikon
+const iconGridMetrics = computed(() => {
+  switch (desktopIconSize.value) {
+    case 'small':
+      return {
+        cellW: 80,
+        cellH: 84,
+        iconBox: 'w-9 h-9',
+        fontSize: 'text-[10px]'
+      }
+    case 'large':
+      return {
+        cellW: 108,
+        cellH: 114,
+        iconBox: 'w-16 h-16',
+        fontSize: 'text-xs'
+      }
+    case 'medium':
+    default:
+      return {
+        cellW: 92,
+        cellH: 96,
+        iconBox: 'w-12 h-12',
+        fontSize: 'text-[11px]'
+      }
+  }
+})
 
 // Mapping posisi tiap-tiap icon: { [appId]: { col: number, row: number } }
 const iconPositions = ref({})
 
-// Ambil data posisi yang tersimpan dari localStorage
-function loadIconPositions() {
-  try {
-    const raw = localStorage.getItem(DESKTOP_POS_STORAGE_KEY)
-    if (raw) {
-      return JSON.parse(raw)
-    }
-  } catch (e) {}
-  return {}
-}
+// Simpan konfigurasi (ukuran & posisi) ke server backend & localStorage
+async function persistDesktopConfig(showToast = false) {
+  const payload = {
+    icon_size: desktopIconSize.value,
+    positions: iconPositions.value
+  }
 
-// Simpan data posisi ke localStorage agar persisten
-function saveIconPositions() {
+  // Simpan ke localStorage untuk loading instan
   try {
+    localStorage.setItem(DESKTOP_CONFIG_STORAGE_KEY, JSON.stringify(payload))
     localStorage.setItem(DESKTOP_POS_STORAGE_KEY, JSON.stringify(iconPositions.value))
   } catch (e) {}
+
+  // Push ke server backend agar persisten lintas perangkat (HP, laptop lain, dsb)
+  try {
+    await fetch('/api/v1/desktop/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    if (showToast) {
+      systemStore.showNotification('Desktop', 'Tata letak desktop disinkronkan', 'success')
+    }
+  } catch (err) {
+    console.warn('Gagal menyimpan konfigurasi desktop ke server:', err)
+  }
+}
+
+// Muat konfigurasi desktop dari server dan localStorage
+async function fetchDesktopConfig() {
+  // 1. Baca localStorage dulu agar tampilan langsung muncul tanpa jeda
+  try {
+    const raw = localStorage.getItem(DESKTOP_CONFIG_STORAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed.icon_size) desktopIconSize.value = parsed.icon_size
+      if (parsed.positions) iconPositions.value = parsed.positions
+    } else {
+      const oldPos = localStorage.getItem(DESKTOP_POS_STORAGE_KEY)
+      if (oldPos) iconPositions.value = JSON.parse(oldPos)
+    }
+  } catch (e) {}
+
+  // 2. Fetch data mutakhir dari server backend
+  try {
+    const res = await fetch('/api/v1/desktop/config')
+    if (res.ok) {
+      const serverCfg = await res.json()
+      if (serverCfg.icon_size) {
+        desktopIconSize.value = serverCfg.icon_size
+      }
+      if (serverCfg.positions && Object.keys(serverCfg.positions).length > 0) {
+        iconPositions.value = serverCfg.positions
+      }
+      // Update cache lokal
+      try {
+        localStorage.setItem(DESKTOP_CONFIG_STORAGE_KEY, JSON.stringify({
+          icon_size: desktopIconSize.value,
+          positions: iconPositions.value
+        }))
+        localStorage.setItem(DESKTOP_POS_STORAGE_KEY, JSON.stringify(iconPositions.value))
+      } catch (e) {}
+    }
+  } catch (err) {
+    console.warn('Gagal memuat konfigurasi desktop dari server:', err)
+  }
+
+  ensureIconPositions()
+}
+
+// Ubah ukuran ikon desktop (small, medium, large)
+function changeIconSize(size) {
+  if (['small', 'medium', 'large'].includes(size)) {
+    desktopIconSize.value = size
+    persistDesktopConfig()
+    systemStore.showNotification('Tampilan Desktop', `Ukuran ikon diubah ke ${size.toUpperCase()}`, 'info')
+  }
+}
+
+// Ratakan ikon ke grid secara otomatis (Auto-arrange ala Windows)
+function autoArrangeIcons() {
+  const allApps = windowStore.allDesktopApps || []
+  const newPositions = {}
+  let curCol = 0
+  let curRow = 0
+  const maxRowsPerCol = Math.max(4, Math.floor((window.innerHeight - 80) / iconGridMetrics.value.cellH))
+
+  allApps.forEach(app => {
+    newPositions[app.id] = { col: curCol, row: curRow }
+    curRow++
+    if (curRow >= maxRowsPerCol) {
+      curRow = 0
+      curCol++
+    }
+  })
+
+  iconPositions.value = newPositions
+  persistDesktopConfig(true)
 }
 
 // Menghitung koordinat awal grid desktop
@@ -310,23 +448,27 @@ function getGridOrigin() {
 
 // Inisialisasi slot grid dan assign posisi untuk aplikasi baru secara otomatis
 function ensureIconPositions() {
-  const saved = loadIconPositions()
   const occupied = new Set()
-  const result = { ...saved }
+  const result = { ...iconPositions.value }
 
   // Catat sel yang sudah terisi
   Object.values(result).forEach(pos => {
-    occupied.add(`${pos.col},${pos.row}`)
+    if (pos && typeof pos.col === 'number' && typeof pos.row === 'number') {
+      occupied.add(`${pos.col},${pos.row}`)
+    }
   })
 
   // Cari slot kosong berurutan kolom demi kolom (ala Windows desktop)
   let curCol = 0
   let curRow = 0
-  const maxRowsPerCol = 6
+  const cellH = iconGridMetrics.value.cellH
+  const maxRowsPerCol = Math.max(4, Math.floor((window.innerHeight - 80) / cellH))
 
   const allApps = windowStore.allDesktopApps || []
+  let hasNew = false
   allApps.forEach(app => {
     if (!result[app.id]) {
+      hasNew = true
       while (occupied.has(`${curCol},${curRow}`)) {
         curRow++
         if (curRow >= maxRowsPerCol) {
@@ -345,7 +487,9 @@ function ensureIconPositions() {
   })
 
   iconPositions.value = result
-  saveIconPositions()
+  if (hasNew) {
+    persistDesktopConfig(false)
+  }
 }
 
 // Watch perubahan daftar aplikasi agar icon website / store app baru otomatis tertata
@@ -354,7 +498,7 @@ watch(() => windowStore.allDesktopApps.length, () => {
 }, { immediate: true })
 
 onMounted(() => {
-  ensureIconPositions()
+  fetchDesktopConfig()
 })
 
 // State Drag & Drop
@@ -374,12 +518,15 @@ function handleIconDragEnd() {
 
 function calculateGridCell(clientX, clientY) {
   const origin = getGridOrigin()
-  // Batas maksimum kolom agar tidak menimpa panel widget di sebelah kanan
-  const maxCol = Math.max(0, Math.floor((window.innerWidth - 320 - origin.x) / CELL_W))
-  const maxRow = Math.max(0, Math.floor((window.innerHeight - 56 - origin.y) / CELL_H))
+  const cellW = iconGridMetrics.value.cellW
+  const cellH = iconGridMetrics.value.cellH
 
-  let col = Math.floor((clientX - origin.x) / CELL_W)
-  let row = Math.floor((clientY - origin.y) / CELL_H)
+  // Batas maksimum kolom agar tidak menimpa panel widget di sebelah kanan
+  const maxCol = Math.max(0, Math.floor((window.innerWidth - 320 - origin.x) / cellW))
+  const maxRow = Math.max(0, Math.floor((window.innerHeight - 56 - origin.y) / cellH))
+
+  let col = Math.floor((clientX - origin.x) / cellW)
+  let row = Math.floor((clientY - origin.y) / cellH)
 
   col = Math.max(0, Math.min(col, maxCol))
   row = Math.max(0, Math.min(row, maxRow))
@@ -391,11 +538,14 @@ function handleDesktopDragOver(e) {
   if (!draggedAppId.value) return
   const { col, row } = calculateGridCell(e.clientX, e.clientY)
   const origin = getGridOrigin()
+  const cellW = iconGridMetrics.value.cellW
+  const cellH = iconGridMetrics.value.cellH
+
   dropPreview.value = {
     col,
     row,
-    x: origin.x + col * CELL_W,
-    y: origin.y + row * CELL_H
+    x: origin.x + col * cellW,
+    y: origin.y + row * cellH
   }
 }
 
@@ -423,9 +573,7 @@ function handleDesktopDrop(e) {
 
   // Terapkan posisi baru pada app yang di-drag
   iconPositions.value[currentAppId] = { col, row }
-  saveIconPositions()
-
-  systemStore.showNotification('Desktop', 'Posisi ikon berhasil disimpan', 'info')
+  persistDesktopConfig(true)
 
   draggedAppId.value = null
   dropPreview.value = null
@@ -453,8 +601,8 @@ function handleDesktopDrop(e) {
         position: 'absolute',
         left: `${dropPreview.x}px`,
         top: `${dropPreview.y}px`,
-        width: `${CELL_W}px`,
-        height: `${CELL_H}px`
+        width: `${iconGridMetrics.cellW}px`,
+        height: `${iconGridMetrics.cellH}px`
       }"
       class="rounded-2xl border-2 border-dashed border-sky-400 bg-sky-500/20 pointer-events-none transition-all duration-100 z-10 flex items-center justify-center shadow-lg shadow-sky-500/20 ring-4 ring-sky-400/20"
     >
@@ -503,21 +651,27 @@ function handleDesktopDrop(e) {
           @contextmenu.prevent.stop="handleDesktopIconContextMenu($event, app)"
           :style="{
             position: 'absolute',
-            left: `${(iconPositions[app.id]?.col ?? 0) * CELL_W}px`,
-            top: `${(iconPositions[app.id]?.row ?? 0) * CELL_H}px`,
-            width: `${CELL_W}px`,
-            height: `${CELL_H}px`
+            left: `${(iconPositions[app.id]?.col ?? 0) * iconGridMetrics.cellW}px`,
+            top: `${(iconPositions[app.id]?.row ?? 0) * iconGridMetrics.cellH}px`,
+            width: `${iconGridMetrics.cellW}px`,
+            height: `${iconGridMetrics.cellH}px`
           }"
           class="flex flex-col items-center justify-start p-1.5 rounded-2xl hover:bg-slate-800/60 cursor-pointer group transition-all duration-150 text-center select-none pointer-events-auto"
           :class="draggedAppId === app.id ? 'opacity-30 scale-95 ring-2 ring-sky-400' : ''"
         >
           <!-- Ikon Aplikasi -->
-          <div class="w-12 h-12 rounded-2xl flex items-center justify-center p-1 group-hover:scale-105 transition-transform duration-150 drop-shadow-md relative shrink-0 pointer-events-none">
+          <div
+            :class="[iconGridMetrics.iconBox]"
+            class="rounded-2xl flex items-center justify-center p-1 group-hover:scale-105 transition-transform duration-150 drop-shadow-md relative shrink-0 pointer-events-none"
+          >
             <img :src="app.icon" :alt="app.title" class="w-full h-full object-contain pointer-events-none" />
             <span v-if="app.isStoreApp || app.isWebsite" class="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900 shadow-sm" :title="app.isWebsite ? 'Website Running' : 'Container Running'"></span>
           </div>
           <!-- Judul / Nama Aplikasi Desktop (Kontras Tinggi & Selalu Terbaca) -->
-          <span class="mt-1 text-[11px] leading-tight text-slate-100 font-medium group-hover:text-sky-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] line-clamp-2 break-words w-full px-1 select-none pointer-events-none">
+          <span
+            :class="[iconGridMetrics.fontSize]"
+            class="mt-1 leading-tight text-slate-100 font-medium group-hover:text-sky-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] line-clamp-2 break-words w-full px-1 select-none pointer-events-none"
+          >
             {{ app.title }}
           </span>
         </div>
