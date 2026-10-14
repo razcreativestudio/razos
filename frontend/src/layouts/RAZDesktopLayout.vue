@@ -314,19 +314,21 @@ function formatBytes(bytes) {
       <!-- Main Desktop Workspace: Left Icons Grid + Right Widgets Column -->
       <div class="flex-1 flex items-start justify-between gap-8 overflow-hidden min-h-0 pointer-events-none">
         <!-- LEFT: Desktop Icons Grid (Aplikasi Sistem + Aplikasi Terpasang dari Store + Website) -->
-        <div class="grid grid-flow-col grid-rows-6 gap-6 w-max pointer-events-auto overflow-y-auto max-h-full pr-2">
+        <div class="grid grid-flow-col grid-rows-[repeat(6,minmax(84px,max-content))] gap-x-4 gap-y-3 w-max pointer-events-auto overflow-y-auto max-h-full pr-2">
           <div
             v-for="app in windowStore.allDesktopApps"
             :key="app.id"
             @dblclick="app.isWebsite ? windowStore.launchWebsiteApp(app) : (app.isStoreApp ? windowStore.launchStoreApp(app) : windowStore.openApp(app.id))"
             @contextmenu.prevent.stop="handleDesktopIconContextMenu($event, app)"
-            class="w-20 flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-slate-800/50 cursor-pointer group transition text-center relative"
+            class="w-20 min-h-[84px] flex flex-col items-center justify-start p-1.5 rounded-xl hover:bg-slate-800/60 cursor-pointer group transition text-center relative select-none"
           >
-            <div class="w-12 h-12 rounded-2xl flex items-center justify-center p-1 group-hover:scale-105 transition-transform duration-150 drop-shadow-md relative">
+            <!-- Ikon Aplikasi -->
+            <div class="w-12 h-12 rounded-2xl flex items-center justify-center p-1 group-hover:scale-105 transition-transform duration-150 drop-shadow-md relative shrink-0">
               <img :src="app.icon" :alt="app.title" class="w-full h-full object-contain" />
-              <span v-if="app.isStoreApp || app.isWebsite" class="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900" :title="app.isWebsite ? 'Website Running' : 'Container Running'"></span>
+              <span v-if="app.isStoreApp || app.isWebsite" class="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900 shadow-sm" :title="app.isWebsite ? 'Website Running' : 'Container Running'"></span>
             </div>
-            <span class="text-xs text-slate-100 font-medium group-hover:text-sky-300 drop-shadow line-clamp-2">
+            <!-- Judul / Nama Aplikasi Desktop (Kontras Tinggi & Selalu Terbaca) -->
+            <span class="mt-1 text-[11px] leading-tight text-slate-100 font-medium group-hover:text-sky-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] line-clamp-2 break-words w-full px-0.5 select-none">
               {{ app.title }}
             </span>
           </div>

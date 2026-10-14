@@ -75,3 +75,19 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - **Verifikasi:**
   - `npm run build` sukses 100% dalam 4.12 detik.
   - Hot Module Replacement (HMR) aktif di dev server `localhost:3000`.
+
+---
+
+### Versi: 2.7.2-desktop-icon-titles-fix (Perbaikan Visibilitas & Spasi Label Judul Ikon Desktop)
+**Waktu Eksekusi:** 2026-10-14 10:48 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer
+
+#### 1. Masalah Terpotongnya Label Judul Ikon Desktop
+- **Penyebab:** Pada layar dengan tinggi viewport tertentu, grid CSS `grid-rows-6` (`repeat(6, minmax(0, 1fr))`) membagi sisa tinggi ruang desktop menjadi 6 baris tipis (~60px). Ketinggian tersebut hanya cukup untuk kotak ikon saja, sehingga teks judul (`app.title`) tertekan keluar dan terpotong (hilang/tidak terlihat).
+- **Solusi:**
+  - Mengubah aturan grid row menjadi `grid-rows-[repeat(6,minmax(84px,max-content))]` dengan `gap-x-4 gap-y-3`.
+  - Memberikan batas minimum ketinggian kartu item `min-h-[84px]` sehingga setiap slot ikon selalu memiliki ruang vertikal yang cukup untuk ikon (`w-12 h-12`) dan 2 baris teks nama aplikasi.
+  - Menambahkan styling kontras tinggi `drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)]` pada `span` judul aplikasi agar selalu terbaca tajam dan jelas di atas wallpaper apa pun.
+- **Verifikasi:**
+  - `npm run build` berhasil 100% dalam 4.20 detik.
+  - Hot Module Replacement (HMR) langsung ter-update di `localhost:3000`.
