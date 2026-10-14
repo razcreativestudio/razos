@@ -5,7 +5,7 @@
  * Deskripsi: Komponen container window dengan fitur draggable, resizable, stacking z-index,
  * minimize, maximize, dan styling glassmorphism Slate-900.
  */
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useWindowStore } from '../stores/RAZWindowStore'
 import { Minus, Square, Copy, X } from 'lucide-vue-next'
 
@@ -32,32 +32,77 @@ const isSnapTopPreview = ref(false)
 
 // Simpan ukuran dan koordinat jendela sebelum maximize agar dapat dipulihkan dengan tepat
 const unmaximizedBounds = ref({
-  width: props.win.width,
-  height: props.win.height,
-  x: props.win.x,
-  y: props.win.y
+  width: props.win.width || 700,
+  height: props.win.height || 480,
+  x: props.win.x || 60,
+  y: props.win.y || 40
+})
+
+// Dimensi dan Koordinat Dinamis yang Aman (Mencegah NaN atau Nilai Rusak)
+const winLeft = computed(() => {
+  if (props.win.isMaximized) return '0px'
+  const val = Number(props.win.x)
+  return `${Number.isFinite(val) ? val : 60}px`
+})
+
+const winTop = computed(() => {
+  if (props.win.isMaximized) return '0px'
+  const val = Number(props.win.y)
+  return `${Number.isFinite(val) ? val : 40}px`
+})
+
+const winWidth = computed(() => {
+  if (props.win.isMaximized) return '100vw'
+  const val = Number(props.win.width)
+  return `${Number.isFinite(val) && val >= 200 ? val : 700}px`
+})
+
+const winHeight = computed(() => {
+  if (props.win.isMaximized) return 'calc(100vh - 48px)'
+  const val = Number(props.win.height)
+  return `${Number.isFinite(val) && val >= 150 ? val : 480}px`
+})
+
+const winZIndex = computed(() => {
+  const val = Number(props.win.zIndex)
+  return Number.isFinite(val) && val > 0 ? val : 10
 })
 
 function startDrag(e) {
+  // Hanya drag jika klik kiri mouse
+  if (e.button !== undefined && e.button !== 0) return
+
   windowStore.bringToFront(props.win.id)
   
   const clientX = e.touches ? e.touches[0].clientX : e.clientX
   const clientY = e.touches ? e.touches[0].clientY : e.clientY
 
+  const curX = Number.isFinite(Number(props.win.x)) ? Number(props.win.x) : 60
+  const curY = Number.isFinite(Number(props.win.y)) ? Number(props.win.y) : 40
+  const curW = Number.isFinite(Number(props.win.width)) && Number(props.win.width) >= 200 ? Number(props.win.width) : 700
+  const curH = Number.isFinite(Number(props.win.height)) && Number(props.win.height) >= 150 ? Number(props.win.height) : 480
+
+  props.win.x = curX
+  props.win.y = curY
+  props.win.width = curW
+  props.win.height = curH
+
   // Jika window sedang maximized dan di-drag ke bawah, unmaximize seketika ala Windows 11
   if (props.win.isMaximized) {
     props.win.isMaximized = false
-    props.win.width = unmaximizedBounds.value.width || 700
-    props.win.height = unmaximizedBounds.value.height || 480
+    const restoredW = unmaximizedBounds.value.width || curW || 700
+    const restoredH = unmaximizedBounds.value.height || curH || 480
+    props.win.width = restoredW
+    props.win.height = restoredH
     // Posisikan window di bawah kursor mouse secara presisi
-    props.win.x = Math.max(10, clientX - Math.round(props.win.width / 2))
+    props.win.x = Math.max(10, clientX - Math.round(restoredW / 2))
     props.win.y = Math.max(10, clientY - 18)
   } else {
     unmaximizedBounds.value = {
-      width: props.win.width,
-      height: props.win.height,
-      x: props.win.x,
-      y: props.win.y
+      width: curW,
+      height: curH,
+      x: curX,
+      y: curY
     }
   }
 
@@ -182,95 +227,90 @@ function stopResize() {
 </script>
 
 <template>
-  <!-- Windows 11 Snap-to-Top Maximize Preview Halo Animation -->
-  <Teleport to="body">
-    <transition name="fade">
-      <div
-        v-if="isSnapTopPreview"
-        class="fixed inset-x-2 top-2 h-[calc(100vh-56px)] rounded-2xl bg-sky-500/10 border-2 border-sky-400/80 backdrop-blur-[2px] pointer-events-none z-[9999] shadow-[0_0_40px_rgba(56,189,248,0.4)] animate-pulse"
-      >
-        <div class="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-transparent to-sky-400/5 rounded-2xl"></div>
-      </div>
-    </transition>
-  </Teleport>
   <transition name="raz-window-transition">
     <div
       v-show="!win.isMinimized"
       @mousedown="windowStore.bringToFront(win.id)"
-      :style="win.isMaximized ? {
+      :style="{
         position: 'absolute',
-        left: '0px',
-        top: '0px',
-        width: '100vw',
-        height: 'calc(100vh - 48px)',
-        zIndex: win.zIndex
-      } : {
-        position: 'absolute',
-        left: `${win.x}px`,
-        top: `${win.y}px`,
-        width: `${win.width}px`,
-        height: `${win.height}px`,
-        zIndex: win.zIndex
+        left: winLeft,
+        top: winTop,
+        width: winWidth,
+        height: winHeight,
+        zIndex: winZIndex
       }"
-      class="flex flex-col rounded-xl overflow-hidden raz-glass raz-window select-none"
+      class="flex flex-col rounded-xl overflow-hidden raz-glass raz-window select-none pointer-events-auto"
       :class="[
         windowStore.activeWindowId === win.id ? 'ring-1 ring-sky-400/40 shadow-2xl' : 'opacity-95 shadow-lg',
         isDragging || isResizing ? 'transition-none' : 'raz-window-fluid'
       ]"
     >
-    <!-- Header Window / Titlebar -->
-    <div
-      @mousedown="startDrag"
-      class="h-10 bg-slate-900/90 border-b border-slate-700/50 flex items-center justify-between px-3 cursor-move"
-    >
-      <!-- Title & Icon (Truncate Single Line Anti-Wrap) -->
-      <div class="flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-200 min-w-0 flex-1 mr-2 overflow-hidden">
-        <img :src="win.icon" :alt="win.title" class="w-4 h-4 shrink-0" />
-        <span class="truncate whitespace-nowrap font-medium" :title="win.title">{{ win.title }}</span>
+      <!-- Windows 11 Snap-to-Top Maximize Preview Halo Animation -->
+      <Teleport to="body">
+        <transition name="fade">
+          <div
+            v-if="isSnapTopPreview"
+            class="fixed inset-x-2 top-2 h-[calc(100vh-56px)] rounded-2xl bg-sky-500/10 border-2 border-sky-400/80 backdrop-blur-[2px] pointer-events-none z-[9999] shadow-[0_0_40px_rgba(56,189,248,0.4)] animate-pulse"
+          >
+            <div class="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-transparent to-sky-400/5 rounded-2xl"></div>
+          </div>
+        </transition>
+      </Teleport>
+
+      <!-- Header Window / Titlebar -->
+      <div
+        @mousedown="startDrag"
+        @touchstart.passive="startDrag"
+        class="h-10 bg-slate-900/90 border-b border-slate-700/50 flex items-center justify-between px-3 cursor-move"
+      >
+        <!-- Title & Icon (Truncate Single Line Anti-Wrap) -->
+        <div class="flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-200 min-w-0 flex-1 mr-2 overflow-hidden pointer-events-none">
+          <img :src="win.icon" :alt="win.title" class="w-4 h-4 shrink-0 pointer-events-none" />
+          <span class="truncate whitespace-nowrap font-medium pointer-events-none" :title="win.title">{{ win.title }}</span>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex items-center gap-1.5 shrink-0 pointer-events-auto" @mousedown.stop @touchstart.stop>
+          <!-- Minimize -->
+          <button
+            @click.stop="windowStore.minimizeWindow(win.id)"
+            class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition active:scale-95"
+            title="Minimize"
+          >
+            <Minus class="w-3.5 h-3.5" />
+          </button>
+
+          <!-- Maximize / Restore -->
+          <button
+            @click.stop="windowStore.toggleMaximize(win.id)"
+            class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition active:scale-95"
+            :title="win.isMaximized ? 'Restore' : 'Maximize'"
+          >
+            <component :is="win.isMaximized ? Copy : Square" class="w-3.5 h-3.5" />
+          </button>
+
+          <!-- Close -->
+          <button
+            @click.stop="windowStore.closeWindow(win.id)"
+            class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-600/80 text-slate-400 hover:text-white transition active:scale-95"
+            title="Close"
+          >
+            <X class="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
-      <!-- Action Buttons -->
-      <div class="flex items-center gap-1.5 shrink-0" @mousedown.stop>
-        <!-- Minimize -->
-        <button
-          @click="windowStore.minimizeWindow(win.id)"
-          class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
-          title="Minimize"
-        >
-          <Minus class="w-3.5 h-3.5" />
-        </button>
-
-        <!-- Maximize / Restore -->
-        <button
-          @click="windowStore.toggleMaximize(win.id)"
-          class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
-          :title="win.isMaximized ? 'Restore' : 'Maximize'"
-        >
-          <component :is="win.isMaximized ? Copy : Square" class="w-3.5 h-3.5" />
-        </button>
-
-        <!-- Close -->
-        <button
-          @click="windowStore.closeWindow(win.id)"
-          class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-600/80 text-slate-400 hover:text-white transition"
-          title="Close"
-        >
-          <X class="w-3.5 h-3.5" />
-        </button>
+      <!-- Window Body Content -->
+      <div class="flex-1 overflow-auto bg-slate-950/70 p-4 text-slate-100 select-auto pointer-events-auto">
+        <slot></slot>
       </div>
-    </div>
 
-    <!-- Window Body Content -->
-    <div class="flex-1 overflow-auto bg-slate-950/70 p-4 text-slate-100">
-      <slot></slot>
+      <!-- Resize Handles (Hanya jika tidak maximized) -->
+      <template v-if="!win.isMaximized">
+        <div @mousedown.stop="(e) => startResize(e, 'se')" class="absolute bottom-0 right-0 w-3.5 h-3.5 cursor-se-resize pointer-events-auto z-10"></div>
+        <div @mousedown.stop="(e) => startResize(e, 'e')" class="absolute top-10 right-0 w-1.5 h-full cursor-e-resize pointer-events-auto z-10"></div>
+        <div @mousedown.stop="(e) => startResize(e, 's')" class="absolute bottom-0 left-0 w-full h-1.5 cursor-s-resize pointer-events-auto z-10"></div>
+      </template>
     </div>
-
-    <!-- Resize Handles (Hanya jika tidak maximized) -->
-    <template v-if="!win.isMaximized">
-      <div @mousedown="(e) => startResize(e, 'se')" class="absolute bottom-0 right-0 w-3.5 h-3.5 cursor-se-resize"></div>
-      <div @mousedown="(e) => startResize(e, 'e')" class="absolute top-10 right-0 w-1.5 h-full cursor-e-resize"></div>
-      <div @mousedown="(e) => startResize(e, 's')" class="absolute bottom-0 left-0 w-full h-1.5 cursor-s-resize"></div>
-    </template>
-  </div>
   </transition>
 </template>

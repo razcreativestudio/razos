@@ -157,3 +157,28 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - `npm run build` sukses 100% tanpa error dalam 4.22 detik.
 - Pengujian API `GET` & `POST` `/api/v1/desktop/config` terverifikasi sukses dengan validasi payload JSON di `backend/internal/store/RAZDesktopConfig.json`.
 - Hot Module Replacement (HMR) berjalan lancar pada dev server `localhost:3000`.
+
+---
+
+### Versi: 2.8.2-window-pointer-events-click-drag-fix (Perbaikan Akses Pointer Events, Drag & Interaksi Seluruh Jendela Aplikasi)
+**Waktu Eksekusi:** 2026-10-14 11:15 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer
+
+#### 1. Akar Masalah (Root Cause Analysis)
+- **Multi-Root Component Fallthrough Loss:** Pada `RAZWindowFrame.vue`, sebelumnya tag `<Teleport to="body">` diletakkan sejajar di tingkat root dengan `<transition name="raz-window-transition">`, menjadikan komponen tersebut multi-root fragment di Vue 3.
+- Akibatnya, atribut fallthrough `class="pointer-events-auto"` yang dipasang pada pemanggil `<RAZWindowFrame>` tidak diteruskan ke DOM node mana pun.
+- Karena parent pembungkus Window Management Layer pada `RAZDesktopLayout.vue` memiliki style `pointer-events-none` (agar area kosong desktop dapat di-klik tembus), elemen `div.raz-window` secara otomatis mewarisi `pointer-events-none`.
+- Dampaknya, seluruh klik mouse, seret (*drag*) titlebar, tombol minimize/maximize/close, serta form dan konten dalam seluruh jendela aplikasi terblokir (tembus dan tidak dapat merespons klik apa pun).
+
+#### 2. Solusi Arsitektur & Perbaikan
+- **Enkapsulasi Single-Root Node:** Memindahkan `<Teleport to="body">` ke dalam elemen `div.raz-window`, sehingga `RAZWindowFrame.vue` kembali menjadi single-root component.
+- **Eksplisit Pointer Events:** Menetapkan `pointer-events-auto` secara langsung dan permanen pada class `div.raz-window`, area action buttons titlebar, dan kontainer body content aplikasi.
+- **Sanitasi Angka Dimensi & Posisi (Anti-NaN Protection):**
+  - Membuat computed properties aman: `winLeft`, `winTop`, `winWidth`, `winHeight`, dan `winZIndex` untuk menjamin seluruh nilai koordinat dan ukuran jendela selalu berupa angka piksel berhingga (`Number.isFinite`), mencegah layout crash jika terdapat state corrupt di `localStorage`.
+  - Memperbarui fungsi `getSavedBounds` dan `saveWindowBounds` di `RAZWindowStore.js` dengan filter validasi tipe data ketat.
+- **Proteksi Drag Mouse Event:** Memastikan `startDrag` hanya aktif pada klik kiri mouse (`e.button === 0`) dengan dukungan `passive` touch event.
+
+#### 3. Verifikasi & Pengujian
+- `npm run build` berhasil 100% tanpa error dalam 4.75 detik.
+- Seluruh event klik, drag titlebar, minimize, maximize, close, resize handle, dan interaktivitas isi jendela aplikasi berfungsi lancar 100%.
+

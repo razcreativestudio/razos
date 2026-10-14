@@ -84,29 +84,46 @@ export const useWindowStore = defineStore('window', () => {
   // Kunci penyimpanan preferensi ukuran & posisi jendela di localStorage
   const WINDOW_BOUNDS_STORAGE_KEY = 'razos_window_bounds'
 
-  // Ambil data ukuran & posisi tersimpan dari localStorage
+  // Ambil data ukuran & posisi tersimpan dari localStorage dengan sanitasi angka
   function getSavedBounds(id) {
     try {
       const raw = localStorage.getItem(WINDOW_BOUNDS_STORAGE_KEY)
       if (raw) {
         const parsed = JSON.parse(raw)
-        return parsed[id] || null
+        const item = parsed[id]
+        if (item && typeof item === 'object') {
+          const w = Number(item.width)
+          const h = Number(item.height)
+          const x = Number(item.x)
+          const y = Number(item.y)
+          return {
+            width: Number.isFinite(w) && w >= 200 ? w : null,
+            height: Number.isFinite(h) && h >= 150 ? h : null,
+            x: Number.isFinite(x) ? x : null,
+            y: Number.isFinite(y) ? y : null
+          }
+        }
       }
     } catch (e) {}
     return null
   }
 
-  // Simpan data ukuran & koordinat posisi jendela ke localStorage
+  // Simpan data ukuran & koordinat posisi jendela ke localStorage dengan sanitasi angka
   function saveWindowBounds(id, bounds) {
     if (!id || !bounds) return
+    const w = Number(bounds.width)
+    const h = Number(bounds.height)
+    const x = Number(bounds.x)
+    const y = Number(bounds.y)
+    if (!Number.isFinite(w) || !Number.isFinite(h) || !Number.isFinite(x) || !Number.isFinite(y)) return
     try {
       const raw = localStorage.getItem(WINDOW_BOUNDS_STORAGE_KEY)
       const parsed = raw ? JSON.parse(raw) : {}
       parsed[id] = {
-        width: Math.round(bounds.width),
-        height: Math.round(bounds.height),
-        x: Math.round(bounds.x),
-        y: Math.round(bounds.y)
+        width: Math.round(w),
+        height: Math.round(h),
+        x: Math.round(x),
+        y: Math.round(y)
       }
       localStorage.setItem(WINDOW_BOUNDS_STORAGE_KEY, JSON.stringify(parsed))
     } catch (e) {}
@@ -135,8 +152,8 @@ export const useWindowStore = defineStore('window', () => {
     const maxX = Math.max(20, (window.innerWidth || 1200) - winWidth - 20)
     const maxY = Math.max(20, (window.innerHeight || 800) - winHeight - 60)
 
-    const winX = saved?.x !== undefined ? Math.min(Math.max(20, saved.x), maxX) : (60 + (offset % 200))
-    const winY = saved?.y !== undefined ? Math.min(Math.max(20, saved.y), maxY) : (40 + (offset % 150))
+    const winX = (saved && saved.x !== null && saved.x !== undefined) ? Math.min(Math.max(20, saved.x), maxX) : (60 + (offset % 200))
+    const winY = (saved && saved.y !== null && saved.y !== undefined) ? Math.min(Math.max(20, saved.y), maxY) : (40 + (offset % 150))
 
     const win = {
       ...appDef,
