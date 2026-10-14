@@ -32,6 +32,8 @@ func RegisterRoutes(r *gin.Engine) {
 		v1.GET("/system/metrics", handleGetMetrics)
 		v1.POST("/system/clean-ram", handleCleanRAM)
 		v1.POST("/system/clean-storage", handleCleanStorage)
+		v1.POST("/system/restart", handleRestartHost)
+		v1.POST("/system/shutdown", handleShutdownHost)
 
 		// Task Manager (Container & Processes)
 		v1.GET("/containers", handleGetContainers)
@@ -116,6 +118,28 @@ func handleCleanStorage(c *gin.Context) {
 		"status":  "success",
 		"message": "Storage docker prune berhasil dieksekusi",
 		"output":  output,
+	})
+}
+
+// handleRestartHost memproses permintaan reboot sistem STB
+func handleRestartHost(c *gin.Context) {
+	go func() {
+		_ = system.RestartHost()
+	}()
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "Sistem sedang memulai ulang (reboot)...",
+	})
+}
+
+// handleShutdownHost memproses permintaan pemadaman daya sistem STB
+func handleShutdownHost(c *gin.Context) {
+	go func() {
+		_ = system.ShutdownHost()
+	}()
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "Sistem sedang mematikan daya (poweroff)...",
 	})
 }
 

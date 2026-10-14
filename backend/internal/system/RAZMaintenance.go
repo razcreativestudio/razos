@@ -22,3 +22,25 @@ func CleanStorage() (string, error) {
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
+
+// RestartHost mengeksekusi reboot aman pada perangkat host Linux STB
+func RestartHost() error {
+	cmd := exec.Command("reboot")
+	if err := cmd.Run(); err != nil {
+		// Fallback perintah shutdown -r now jika reboot direct ditolak
+		fallback := exec.Command("shutdown", "-r", "now")
+		return fallback.Run()
+	}
+	return nil
+}
+
+// ShutdownHost mematikan daya perangkat STB host secara aman
+func ShutdownHost() error {
+	cmd := exec.Command("poweroff")
+	if err := cmd.Run(); err != nil {
+		// Fallback perintah shutdown -h now jika poweroff direct ditolak
+		fallback := exec.Command("shutdown", "-h", "now")
+		return fallback.Run()
+	}
+	return nil
+}

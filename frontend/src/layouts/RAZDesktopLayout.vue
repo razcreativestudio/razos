@@ -5,7 +5,7 @@
  * Deskripsi: Layout Desktop mode untuk breakpoint > 768px, memadukan desktop icon shortcuts,
  * window manager frame multi-jendela, dan taskbar bawah dengan sistem jendela mandiri tanpa background blur.
  */
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useWindowStore } from '../stores/RAZWindowStore'
 import { useSystemStore } from '../stores/RAZSystemStore'
 import { useContextMenuStore } from '../stores/RAZContextMenuStore'
@@ -13,7 +13,8 @@ import RAZWindowFrame from '../components/RAZWindowFrame.vue'
 import RAZTaskbar from '../components/RAZTaskbar.vue'
 import {
   RefreshCw, Folder, Terminal, Cpu, Settings, EyeOff, Layers, Play, Info,
-  Trash2, ExternalLink, AlertTriangle, X, Globe
+  Trash2, ExternalLink, AlertTriangle, X, Globe, Clock, Activity, HardDrive,
+  Network, Search
 } from 'lucide-vue-next'
 
 // Import View Aplikasi
@@ -224,12 +225,58 @@ function handleDesktopIconContextMenu(e, app) {
     ], app.title)
   }
 }
+
+// ==========================================
+// DESKTOP WIDGETS & SEARCH LOGIC
+// ==========================================
+const currentTime = ref('')
+const currentDate = ref('')
+let clockTimer = null
+
+function updateClock() {
+  const now = new Date()
+  currentTime.value = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  currentDate.value = now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+}
+
+onMounted(() => {
+  updateClock()
+  clockTimer = setInterval(updateClock, 1000)
+})
+
+onUnmounted(() => {
+  if (clockTimer) clearInterval(clockTimer)
+})
+
+// Handler Pencarian Desktop (CasaOS Floating Search Bar)
+const searchQuery = ref('')
+
+function handleDesktopSearch() {
+  if (!searchQuery.value.trim()) return
+  const q = encodeURIComponent(searchQuery.value.trim())
+  let url = `https://duckduckgo.com/?q=${q}`
+  const engine = systemStore.settings?.searchEngine || 'DuckDuckGo'
+  if (engine === 'Google') url = `https://www.google.com/search?q=${q}`
+  else if (engine === 'Bing') url = `https://www.bing.com/search?q=${q}`
+  else if (engine === 'Baidu') url = `https://www.baidu.com/s?wd=${q}`
+  window.open(url, '_blank')
+  searchQuery.value = ''
+}
+
+// Helper Format Ukuran Byte
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
 </script>
 
 <template>
   <div
     class="relative w-screen h-screen overflow-hidden bg-cover bg-center select-none"
-    style="background-image: url('/assets/images/RAZDesktopBg.webp')"
+    :style="{ backgroundImage: `url('${systemStore.settings?.wallpaper || '/assets/images/RAZDesktopBg.webp'}')` }"
     @contextmenu.prevent="handleDesktopContextMenu"
   >
     <!-- Subtle Brand Watermark di pojok kanan atas -->
@@ -237,22 +284,143 @@ function handleDesktopIconContextMenu(e, app) {
       <img src="/assets/brand/RAZBrandTransparent.webp" alt="RAZ STUDIO" class="h-8 object-contain" />
     </div>
 
-    <!-- Desktop Icons Grid (Aplikasi Sistem + Aplikasi Terpasang dari Store + Website) -->
-    <div class="relative z-10 p-6 grid grid-flow-col grid-rows-6 gap-6 w-max">
-      <div
-        v-for="app in windowStore.allDesktopApps"
-        :key="app.id"
-        @dblclick="app.isWebsite ? windowStore.launchWebsiteApp(app) : (app.isStoreApp ? windowStore.launchStoreApp(app) : windowStore.openApp(app.id))"
-        @contextmenu.prevent.stop="handleDesktopIconContextMenu($event, app)"
-        class="w-20 flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-slate-800/50 cursor-pointer group transition text-center relative"
+    <!-- Floating Search Bar (CasaOS Style - Top Center) -->
+    <div
+      v-if="systemStore.settings?.showSearchBar"
+      class="absolute top-4 left-1/2 -translate-x-1/2 z-10 w-full max-w-md px-4"
+    >
+      <form
+        @submit.prevent="handleDesktopSearch"
+        class="flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-slate-900/80 backdrop-blur-md border border-slate-700/80 shadow-2xl text-slate-100 hover:border-sky-500/50 transition duration-200"
       >
-        <div class="w-12 h-12 rounded-2xl flex items-center justify-center p-1 group-hover:scale-105 transition-transform duration-150 drop-shadow-md relative">
-          <img :src="app.icon" :alt="app.title" class="w-full h-full object-contain" />
-          <span v-if="app.isStoreApp || app.isWebsite" class="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900" :title="app.isWebsite ? 'Website Running' : 'Container Running'"></span>
-        </div>
-        <span class="text-xs text-slate-100 font-medium group-hover:text-sky-300 drop-shadow line-clamp-2">
-          {{ app.title }}
+        <Search class="w-4 h-4 text-sky-400 shrink-0" />
+        <input
+          v-model="searchQuery"
+          type="text"
+          :placeholder="`Cari web dengan ${systemStore.settings?.searchEngine || 'DuckDuckGo'}...`"
+          class="bg-transparent border-none outline-none text-xs sm:text-sm text-slate-100 placeholder-slate-400 w-full font-medium"
+        />
+        <span class="text-[10px] font-semibold font-mono px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700/60 uppercase">
+          {{ systemStore.settings?.searchEngine || 'DuckDuckGo' }}
         </span>
+      </form>
+    </div>
+
+    <!-- Desktop Content Area: Left Widgets + Desktop Icons Grid -->
+    <div
+      class="relative z-10 p-6 flex items-start gap-8 h-[calc(100vh-48px)] overflow-x-auto overflow-y-hidden"
+      :class="systemStore.settings?.showSearchBar ? 'pt-16' : ''"
+    >
+      <!-- CasaOS Desktop Widgets Card (Tampil jika minimal 1 widget aktif) -->
+      <div
+        v-if="systemStore.settings?.widgets && (systemStore.settings.widgets.time || systemStore.settings.widgets.systemStatus || systemStore.settings.widgets.storageStatus || systemStore.settings.widgets.networkStatus)"
+        class="w-72 shrink-0 rounded-2xl bg-slate-900/75 backdrop-blur-md border border-slate-800/90 shadow-2xl p-4 space-y-4 text-slate-200 animate-in fade-in"
+      >
+        <!-- Widget 1: Time -->
+        <div v-if="systemStore.settings.widgets.time" class="pb-3 border-b border-slate-800/80">
+          <div class="text-3xl font-extrabold tracking-tight text-slate-100 font-mono">
+            {{ currentTime }}
+          </div>
+          <div class="text-xs text-sky-400 font-medium mt-0.5 capitalize">
+            {{ currentDate }}
+          </div>
+        </div>
+
+        <!-- Widget 2: System Status (CPU, RAM, Temp) -->
+        <div v-if="systemStore.settings.widgets.systemStatus" class="space-y-2.5 pb-3 border-b border-slate-800/80">
+          <!-- CPU Load & Temperature -->
+          <div class="flex items-center justify-between text-xs">
+            <span class="flex items-center gap-1.5 font-semibold text-slate-300">
+              <Activity class="w-3.5 h-3.5 text-emerald-400" />
+              <span>Beban CPU</span>
+            </span>
+            <span class="font-mono text-emerald-400 font-bold">
+              {{ systemStore.metrics.cpu_percent ? systemStore.metrics.cpu_percent.toFixed(1) : 0 }}%
+              <span v-if="systemStore.metrics.cpu_temp > 0" class="text-slate-400 font-normal">({{ systemStore.metrics.cpu_temp }}°C)</span>
+            </span>
+          </div>
+          <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <div
+              class="h-full bg-emerald-500 rounded-full transition-all duration-300"
+              :style="{ width: `${Math.min(systemStore.metrics.cpu_percent || 0, 100)}%` }"
+            ></div>
+          </div>
+
+          <!-- RAM Load -->
+          <div class="flex items-center justify-between text-xs pt-1">
+            <span class="flex items-center gap-1.5 font-semibold text-slate-300">
+              <Cpu class="w-3.5 h-3.5 text-sky-400" />
+              <span>Memori RAM</span>
+            </span>
+            <span class="font-mono text-sky-400 font-bold">
+              {{ systemStore.metrics.ram_percent ? systemStore.metrics.ram_percent.toFixed(1) : 0 }}%
+            </span>
+          </div>
+          <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <div
+              class="h-full bg-sky-500 rounded-full transition-all duration-300"
+              :style="{ width: `${Math.min(systemStore.metrics.ram_percent || 0, 100)}%` }"
+            ></div>
+          </div>
+        </div>
+
+        <!-- Widget 3: Storage Status (/DATA) -->
+        <div v-if="systemStore.settings.widgets.storageStatus" class="space-y-2 pb-3 border-b border-slate-800/80">
+          <div class="flex items-center justify-between text-xs">
+            <span class="flex items-center gap-1.5 font-semibold text-slate-300">
+              <HardDrive class="w-3.5 h-3.5 text-amber-400" />
+              <span>Storage (/DATA)</span>
+            </span>
+            <span class="font-mono text-amber-400 font-bold text-[11px]">
+              {{ formatBytes(systemStore.metrics.disk_used) }} / {{ formatBytes(systemStore.metrics.disk_total) }}
+            </span>
+          </div>
+          <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <div
+              class="h-full bg-amber-500 rounded-full transition-all duration-300"
+              :style="{ width: `${Math.min(systemStore.metrics.disk_percent || 0, 100)}%` }"
+            ></div>
+          </div>
+        </div>
+
+        <!-- Widget 4: Network Status -->
+        <div v-if="systemStore.settings.widgets.networkStatus" class="space-y-1.5">
+          <div class="flex items-center justify-between text-xs">
+            <span class="flex items-center gap-1.5 font-semibold text-slate-300">
+              <Network class="w-3.5 h-3.5 text-indigo-400" />
+              <span>Kecepatan Jaringan</span>
+            </span>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-xs font-mono pt-1">
+            <div class="p-2 rounded-xl bg-slate-950/60 border border-slate-800">
+              <span class="text-[10px] text-slate-400 block">Download</span>
+              <span class="text-sky-300 font-bold text-xs truncate block">↓ {{ systemStore.metrics.net_download_speed || '0 KB/s' }}</span>
+            </div>
+            <div class="p-2 rounded-xl bg-slate-950/60 border border-slate-800">
+              <span class="text-[10px] text-slate-400 block">Upload</span>
+              <span class="text-indigo-300 font-bold text-xs truncate block">↑ {{ systemStore.metrics.net_upload_speed || '0 KB/s' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Desktop Icons Grid (Aplikasi Sistem + Aplikasi Terpasang dari Store + Website) -->
+      <div class="grid grid-flow-col grid-rows-6 gap-6 w-max">
+        <div
+          v-for="app in windowStore.allDesktopApps"
+          :key="app.id"
+          @dblclick="app.isWebsite ? windowStore.launchWebsiteApp(app) : (app.isStoreApp ? windowStore.launchStoreApp(app) : windowStore.openApp(app.id))"
+          @contextmenu.prevent.stop="handleDesktopIconContextMenu($event, app)"
+          class="w-20 flex flex-col items-center gap-1.5 p-2 rounded-xl hover:bg-slate-800/50 cursor-pointer group transition text-center relative"
+        >
+          <div class="w-12 h-12 rounded-2xl flex items-center justify-center p-1 group-hover:scale-105 transition-transform duration-150 drop-shadow-md relative">
+            <img :src="app.icon" :alt="app.title" class="w-full h-full object-contain" />
+            <span v-if="app.isStoreApp || app.isWebsite" class="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900" :title="app.isWebsite ? 'Website Running' : 'Container Running'"></span>
+          </div>
+          <span class="text-xs text-slate-100 font-medium group-hover:text-sky-300 drop-shadow line-clamp-2">
+            {{ app.title }}
+          </span>
+        </div>
       </div>
     </div>
 

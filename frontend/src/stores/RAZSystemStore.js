@@ -1,14 +1,38 @@
 /**
  * RAZOS System Store (Pinia)
- * Updated: 2026-10-08
- * Deskripsi: State management untuk polling data metrik host dan status windowing.
+ * Updated: 2026-10-14
+ * Deskripsi: State management untuk polling data metrik host, preferensi pengguna sistem (CasaOS style), dan status windowing.
  */
 
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { ref } from 'vue'
 
+const SETTINGS_STORAGE_KEY = 'razos_system_settings'
+
+// Default konfigurasi preferensi pengguna
+const DEFAULT_SETTINGS = {
+  showSearchBar: true,
+  searchEngine: 'DuckDuckGo', // 'DuckDuckGo', 'Google', 'Bing', 'Baidu'
+  language: 'English', // 'English', 'Bahasa Indonesia'
+  webUiPort: 8080,
+  wallpaper: '/assets/images/RAZDesktopBg.webp',
+  showBlogFeed: true,
+  showRecommendedApps: true,
+  automountUsb: true,
+  widgets: {
+    time: true,
+    systemStatus: true,
+    storageStatus: true,
+    networkStatus: true
+  },
+  account: {
+    name: 'raz',
+    avatar: '/assets/brand/RAZBrandSquare.webp'
+  }
+}
+
 export const useSystemStore = defineStore('system', () => {
-  // Metrik Hardware
+  // Metrik Hardware Host
   const metrics = ref({
     cpu_percent: 0,
     cpu_temp: 0,
@@ -18,13 +42,80 @@ export const useSystemStore = defineStore('system', () => {
     zram_percent: 0,
     disk_total: 0,
     disk_used: 0,
-    disk_percent: 0
+    disk_percent: 0,
+    net_sent: 0,
+    net_recv: 0,
+    net_upload_speed: '0 B/s',
+    net_download_speed: '0 B/s'
   })
+
+  // State Pelacak Kecepatan Jaringan
+  let lastNetTime = 0
+  let lastNetSent = 0
+  let lastNetRecv = 0
 
   const isConnected = ref(false)
   const isCleaningRAM = ref(false)
   const isCleaningStorage = ref(false)
   const notification = ref(null)
+
+  // Inisialisasi Settings dari LocalStorage
+  const loadSavedSettings = () => {
+    try {
+      const saved = localStorage.getItem(SETTINGS_STORAGE_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        return {
+          ...DEFAULT_SETTINGS,
+          ...parsed,
+          widgets: { ...DEFAULT_SETTINGS.widgets, ...(parsed.widgets || {}) },
+          account: { ...DEFAULT_SETTINGS.account, ...(parsed.account || {}) }
+        }
+      }
+    } catch (e) {
+      console.warn('Gagal membaca preferensi sistem dari localStorage:', e)
+    }
+    return { ...DEFAULT_SETTINGS }
+  }
+
+  const settings = ref(loadSavedSettings())
+
+  // Simpan pengaturan ke LocalStorage
+  function saveSettings() {
+    try {
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings.value))
+    } catch (e) {
+      console.error('Gagal menyimpan preferensi sistem:', e)
+    }
+  }
+
+  // Update nilai konfigurasi umum
+  function updateSetting(key, val) {
+    settings.value[key] = val
+    saveSettings()
+  }
+
+  // Update status widget individual
+  function updateWidget(widgetKey, val) {
+    if (settings.value.widgets) {
+      settings.value.widgets[widgetKey] = val
+      saveSettings()
+    }
+  }
+
+  // Update informasi akun pengguna
+  function updateAccount(name, avatar) {
+    if (name) settings.value.account.name = name
+    if (avatar) settings.value.account.avatar = avatar
+    saveSettings()
+  }
+
+  // Format bytes ke ukuran yang mudah dibaca
+  function formatSpeed(bytesPerSec) {
+    if (bytesPerSec < 1024) return `${Math.round(bytesPerSec)} B/s`
+    if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)} KB/s`
+    return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`
+  }
 
   // Tampilkan custom notification modal/toast
   function showNotification(title, message, type = 'info') {
@@ -39,7 +130,29 @@ export const useSystemStore = defineStore('system', () => {
     try {
       const res = await fetch('/api/v1/system/metrics')
       if (res.ok) {
-        metrics.value = await res.json()
+        const data = await res.json()
+        const now = Date.now()
+
+        // Hitung laju throughput kecepatan internet / LAN
+        if (lastNetTime > 0 && now > lastNetTime) {
+          const seconds = (now - lastNetTime) / 1000
+          if (seconds > 0) {
+            const upDiff = (data.net_sent || 0) >= lastNetSent ? (data.net_sent - lastNetSent) : 0
+            const downDiff = (data.net_recv || 0) >= lastNetRecv ? (data.net_recv - lastNetRecv) : 0
+
+            data.net_upload_speed = formatSpeed(upDiff / seconds)
+            data.net_download_speed = formatSpeed(downDiff / seconds)
+          }
+        } else {
+          data.net_upload_speed = '0 KB/s'
+          data.net_download_speed = '0 KB/s'
+        }
+
+        lastNetTime = now
+        lastNetSent = data.net_sent || 0
+        lastNetRecv = data.net_recv || 0
+
+        metrics.value = data
         isConnected.value = true
       } else {
         isConnected.value = false
@@ -85,6 +198,38 @@ export const useSystemStore = defineStore('system', () => {
     }
   }
 
+  // Eksekusi Reboot / Restart Sistem Host
+  async function restartSystem() {
+    try {
+      const res = await fetch('/api/v1/system/restart', { method: 'POST' })
+      if (res.ok) {
+        showNotification('Memulai Ulang', 'Sistem STB sedang melakukan restart...', 'info')
+        return true
+      }
+      showNotification('Gagal', 'Gagal mengirim instruksi restart', 'error')
+      return false
+    } catch (e) {
+      showNotification('Memulai Ulang', 'Instruksi restart telah dikirimkan ke hardware.', 'info')
+      return true
+    }
+  }
+
+  // Eksekusi Shutdown / Matikan Daya Host
+  async function shutdownSystem() {
+    try {
+      const res = await fetch('/api/v1/system/shutdown', { method: 'POST' })
+      if (res.ok) {
+        showNotification('Mematikan Sistem', 'Sistem STB sedang mematikan daya...', 'info')
+        return true
+      }
+      showNotification('Gagal', 'Gagal mengirim instruksi shutdown', 'error')
+      return false
+    } catch (e) {
+      showNotification('Mematikan Daya', 'Instruksi shutdown telah dikirimkan ke hardware.', 'info')
+      return true
+    }
+  }
+
   // Event Triggers untuk sinkronisasi antar-jendela OS
   const websitesRefreshTrigger = ref(0)
   const databasesRefreshTrigger = ref(0)
@@ -108,6 +253,13 @@ export const useSystemStore = defineStore('system', () => {
     isCleaningRAM,
     isCleaningStorage,
     notification,
+    settings,
+    saveSettings,
+    updateSetting,
+    updateWidget,
+    updateAccount,
+    restartSystem,
+    shutdownSystem,
     websitesRefreshTrigger,
     databasesRefreshTrigger,
     appsRefreshTrigger,

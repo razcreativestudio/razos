@@ -22,6 +22,11 @@
 - **Database Suite & Web Manager GUI:** Server MariaDB, PostgreSQL, dan SQLite terpusat dengan Web GUI Adminer (HeidiSQL / phpMyAdmin web style) siap pakai untuk inspeksi visual tabel dan eksekusi query data, terhubung langsung ke Website Manager.
 - **Web Terminal:** Akses SSH/PTY langsung di peramban menggunakan xterm.js.
 - **Detached Standalone Windows Architecture (Seperti File Manager - Zero In-App Blocking):** Seluruh dialog konfigurasi dan form wizard (Wizard Pembuatan Website, Edit Konfigurasi 5-Tab, GitHub PAT & Git Pull Sync, Rincian Website, Properti Berkas File Manager, dan Buat Database) kini bertransformasi menjadi **Jendela Desktop Mandiri Terpisah (`RAZWindowStore`)** persis seperti sistem pembuka berkas File Manager. Jendela-jendela ini memiliki frame mandiri, titlebar desktop, draggable, resizable, minimizeable ke taskbar dengan ikonnya sendiri, dan **sama sekali tidak mengunci/mengganggu aplikasi utama**. Pengguna dapat leluasa mengklik, menggulir, dan menjelajahi Website Manager, File Manager, atau App Store secara simultan tanpa halangan overlay modal.
+- **CasaOS-Style Settings Suite & Desktop Widgets Real-Time (v2.7.0):** Panel pengaturan sistem multi-tab terpadu mencakup:
+  1. *Account Profile*: Manajemen profil pengguna (nama & kata sandi terproteksi dengan custom modal dialog), avatar profil resmi RAZOS, dan tombol Logout aman.
+  2. *System Settings*: Toggle floating web search bar, pilihan search engine (DuckDuckGo, Google, Bing, Baidu), konfigurasi bahasa antarmuka, pengganti port WebUI host, galeri pemilih wallpaper desktop (RAZ Cosmic, Gradient Nebula, Cyber, Minimalist, atau Custom URL), toggle feed berita & rekomendasi aplikasi, automount USB drive, kartu OTA Updater, serta tombol kontrol daya host **Restart** (reboot aman) & **Shutdown** (poweroff aman).
+  3. *Widget Settings*: Toggle 4 widget desktop real-time (Jam digital & tanggal bahasa Indonesia, status CPU load & suhu SoC STB beserta RAM, kapasitas penyimpanan /DATA MicroSD, serta throughput kecepatan jaringan Download & Upload real-time).
+  4. *Desktop Reaktif*: Floating search bar terintegrasi di bagian atas desktop dan floating widget cards di samping desktop yang sinkron seketika dengan preferensi pengguna.
 
 ---
 

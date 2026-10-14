@@ -15,6 +15,7 @@ import (
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/net"
 )
 
 // Metrics merepresentasikan struktur data performa sistem secara komprehensif
@@ -28,6 +29,8 @@ type Metrics struct {
 	DiskTotal   uint64  `json:"disk_total"`   // Total penyimpanan data (/DATA)
 	DiskUsed    uint64  `json:"disk_used"`    // Penyimpanan terpakai (/DATA)
 	DiskPercent float64 `json:"disk_percent"` // Persentase disk terpakai
+	NetSent     uint64  `json:"net_sent"`     // Total byte dikirim jaringan
+	NetRecv     uint64  `json:"net_recv"`     // Total byte diterima jaringan
 }
 
 // GetMetrics mengumpulkan metrik sistem secara real-time dari kernel Linux host
@@ -69,6 +72,15 @@ func GetMetrics() (*Metrics, error) {
 		swapPercent = sMem.UsedPercent
 	}
 
+	// Ambil statistik I/O jaringan keseluruhan
+	netStats, _ := net.IOCounters(false)
+	netSent := uint64(0)
+	netRecv := uint64(0)
+	if len(netStats) > 0 {
+		netSent = netStats[0].BytesSent
+		netRecv = netStats[0].BytesRecv
+	}
+
 	return &Metrics{
 		CPUPercent:  cpuVal,
 		CPUTemp:     readCPUTemp(),
@@ -79,6 +91,8 @@ func GetMetrics() (*Metrics, error) {
 		DiskTotal:   diskTotal,
 		DiskUsed:    diskUsed,
 		DiskPercent: diskPercent,
+		NetSent:     netSent,
+		NetRecv:     netRecv,
 	}, nil
 }
 
