@@ -81,7 +81,38 @@ export const useWindowStore = defineStore('window', () => {
   const activeWindowId = ref(null)
   const zIndexCounter = ref(10)
 
-  // Buka window aplikasi
+  // Kunci penyimpanan preferensi ukuran & posisi jendela di localStorage
+  const WINDOW_BOUNDS_STORAGE_KEY = 'razos_window_bounds'
+
+  // Ambil data ukuran & posisi tersimpan dari localStorage
+  function getSavedBounds(id) {
+    try {
+      const raw = localStorage.getItem(WINDOW_BOUNDS_STORAGE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        return parsed[id] || null
+      }
+    } catch (e) {}
+    return null
+  }
+
+  // Simpan data ukuran & koordinat posisi jendela ke localStorage
+  function saveWindowBounds(id, bounds) {
+    if (!id || !bounds) return
+    try {
+      const raw = localStorage.getItem(WINDOW_BOUNDS_STORAGE_KEY)
+      const parsed = raw ? JSON.parse(raw) : {}
+      parsed[id] = {
+        width: Math.round(bounds.width),
+        height: Math.round(bounds.height),
+        x: Math.round(bounds.x),
+        y: Math.round(bounds.y)
+      }
+      localStorage.setItem(WINDOW_BOUNDS_STORAGE_KEY, JSON.stringify(parsed))
+    } catch (e) {}
+  }
+
+  // Buka window aplikasi dengan memulihkan ukuran dan posisi terakhir
   function openApp(appId) {
     const existing = openWindows.value.find(w => w.id === appId)
     if (existing) {
@@ -96,12 +127,23 @@ export const useWindowStore = defineStore('window', () => {
     if (!appDef) return
 
     zIndexCounter.value++
-    // Posisi acak teratur agar tidak menumpuk tepat di satu titik
     const offset = openWindows.value.length * 28
+    const saved = getSavedBounds(appId)
+
+    const winWidth = saved?.width || appDef.width
+    const winHeight = saved?.height || appDef.height
+    const maxX = Math.max(20, (window.innerWidth || 1200) - winWidth - 20)
+    const maxY = Math.max(20, (window.innerHeight || 800) - winHeight - 60)
+
+    const winX = saved?.x !== undefined ? Math.min(Math.max(20, saved.x), maxX) : (60 + (offset % 200))
+    const winY = saved?.y !== undefined ? Math.min(Math.max(20, saved.y), maxY) : (40 + (offset % 150))
+
     const win = {
       ...appDef,
-      x: 60 + (offset % 200),
-      y: 40 + (offset % 150),
+      width: winWidth,
+      height: winHeight,
+      x: winX,
+      y: winY,
       zIndex: zIndexCounter.value,
       isMinimized: false,
       isMaximized: false
@@ -111,8 +153,17 @@ export const useWindowStore = defineStore('window', () => {
     activeWindowId.value = appId
   }
 
-  // Tutup window
+  // Tutup window dan simpan ukuran/posisi terakhirnya
   function closeWindow(appId) {
+    const win = openWindows.value.find(w => w.id === appId)
+    if (win && !win.isMaximized) {
+      saveWindowBounds(appId, {
+        width: win.width,
+        height: win.height,
+        x: win.x,
+        y: win.y
+      })
+    }
     openWindows.value = openWindows.value.filter(w => w.id !== appId)
     if (activeWindowId.value === appId) {
       const remaining = openWindows.value.filter(w => !w.isMinimized)
@@ -241,17 +292,26 @@ export const useWindowStore = defineStore('window', () => {
 
     zIndexCounter.value++
     const offset = (openWindows.value.length * 32) % 200
+    const saved = getSavedBounds(config.id)
+
+    const winWidth = saved?.width || config.width || 600
+    const winHeight = saved?.height || config.height || 480
+    const maxX = Math.max(20, (window.innerWidth || 1200) - winWidth - 20)
+    const maxY = Math.max(20, (window.innerHeight || 800) - winHeight - 60)
+
+    const winX = saved?.x !== undefined ? Math.min(Math.max(20, saved.x), maxX) : Math.max(40, 100 + offset)
+    const winY = saved?.y !== undefined ? Math.min(Math.max(20, saved.y), maxY) : Math.max(30, 60 + offset)
 
     const win = {
       id: config.id,
       title: config.title || 'Jendela Dialog',
       icon: config.icon || '/assets/icons/RAZBrandCapsule.png',
-      width: config.width || 600,
-      height: config.height || 480,
+      width: winWidth,
+      height: winHeight,
       minWidth: config.minWidth || 380,
       minHeight: config.minHeight || 300,
-      x: Math.max(40, 100 + offset),
-      y: Math.max(30, 60 + offset),
+      x: winX,
+      y: winY,
       zIndex: zIndexCounter.value,
       isMinimized: false,
       isMaximized: false,
@@ -539,6 +599,7 @@ export const useWindowStore = defineStore('window', () => {
     openDatabaseCreator,
     openFileProperties,
     closeWindow,
+    saveWindowBounds,
     minimizeWindow,
     toggleMaximize,
     bringToFront,

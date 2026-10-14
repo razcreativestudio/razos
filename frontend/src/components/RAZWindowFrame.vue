@@ -27,13 +27,41 @@ const isResizing = ref(false)
 const resizeDirection = ref(null)
 const resizeStart = ref({ mouseX: 0, mouseY: 0, width: 0, height: 0, winX: 0, winY: 0 })
 
+// State Animasi Windows 11 Snap-to-Top Maximize Preview
+const isSnapTopPreview = ref(false)
+
+// Simpan ukuran dan koordinat jendela sebelum maximize agar dapat dipulihkan dengan tepat
+const unmaximizedBounds = ref({
+  width: props.win.width,
+  height: props.win.height,
+  x: props.win.x,
+  y: props.win.y
+})
+
 function startDrag(e) {
-  if (props.win.isMaximized) return
-  isDragging.value = true
   windowStore.bringToFront(props.win.id)
   
   const clientX = e.touches ? e.touches[0].clientX : e.clientX
   const clientY = e.touches ? e.touches[0].clientY : e.clientY
+
+  // Jika window sedang maximized dan di-drag ke bawah, unmaximize seketika ala Windows 11
+  if (props.win.isMaximized) {
+    props.win.isMaximized = false
+    props.win.width = unmaximizedBounds.value.width || 700
+    props.win.height = unmaximizedBounds.value.height || 480
+    // Posisikan window di bawah kursor mouse secara presisi
+    props.win.x = Math.max(10, clientX - Math.round(props.win.width / 2))
+    props.win.y = Math.max(10, clientY - 18)
+  } else {
+    unmaximizedBounds.value = {
+      width: props.win.width,
+      height: props.win.height,
+      x: props.win.x,
+      y: props.win.y
+    }
+  }
+
+  isDragging.value = true
 
   dragStart.value = {
     x: clientX,
@@ -58,6 +86,13 @@ function onDrag(e) {
 
   props.win.x = Math.max(0, dragStart.value.winX + dx)
   props.win.y = Math.max(0, dragStart.value.winY + dy)
+
+  // Cek apakah kursor mentok ke bagian paling atas layar (Windows 11 Snap Gesture <= 12px)
+  if (clientY <= 12) {
+    isSnapTopPreview.value = true
+  } else {
+    isSnapTopPreview.value = false
+  }
 }
 
 function stopDrag() {
@@ -66,6 +101,22 @@ function stopDrag() {
   window.removeEventListener('mouseup', stopDrag)
   window.removeEventListener('touchmove', onDrag)
   window.removeEventListener('touchend', stopDrag)
+
+  // Jika dilepas di bagian atas layar, eksekusi maximize otomatis
+  if (isSnapTopPreview.value) {
+    isSnapTopPreview.value = false
+    props.win.isMaximized = true
+    windowStore.bringToFront(props.win.id)
+  } else if (!props.win.isMaximized) {
+    unmaximizedBounds.value = {
+      width: props.win.width,
+      height: props.win.height,
+      x: props.win.x,
+      y: props.win.y
+    }
+    // Simpan ukuran dan posisi terakhir ke localStorage
+    windowStore.saveWindowBounds(props.win.id, unmaximizedBounds.value)
+  }
 }
 
 function startResize(e, dir) {
@@ -116,10 +167,32 @@ function stopResize() {
   window.removeEventListener('mouseup', stopResize)
   window.removeEventListener('touchmove', onResize)
   window.removeEventListener('touchend', stopResize)
+
+  if (!props.win.isMaximized) {
+    unmaximizedBounds.value = {
+      width: props.win.width,
+      height: props.win.height,
+      x: props.win.x,
+      y: props.win.y
+    }
+    // Simpan ukuran baru hasil resize ke localStorage
+    windowStore.saveWindowBounds(props.win.id, unmaximizedBounds.value)
+  }
 }
 </script>
 
 <template>
+  <!-- Windows 11 Snap-to-Top Maximize Preview Halo Animation -->
+  <Teleport to="body">
+    <transition name="fade">
+      <div
+        v-if="isSnapTopPreview"
+        class="fixed inset-x-2 top-2 h-[calc(100vh-56px)] rounded-2xl bg-sky-500/10 border-2 border-sky-400/80 backdrop-blur-[2px] pointer-events-none z-[9999] shadow-[0_0_40px_rgba(56,189,248,0.4)] animate-pulse"
+      >
+        <div class="absolute inset-0 bg-gradient-to-b from-sky-400/20 via-transparent to-sky-400/5 rounded-2xl"></div>
+      </div>
+    </transition>
+  </Teleport>
   <transition name="raz-window-transition">
     <div
       v-show="!win.isMinimized"

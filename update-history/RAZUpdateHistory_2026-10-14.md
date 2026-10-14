@@ -91,3 +91,36 @@ Dokumen riwayat pembaruan harian proyek RAZOS sesuai standar operasional enterpr
 - **Verifikasi:**
   - `npm run build` berhasil 100% dalam 4.20 detik.
   - Hot Module Replacement (HMR) langsung ter-update di `localhost:3000`.
+
+---
+
+### Versi: 2.8.0-windows-grid-dnd-snap-maximize (Windows Desktop Grid & Drag-Drop, Windows 11 Snap Maximize & Window Bounds Persistence)
+**Waktu Eksekusi:** 2026-10-14 10:55 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer
+
+#### 1. Windows Desktop Grid System & Drag-and-Drop dengan Snap Target
+- **Sistem Grid Koordinat Desktop:**
+  - Menerapkan sistem penataan grid slot koordinat `(col, row)` ala Windows Desktop (`CELL_W = 96px`, `CELL_H = 100px`).
+  - Setiap ikon aplikasi diposisikan secara mutlak (`absolute`) berdasarkan koordinat slot grid.
+- **Drag-and-Drop Interaktif:**
+  - Ikon desktop dapat diklik dan diseret (`drag-and-drop`) bebas ke slot grid mana pun di desktop.
+  - Menampilkan animasi indikator kotak target snap semi-transparan berbingkai putus-putus (`border-dashed border-sky-400 bg-sky-500/20`) saat menyeret ikon untuk memperlihatkan posisi landing secara presisi.
+  - Jika slot tujuan sudah terisi, sistem secara otomatis menukar posisi (*swap positions*) dengan ikon yang ada persis seperti Windows desktop.
+- **Persistensi Posisi Ikon Desktop:**
+  - Seluruh posisi ikon tersimpan secara permanen ke `localStorage` (`razos_desktop_icon_positions`).
+  - Saat reload peramban atau login kembali, tata letak ikon desktop tetap berada pada posisi terakhirnya.
+
+#### 2. Windows 11 Snap-to-Top Maximize Gesture & Animasi Halo Preview
+- **Gesture Drag Mentok ke Atas:**
+  - Saat title bar jendela aplikasi diseret dan mentok ke bagian paling atas layar (`clientY <= 12px`), muncul animasi halo preview fullscreen semi-transparan berpendar biru (`bg-sky-500/10 border-sky-400/80 shadow-[0_0_40px_rgba(56,189,248,0.4)] animate-pulse`) yang di-teleport langsung ke body (Windows 11 Snap style).
+  - Ketika mouse dilepaskan, jendela otomatis beranimasi menjadi **Maximize**.
+  - Menyeret title bar jendela yang sedang maximized ke bawah otomatis mengembalikan jendela ke ukuran semula (*unmaximize on pull down*) dengan kursor berada tepat di tengah titlebar.
+
+#### 3. Persistensi Ukuran & Posisi Jendela per Aplikasi
+- **Penyimpanan Ukuran Terakhir:**
+  - Ukuran jendela (`width`, `height`) serta koordinat posisi (`x`, `y`) disimpan secara otomatis ke `localStorage` (`razos_window_bounds`) setiap kali jendela selesai dipindahkan, di-resize, atau ditutup (`closeWindow`).
+  - Saat aplikasi dibuka kembali di kemudian hari, jendela akan langsung muncul dengan ukuran dan posisi yang sama persis seperti saat terakhir digunakan.
+
+#### 4. Verifikasi & Build
+- `npm run build` sukses 100% tanpa error dalam 4.23 detik.
+- Hot Module Replacement (HMR) aktif di dev server `localhost:3000`.

@@ -5,7 +5,7 @@
  * Deskripsi: Layout Desktop mode untuk breakpoint > 768px, memadukan desktop icon shortcuts,
  * window manager frame multi-jendela, dan taskbar bawah dengan sistem jendela mandiri tanpa background blur.
  */
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useWindowStore } from '../stores/RAZWindowStore'
 import { useSystemStore } from '../stores/RAZSystemStore'
 import { useContextMenuStore } from '../stores/RAZContextMenuStore'
@@ -271,6 +271,165 @@ function formatBytes(bytes) {
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
+
+// ==========================================
+// WINDOWS DESKTOP GRID & DRAG-AND-DROP SYSTEM
+// ==========================================
+const DESKTOP_POS_STORAGE_KEY = 'razos_desktop_icon_positions'
+const CELL_W = 96  // Lebar slot grid desktop (px)
+const CELL_H = 100 // Tinggi slot grid desktop (px)
+
+// Mapping posisi tiap-tiap icon: { [appId]: { col: number, row: number } }
+const iconPositions = ref({})
+
+// Ambil data posisi yang tersimpan dari localStorage
+function loadIconPositions() {
+  try {
+    const raw = localStorage.getItem(DESKTOP_POS_STORAGE_KEY)
+    if (raw) {
+      return JSON.parse(raw)
+    }
+  } catch (e) {}
+  return {}
+}
+
+// Simpan data posisi ke localStorage agar persisten
+function saveIconPositions() {
+  try {
+    localStorage.setItem(DESKTOP_POS_STORAGE_KEY, JSON.stringify(iconPositions.value))
+  } catch (e) {}
+}
+
+// Menghitung koordinat awal grid desktop
+function getGridOrigin() {
+  return {
+    x: 24,
+    y: systemStore.settings?.showSearchBar ? 76 : 24
+  }
+}
+
+// Inisialisasi slot grid dan assign posisi untuk aplikasi baru secara otomatis
+function ensureIconPositions() {
+  const saved = loadIconPositions()
+  const occupied = new Set()
+  const result = { ...saved }
+
+  // Catat sel yang sudah terisi
+  Object.values(result).forEach(pos => {
+    occupied.add(`${pos.col},${pos.row}`)
+  })
+
+  // Cari slot kosong berurutan kolom demi kolom (ala Windows desktop)
+  let curCol = 0
+  let curRow = 0
+  const maxRowsPerCol = 6
+
+  const allApps = windowStore.allDesktopApps || []
+  allApps.forEach(app => {
+    if (!result[app.id]) {
+      while (occupied.has(`${curCol},${curRow}`)) {
+        curRow++
+        if (curRow >= maxRowsPerCol) {
+          curRow = 0
+          curCol++
+        }
+      }
+      result[app.id] = { col: curCol, row: curRow }
+      occupied.add(`${curCol},${curRow}`)
+      curRow++
+      if (curRow >= maxRowsPerCol) {
+        curRow = 0
+        curCol++
+      }
+    }
+  })
+
+  iconPositions.value = result
+  saveIconPositions()
+}
+
+// Watch perubahan daftar aplikasi agar icon website / store app baru otomatis tertata
+watch(() => windowStore.allDesktopApps.length, () => {
+  ensureIconPositions()
+}, { immediate: true })
+
+onMounted(() => {
+  ensureIconPositions()
+})
+
+// State Drag & Drop
+const draggedAppId = ref(null)
+const dropPreview = ref(null) // { col, row, x, y }
+
+function handleIconDragStart(e, app) {
+  draggedAppId.value = app.id
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('text/plain', app.id)
+}
+
+function handleIconDragEnd() {
+  draggedAppId.value = null
+  dropPreview.value = null
+}
+
+function calculateGridCell(clientX, clientY) {
+  const origin = getGridOrigin()
+  // Batas maksimum kolom agar tidak menimpa panel widget di sebelah kanan
+  const maxCol = Math.max(0, Math.floor((window.innerWidth - 320 - origin.x) / CELL_W))
+  const maxRow = Math.max(0, Math.floor((window.innerHeight - 56 - origin.y) / CELL_H))
+
+  let col = Math.floor((clientX - origin.x) / CELL_W)
+  let row = Math.floor((clientY - origin.y) / CELL_H)
+
+  col = Math.max(0, Math.min(col, maxCol))
+  row = Math.max(0, Math.min(row, maxRow))
+
+  return { col, row }
+}
+
+function handleDesktopDragOver(e) {
+  if (!draggedAppId.value) return
+  const { col, row } = calculateGridCell(e.clientX, e.clientY)
+  const origin = getGridOrigin()
+  dropPreview.value = {
+    col,
+    row,
+    x: origin.x + col * CELL_W,
+    y: origin.y + row * CELL_H
+  }
+}
+
+function handleDesktopDragLeave(e) {
+  if (!e.relatedTarget) {
+    dropPreview.value = null
+  }
+}
+
+function handleDesktopDrop(e) {
+  if (!draggedAppId.value) return
+  const { col, row } = calculateGridCell(e.clientX, e.clientY)
+  const currentAppId = draggedAppId.value
+
+  // Cek apakah slot target sudah ditempati icon lain (tukar posisi ala Windows)
+  const existingAppEntry = Object.entries(iconPositions.value).find(
+    ([id, pos]) => id !== currentAppId && pos.col === col && pos.row === row
+  )
+
+  if (existingAppEntry) {
+    const [existingId, _] = existingAppEntry
+    const oldPos = iconPositions.value[currentAppId] || { col: 0, row: 0 }
+    iconPositions.value[existingId] = { ...oldPos }
+  }
+
+  // Terapkan posisi baru pada app yang di-drag
+  iconPositions.value[currentAppId] = { col, row }
+  saveIconPositions()
+
+  systemStore.showNotification('Desktop', 'Posisi ikon berhasil disimpan', 'info')
+
+  draggedAppId.value = null
+  dropPreview.value = null
+}
 </script>
 
 <template>
@@ -278,10 +437,30 @@ function formatBytes(bytes) {
     class="relative w-screen h-screen overflow-hidden bg-cover bg-center select-none"
     :style="{ backgroundImage: `url('${systemStore.settings?.wallpaper || '/assets/images/RAZDesktopBg.webp'}')` }"
     @contextmenu.prevent="handleDesktopContextMenu"
+    @dragover.prevent="handleDesktopDragOver"
+    @dragleave="handleDesktopDragLeave"
+    @drop.prevent="handleDesktopDrop"
   >
     <!-- Subtle Brand Watermark di pojok kanan atas -->
     <div class="absolute top-4 right-6 pointer-events-none opacity-40 z-0">
       <img src="/assets/brand/RAZBrandTransparent.webp" alt="RAZ STUDIO" class="h-8 object-contain" />
+    </div>
+
+    <!-- Snap-to-Grid Target Preview (Windows Style) -->
+    <div
+      v-if="dropPreview"
+      :style="{
+        position: 'absolute',
+        left: `${dropPreview.x}px`,
+        top: `${dropPreview.y}px`,
+        width: `${CELL_W}px`,
+        height: `${CELL_H}px`
+      }"
+      class="rounded-2xl border-2 border-dashed border-sky-400 bg-sky-500/20 pointer-events-none transition-all duration-100 z-10 flex items-center justify-center shadow-lg shadow-sky-500/20 ring-4 ring-sky-400/20"
+    >
+      <div class="w-8 h-8 rounded-xl bg-sky-400/30 flex items-center justify-center">
+        <div class="w-2.5 h-2.5 rounded-full bg-sky-300 animate-ping"></div>
+      </div>
     </div>
 
     <!-- Desktop Layer (z-10, h-[calc(100vh-48px)]) -->
@@ -311,33 +490,42 @@ function formatBytes(bytes) {
         </form>
       </div>
 
-      <!-- Main Desktop Workspace: Left Icons Grid + Right Widgets Column -->
-      <div class="flex-1 flex items-start justify-between gap-8 overflow-hidden min-h-0 pointer-events-none">
-        <!-- LEFT: Desktop Icons Grid (Aplikasi Sistem + Aplikasi Terpasang dari Store + Website) -->
-        <div class="grid grid-flow-col grid-rows-[repeat(6,minmax(84px,max-content))] gap-x-4 gap-y-3 w-max pointer-events-auto overflow-y-auto max-h-full pr-2">
-          <div
-            v-for="app in windowStore.allDesktopApps"
-            :key="app.id"
-            @dblclick="app.isWebsite ? windowStore.launchWebsiteApp(app) : (app.isStoreApp ? windowStore.launchStoreApp(app) : windowStore.openApp(app.id))"
-            @contextmenu.prevent.stop="handleDesktopIconContextMenu($event, app)"
-            class="w-20 min-h-[84px] flex flex-col items-center justify-start p-1.5 rounded-xl hover:bg-slate-800/60 cursor-pointer group transition text-center relative select-none"
-          >
-            <!-- Ikon Aplikasi -->
-            <div class="w-12 h-12 rounded-2xl flex items-center justify-center p-1 group-hover:scale-105 transition-transform duration-150 drop-shadow-md relative shrink-0">
-              <img :src="app.icon" :alt="app.title" class="w-full h-full object-contain" />
-              <span v-if="app.isStoreApp || app.isWebsite" class="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900 shadow-sm" :title="app.isWebsite ? 'Website Running' : 'Container Running'"></span>
-            </div>
-            <!-- Judul / Nama Aplikasi Desktop (Kontras Tinggi & Selalu Terbaca) -->
-            <span class="mt-1 text-[11px] leading-tight text-slate-100 font-medium group-hover:text-sky-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] line-clamp-2 break-words w-full px-0.5 select-none">
-              {{ app.title }}
-            </span>
+      <!-- Main Desktop Workspace: Icons Absolute Grid + Right Widgets Column -->
+      <div class="flex-1 relative w-full h-full min-h-0 pointer-events-none overflow-hidden">
+        <!-- Windows Desktop Grid Icons (Draggable & Absolute Grid Positioned) -->
+        <div
+          v-for="app in windowStore.allDesktopApps"
+          :key="app.id"
+          draggable="true"
+          @dragstart="handleIconDragStart($event, app)"
+          @dragend="handleIconDragEnd"
+          @dblclick="app.isWebsite ? windowStore.launchWebsiteApp(app) : (app.isStoreApp ? windowStore.launchStoreApp(app) : windowStore.openApp(app.id))"
+          @contextmenu.prevent.stop="handleDesktopIconContextMenu($event, app)"
+          :style="{
+            position: 'absolute',
+            left: `${(iconPositions[app.id]?.col ?? 0) * CELL_W}px`,
+            top: `${(iconPositions[app.id]?.row ?? 0) * CELL_H}px`,
+            width: `${CELL_W}px`,
+            height: `${CELL_H}px`
+          }"
+          class="flex flex-col items-center justify-start p-1.5 rounded-2xl hover:bg-slate-800/60 cursor-pointer group transition-all duration-150 text-center select-none pointer-events-auto"
+          :class="draggedAppId === app.id ? 'opacity-30 scale-95 ring-2 ring-sky-400' : ''"
+        >
+          <!-- Ikon Aplikasi -->
+          <div class="w-12 h-12 rounded-2xl flex items-center justify-center p-1 group-hover:scale-105 transition-transform duration-150 drop-shadow-md relative shrink-0 pointer-events-none">
+            <img :src="app.icon" :alt="app.title" class="w-full h-full object-contain pointer-events-none" />
+            <span v-if="app.isStoreApp || app.isWebsite" class="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900 shadow-sm" :title="app.isWebsite ? 'Website Running' : 'Container Running'"></span>
           </div>
+          <!-- Judul / Nama Aplikasi Desktop (Kontras Tinggi & Selalu Terbaca) -->
+          <span class="mt-1 text-[11px] leading-tight text-slate-100 font-medium group-hover:text-sky-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] line-clamp-2 break-words w-full px-1 select-none pointer-events-none">
+            {{ app.title }}
+          </span>
         </div>
 
         <!-- RIGHT: Desktop Widgets Card (Tampil di sebelah kanan jika minimal 1 widget aktif) -->
         <div
           v-if="systemStore.settings?.widgets && (systemStore.settings.widgets.time || systemStore.settings.widgets.systemStatus || systemStore.settings.widgets.storageStatus || systemStore.settings.widgets.networkStatus)"
-          class="w-72 shrink-0 rounded-2xl bg-slate-900/80 backdrop-blur-md border border-slate-800/90 shadow-2xl p-4 space-y-4 text-slate-200 pointer-events-auto animate-in fade-in select-none ml-auto"
+          class="absolute top-0 right-0 w-72 rounded-2xl bg-slate-900/80 backdrop-blur-md border border-slate-800/90 shadow-2xl p-4 space-y-4 text-slate-200 pointer-events-auto animate-in fade-in select-none"
         >
           <!-- Widget 1: Time -->
           <div v-if="systemStore.settings.widgets.time" class="pb-3 border-b border-slate-800/80">
