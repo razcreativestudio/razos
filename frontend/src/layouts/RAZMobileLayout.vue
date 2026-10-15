@@ -82,8 +82,8 @@ function toggleFullscreen() {
       <div class="p-4 rounded-2xl raz-glass border border-slate-700/60 flex flex-col gap-3 shadow-xl">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <img src="/assets/images/RAZLogo.svg" alt="RAZOS" class="w-5 h-5" />
-            <span class="text-xs font-bold text-sky-400 tracking-wider">RAZOS MINI SERVER</span>
+            <img src="/assets/images/RAZLogo.svg" alt="RAZOS" class="w-5 h-5 object-contain drop-shadow" />
+            <span class="text-xs font-bold bg-gradient-to-r from-amber-200 to-yellow-400 bg-clip-text text-transparent tracking-wider">RAZOS MINI SERVER</span>
           </div>
           <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-medium">Online</span>
         </div>
@@ -132,8 +132,8 @@ function toggleFullscreen() {
       <button @click="openMobileApp('task-manager')" class="p-2 flex flex-col items-center">
         <img src="/assets/icons/RAZIconTaskManager.svg" alt="Task" class="w-6 h-6" />
       </button>
-      <div class="w-10 h-10 rounded-full bg-sky-500/20 border border-sky-400/40 flex items-center justify-center">
-        <img src="/assets/images/RAZLogo.svg" alt="Home" class="w-5 h-5" />
+      <div class="w-10 h-10 rounded-full bg-amber-500/15 border-2 border-amber-400/50 shadow-md shadow-amber-500/20 flex items-center justify-center">
+        <img src="/assets/images/RAZLogo.svg" alt="Home" class="w-5 h-5 object-contain drop-shadow" />
       </div>
       <button @click="openMobileApp('websites')" class="p-2 flex flex-col items-center">
         <img src="/assets/icons/RAZIconWebsites.svg" alt="Web" class="w-6 h-6" />
