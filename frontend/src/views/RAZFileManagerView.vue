@@ -1,17 +1,17 @@
 <script setup>
 /**
  * RAZOS Google Drive-Style Storage & Windows File Explorer Hybrid File Manager
- * Updated: 2026-10-15 (v3.5.1 - Fix Zero-Click Direct Initial Load)
+ * Updated: 2026-10-15 (v3.6.0 - Advanced File Creation, Multi-Mode Upload, and RAZ Studio Code Integration)
  * Deskripsi: Antarmuka File Manager tingkat lanjut memadukan arsitektur Windows File Explorer dan Google Drive:
+ * - New Action Suite (+ Baru Dropdown): Pembuatan folder baru, pembuatan file baru (teks/kode dengan quick template),
+ *   upload multi-file, upload folder rekursif (webkitdirectory), dan upload ZIP dengan auto-extract seketika.
+ * - Deep RAZ Studio Code Integration: Membuka berkas kode/teks langsung di Sublime/Notepad++ complex editor,
+ *   baik via double-click, tombol context menu "Buka di Teks Editor", maupun tombol aksi cepat.
  * - Direct Zero-Click Initial Load: Otomatis memuat dan menampilkan berkas/folder default (/DATA atau C:/DATA) saat pertama kali dibuka.
  * - Windows Explorer Interactive Address Bar: Bilah alamat dwi-fungsi (Breadcrumbs interaktif & Editable Text Input).
  * - History Navigation Trio: Tombol Back, Forward, dan Up dengan history stack tracking yang presisi.
- * - Quick Address Actions: Tombol Copy Path (dengan notifikasi clipboard) dan Refresh folder langsung di dalam address bar.
- * - Standalone Content Viewers & File Properties (No Dark/Blur Overlay): Membuka berkas gambar, video, musik, PDF,
- *   kode, serta Rincian & Properti Berkas di Jendela Mandiri terpisah via RAZWindowStore tanpa mengunci File Manager.
- * - Accurate Navigation & Path Normalization: Penanganan path Windows & Linux STB yang presisi tanpa lompat folder.
- * - Fluid Responsive Grid: Menggunakan auto-fill minmax(140px, 1fr) sehingga kartu folder/file tidak pernah gepeng.
- * - Bottom Status Bar: Menampilkan jumlah item, status item aktif, dan tombol aksi cepat tanpa memeras ruang grid.
+ * - Standalone Content Viewers & File Properties: Jendela mandiri terpisah via RAZWindowStore tanpa mengunci File Manager.
+ * - Fluid Responsive Grid & List View: Auto-fill layout yang tidak pernah gepeng dengan status bar lengkap.
  */
 import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
@@ -22,7 +22,8 @@ import {
   ChevronRight, ArrowLeft, ArrowRight, ArrowUp, RefreshCw, X, Save, AlertTriangle, Eye, Usb,
   Grid, List, Search, Star, Download, Info, CheckCircle2, Clock, Upload,
   Share2, MoreVertical, LayoutGrid, Server, Image, Film, Music, FileCheck, Play,
-  Copy, Check, BookOpen
+  Copy, Check, BookOpen, FilePlus, FolderPlus, FileUp, FolderUp, Archive, UploadCloud,
+  ChevronDown, Sparkles, Loader2, Code2
 } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
@@ -151,12 +152,33 @@ const searchQuery = ref('')
 const filterType = ref('all') // 'all' | 'folders' | 'code' | 'docs' | 'images' | 'video' | 'audio'
 const activeSidebarSection = ref('drive') // 'drive' | 'starred' | 'devices'
 
+// State Dropdown Menu "+ Baru"
+const showNewMenu = ref(false)
+
 // State Modal Folder & Rename
 const showNewFolderModal = ref(false)
 const newFolderName = ref('')
 const showRenameModal = ref(false)
 const renameTargetOldPath = ref('')
 const renameTargetNewName = ref('')
+
+// State Modal Buat File Baru (Teks / Kode)
+const showNewFileModal = ref(false)
+const newFileName = ref('')
+const newFileTemplate = ref('txt') // 'txt' | 'js' | 'html' | 'css' | 'json' | 'py' | 'go' | 'md' | 'yaml'
+
+// State Upload File, Folder, dan ZIP Auto-Extract
+const fileUploadInputRef = ref(null)
+const folderUploadInputRef = ref(null)
+const zipUploadInputRef = ref(null)
+
+const isUploading = ref(false)
+const uploadProgress = ref(0) // 0 - 100%
+const uploadCurrentFileName = ref('')
+const uploadTotalCount = ref(0)
+const uploadCompletedCount = ref(0)
+const showUploadModal = ref(false)
+const uploadType = ref('file') // 'file' | 'folder' | 'zip'
 
 // Buka Jendela Mandiri Info & Properti Berkas (v2.6.0)
 function openInfoModal(item = selectedItem.value) {
@@ -439,7 +461,7 @@ function handleItemClick(item) {
   selectedItem.value = item
 }
 
-// Buka Berkas di Window Mandiri (Standalone Window Viewers)
+// Buka Berkas di Window Mandiri (Standalone Window Viewers & RAZ Studio Code)
 function handleItemDoubleClick(item) {
   if (!item) return
   if (item.is_dir) {
@@ -448,11 +470,13 @@ function handleItemDoubleClick(item) {
     }
     fetchFiles(normalizePath(item.path))
   } else {
-    // Failsafe: pastikan fungsi windowStore.openFileViewer tersedia (bebas dari cache lama browser)
-    if (typeof windowStore.openFileViewer === 'function') {
+    // Jika berkas adalah kode, teks, markdown, script, atau konfigurasi, buka di RAZ Studio Code
+    if (isCodeFile(item.extension) || isDocFile(item.extension) || isMarkdownFile(item.extension) || !item.extension) {
+      openInTextEditor(item)
+    } else if (typeof windowStore.openFileViewer === 'function') {
       windowStore.openFileViewer(item)
     } else {
-      systemStore.showNotification('Pemberitahuan', `Memuat viewer untuk ${item.name}... Silakan refresh (F5) jika tampilan belum terbuka.`, 'info')
+      openInTextEditor(item)
     }
   }
 }
@@ -488,12 +512,219 @@ async function confirmCreateFolder() {
       body: JSON.stringify({ parent_path: currentPath.value, folder_name: newFolderName.value.trim() })
     })
     if (res.ok) {
-      systemStore.showNotification('Sukses', `Folder ${newFolderName.value} berhasil dibuat`, 'success')
+      systemStore.showNotification('Sukses', `Folder "${newFolderName.value}" berhasil dibuat`, 'success')
       showNewFolderModal.value = false
       newFolderName.value = ''
       fetchFiles()
     }
-  } catch (e) {}
+  } catch (e) {
+    systemStore.showNotification('Error', 'Gagal membuat folder baru', 'error')
+  }
+}
+
+// Template Konten Awal Berkas Baru
+function getInitialTemplateContent(ext) {
+  switch (ext) {
+    case 'html':
+      return `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dokumen Baru</title>
+</head>
+<body>
+  <h1>Selamat Datang di RAZOS</h1>
+</body>
+</html>`
+    case 'js':
+      return `/**
+ * RAZOS Script Module
+ */
+console.log('Hello from RAZ Studio Code!');`
+    case 'css':
+      return `/* RAZOS Stylesheet */
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+}`
+    case 'json':
+      return `{\n  "name": "razos-project",\n  "version": "1.0.0",\n  "description": ""\n}`
+    case 'py':
+      return `#!/usr/bin/env python3\n# RAZOS Python Script\n\nprint("Hello from Python!")`
+    case 'go':
+      return `package main\n\nimport "fmt"\n\nfunc main() {\n\tfmt.Println("Hello from Go!")\n}`
+    case 'md':
+      return `# Judul Berkas Baru\n\nTuliskan catatan atau dokumentasi di sini.`
+    case 'yaml':
+      return `version: '3.8'\nservices:\n  app:\n    image: nginx:alpine\n    ports:\n      - "80:80"`
+    default:
+      return ''
+  }
+}
+
+// Buat Berkas Baru (Teks / Kode) & Langsung Buka di Editor
+async function confirmCreateFile(openInEditor = true) {
+  let name = newFileName.value.trim()
+  if (!name) return
+
+  // Jika nama tidak punya ekstensi, tambahkan ekstensi dari template yang dipilih
+  if (!name.includes('.')) {
+    name = `${name}.${newFileTemplate.value}`
+  }
+
+  const ext = name.split('.').pop().toLowerCase()
+  const content = getInitialTemplateContent(ext)
+
+  try {
+    const res = await fetch('/api/v1/files/create-file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        parent_path: currentPath.value,
+        file_name: name,
+        content: content
+      })
+    })
+    const data = await res.json()
+    if (res.ok && data.status === 'created') {
+      systemStore.showNotification('Sukses', `Berkas "${name}" berhasil dibuat`, 'success')
+      showNewFileModal.value = false
+      newFileName.value = ''
+      await fetchFiles()
+
+      // Buka langsung di RAZ Studio Code (Sublime/Notepad++ Style)
+      if (openInEditor && data.item) {
+        windowStore.openTextEditor(data.item)
+      }
+    } else {
+      systemStore.showNotification('Gagal', data.error || 'Tidak dapat membuat berkas', 'error')
+    }
+  } catch (err) {
+    systemStore.showNotification('Error', `Gagal membuat berkas: ${err.message}`, 'error')
+  }
+}
+
+// Buka Berkas Langsung di RAZ Studio Code (Sublime Text / Notepad++ Style)
+function openInTextEditor(item) {
+  if (!item || item.is_dir) return
+  windowStore.openTextEditor(item)
+}
+
+// Trigger Input Upload
+function triggerUpload(type) {
+  uploadType.value = type
+  if (type === 'file' && fileUploadInputRef.value) {
+    fileUploadInputRef.value.value = ''
+    fileUploadInputRef.value.click()
+  } else if (type === 'folder' && folderUploadInputRef.value) {
+    folderUploadInputRef.value.value = ''
+    folderUploadInputRef.value.click()
+  } else if (type === 'zip' && zipUploadInputRef.value) {
+    zipUploadInputRef.value.value = ''
+    zipUploadInputRef.value.click()
+  }
+}
+
+// Helper Upload Single File ke API raw-stream
+async function uploadSingleFileRaw(file, relativePath = '', autoExtract = false) {
+  const destDir = currentPath.value
+  const res = await fetch('/api/v1/files/upload-raw', {
+    method: 'POST',
+    headers: {
+      'x-dest-dir': encodeURIComponent(destDir),
+      'x-filename': encodeURIComponent(file.name),
+      'x-relative-path': relativePath ? encodeURIComponent(relativePath) : '',
+      'x-auto-extract': autoExtract ? 'true' : 'false'
+    },
+    body: file
+  })
+  return await res.json()
+}
+
+// Handler Upload Berkas Biasa (Multi-file)
+async function handleFileUploadChange(e) {
+  const selectedFiles = Array.from(e.target.files || [])
+  if (selectedFiles.length === 0) return
+
+  uploadTotalCount.value = selectedFiles.length
+  uploadCompletedCount.value = 0
+  uploadProgress.value = 0
+  isUploading.value = true
+  showUploadModal.value = true
+
+  for (let i = 0; i < selectedFiles.length; i++) {
+    const file = selectedFiles[i]
+    uploadCurrentFileName.value = file.name
+    try {
+      await uploadSingleFileRaw(file, '', false)
+      uploadCompletedCount.value++
+      uploadProgress.value = Math.round((uploadCompletedCount.value / uploadTotalCount.value) * 100)
+    } catch (err) {
+      console.error('Gagal upload berkas:', file.name, err)
+    }
+  }
+
+  isUploading.value = false
+  systemStore.showNotification('Upload Selesai', `${uploadCompletedCount.value} berkas berhasil diunggah`, 'success')
+  fetchFiles()
+  setTimeout(() => { showUploadModal.value = false }, 1800)
+}
+
+// Handler Upload Seluruh Folder (Recursive WebkitDirectory)
+async function handleFolderUploadChange(e) {
+  const selectedFiles = Array.from(e.target.files || [])
+  if (selectedFiles.length === 0) return
+
+  uploadTotalCount.value = selectedFiles.length
+  uploadCompletedCount.value = 0
+  uploadProgress.value = 0
+  isUploading.value = true
+  showUploadModal.value = true
+
+  for (let i = 0; i < selectedFiles.length; i++) {
+    const file = selectedFiles[i]
+    uploadCurrentFileName.value = file.webkitRelativePath || file.name
+    try {
+      await uploadSingleFileRaw(file, file.webkitRelativePath || '', false)
+      uploadCompletedCount.value++
+      uploadProgress.value = Math.round((uploadCompletedCount.value / uploadTotalCount.value) * 100)
+    } catch (err) {
+      console.error('Gagal upload folder item:', file.name, err)
+    }
+  }
+
+  isUploading.value = false
+  systemStore.showNotification('Folder Diunggah', `Folder beserta ${uploadCompletedCount.value} berkas berhasil diunggah`, 'success')
+  fetchFiles()
+  setTimeout(() => { showUploadModal.value = false }, 1800)
+}
+
+// Handler Upload ZIP dengan Auto-Extract Otomatis
+async function handleZipUploadChange(e) {
+  const selectedFiles = Array.from(e.target.files || [])
+  if (selectedFiles.length === 0) return
+
+  const zipFile = selectedFiles[0]
+  uploadTotalCount.value = 1
+  uploadCompletedCount.value = 0
+  uploadProgress.value = 30
+  uploadCurrentFileName.value = zipFile.name
+  isUploading.value = true
+  showUploadModal.value = true
+
+  try {
+    const res = await uploadSingleFileRaw(zipFile, '', true)
+    uploadProgress.value = 100
+    uploadCompletedCount.value = 1
+    systemStore.showNotification('Ekstraksi Sukses', res.message || `Arsip "${zipFile.name}" berhasil diekstrak`, 'success')
+  } catch (err) {
+    systemStore.showNotification('Gagal', `Gagal mengekstrak ZIP: ${err.message}`, 'error')
+  } finally {
+    isUploading.value = false
+    fetchFiles()
+    setTimeout(() => { showUploadModal.value = false }, 1800)
+  }
 }
 
 // Hapus Berkas/Folder
@@ -589,7 +820,19 @@ function handleFileItemContextMenu(e, item) {
       label: item.is_dir ? 'Masuk Folder' : 'Buka Berkas',
       icon: item.is_dir ? Folder : Eye,
       action: () => handleItemDoubleClick(item)
-    },
+    }
+  ]
+
+  // Jika berupa berkas (bukan folder), berikan opsi Buka di Teks Editor
+  if (!item.is_dir) {
+    menuList.push({
+      label: 'Buka di Teks Editor',
+      icon: FileCode,
+      action: () => openInTextEditor(item)
+    })
+  }
+
+  menuList.push(
     {
       label: 'Ubah Nama',
       icon: Edit3,
@@ -607,7 +850,7 @@ function handleFileItemContextMenu(e, item) {
       danger: true,
       action: () => deleteItem(item)
     }
-  ]
+  )
 
   contextMenuStore.show(e, menuList, item.name)
 }
@@ -617,9 +860,37 @@ function handleCanvasContextMenu(e) {
   contextMenuStore.show(e, [
     {
       label: 'Folder Baru',
-      icon: Plus,
+      icon: FolderPlus,
       action: () => { showNewFolderModal.value = true }
     },
+    {
+      label: 'File Baru (Teks/Kode)',
+      icon: FilePlus,
+      action: () => { showNewFileModal.value = true }
+    },
+    { separator: true },
+    {
+      label: 'Unggah (Upload)',
+      icon: UploadCloud,
+      children: [
+        {
+          label: 'Upload File',
+          icon: FileUp,
+          action: () => triggerUpload('file')
+        },
+        {
+          label: 'Upload Folder Lengkap',
+          icon: FolderUp,
+          action: () => triggerUpload('folder')
+        },
+        {
+          label: 'Upload & Ekstrak ZIP',
+          icon: Archive,
+          action: () => triggerUpload('zip')
+        }
+      ]
+    },
+    { separator: true },
     {
       label: 'Tampilan (View)',
       icon: LayoutGrid,
@@ -668,14 +939,92 @@ onMounted(async () => {
     <!-- LEFT SIDEBAR (Google Drive Style) -->
     <div class="w-56 border-r border-slate-800/80 bg-slate-900/60 p-3 flex flex-col justify-between hidden md:flex shrink-0">
       <div class="flex flex-col gap-4">
-        <!-- New Button -->
-        <button
-          @click="showNewFolderModal = true"
-          class="h-10 px-4 rounded-2xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold flex items-center justify-center gap-2 shadow-lg transition active:scale-95"
-        >
-          <Plus class="w-5 h-5" />
-          <span class="text-xs tracking-wide">Folder Baru</span>
-        </button>
+        <!-- New Button with Dropdown -->
+        <div class="relative">
+          <button
+            @click="showNewMenu = !showNewMenu"
+            class="w-full h-10 px-4 rounded-2xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold flex items-center justify-between gap-2 shadow-lg transition active:scale-95"
+          >
+            <div class="flex items-center gap-2">
+              <Plus class="w-5 h-5" />
+              <span class="text-xs tracking-wide">Baru</span>
+            </div>
+            <ChevronDown class="w-4 h-4 transition-transform duration-200" :class="showNewMenu ? 'rotate-180' : ''" />
+          </button>
+
+          <!-- Dropdown Menu -->
+          <div
+            v-if="showNewMenu"
+            class="absolute top-12 left-0 w-64 bg-slate-900/95 border border-slate-700/80 rounded-2xl shadow-2xl z-50 p-1.5 flex flex-col gap-1 text-xs font-sans text-slate-200 backdrop-blur-md animate-in fade-in zoom-in-95"
+          >
+            <button
+              @click="() => { showNewMenu = false; showNewFolderModal = true; }"
+              class="w-full px-3 py-2 rounded-xl hover:bg-slate-800 flex items-center gap-3 transition text-left"
+            >
+              <div class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
+                <FolderPlus class="w-4 h-4" />
+              </div>
+              <div>
+                <span class="font-medium block text-slate-200">Folder Baru</span>
+                <span class="text-[10px] text-slate-400 block">Buat folder di direktori aktif</span>
+              </div>
+            </button>
+
+            <button
+              @click="() => { showNewMenu = false; showNewFileModal = true; }"
+              class="w-full px-3 py-2 rounded-xl hover:bg-slate-800 flex items-center gap-3 transition text-left"
+            >
+              <div class="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                <FilePlus class="w-4 h-4" />
+              </div>
+              <div>
+                <span class="font-medium block text-slate-200">File Baru (Teks/Kode)</span>
+                <span class="text-[10px] text-slate-400 block">Buat & langsung buka di Editor</span>
+              </div>
+            </button>
+
+            <div class="h-px bg-slate-800 my-0.5"></div>
+
+            <button
+              @click="() => { showNewMenu = false; triggerUpload('file'); }"
+              class="w-full px-3 py-2 rounded-xl hover:bg-slate-800 flex items-center gap-3 transition text-left"
+            >
+              <div class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
+                <FileUp class="w-4 h-4" />
+              </div>
+              <div>
+                <span class="font-medium block text-slate-200">Upload File</span>
+                <span class="text-[10px] text-slate-400 block">Unggah satu atau banyak berkas</span>
+              </div>
+            </button>
+
+            <button
+              @click="() => { showNewMenu = false; triggerUpload('folder'); }"
+              class="w-full px-3 py-2 rounded-xl hover:bg-slate-800 flex items-center gap-3 transition text-left"
+            >
+              <div class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                <FolderUp class="w-4 h-4" />
+              </div>
+              <div>
+                <span class="font-medium block text-slate-200">Upload Folder</span>
+                <span class="text-[10px] text-slate-400 block">Unggah folder beserta seluruh isinya</span>
+              </div>
+            </button>
+
+            <button
+              @click="() => { showNewMenu = false; triggerUpload('zip'); }"
+              class="w-full px-3 py-2 rounded-xl hover:bg-slate-800 flex items-center gap-3 transition text-left"
+            >
+              <div class="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                <Archive class="w-4 h-4" />
+              </div>
+              <div>
+                <span class="font-medium block text-purple-300">Upload ZIP (Auto Extract)</span>
+                <span class="text-[10px] text-slate-400 block">Unggah & langsung diekstrak</span>
+              </div>
+            </button>
+          </div>
+        </div>
 
         <!-- Navigation Links -->
         <div class="flex flex-col gap-1 text-xs">
@@ -1043,6 +1392,9 @@ onMounted(async () => {
                       <button @click="openInfoModal(item)" class="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-sky-400" title="Detail & Properti">
                         <Info class="w-3.5 h-3.5" />
                       </button>
+                      <button v-if="!item.is_dir" @click="openInTextEditor(item)" class="p-1 rounded hover:bg-slate-700 text-emerald-400" title="Buka di RAZ Studio Code (Sublime/Notepad++)">
+                        <Code2 class="w-3.5 h-3.5" />
+                      </button>
                       <button v-if="!item.is_dir" @click="handleItemDoubleClick(item)" class="p-1 rounded hover:bg-slate-700 text-sky-400" title="Buka Viewer / Player">
                         <Play v-if="isVideoFile(item.extension) || isAudioFile(item.extension)" class="w-3.5 h-3.5" />
                         <Eye v-else class="w-3.5 h-3.5" />
@@ -1116,6 +1468,15 @@ onMounted(async () => {
             >
               <Info class="w-3.5 h-3.5 text-sky-400" />
               <span class="hidden sm:inline">Info Berkas</span>
+            </button>
+            <button
+              v-if="!selectedItem.is_dir"
+              @click="openInTextEditor(selectedItem)"
+              class="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[11px] font-medium flex items-center gap-1 transition"
+              title="Buka di RAZ Studio Code"
+            >
+              <Code2 class="w-3.5 h-3.5" />
+              <span class="hidden sm:inline">Teks Editor</span>
             </button>
             <button
               v-if="!selectedItem.is_dir"
@@ -1225,5 +1586,161 @@ onMounted(async () => {
         </div>
       </div>
     </div>
+
+    <!-- CUSTOM MODAL: Buat File Baru (Teks / Kode) -->
+    <div
+      v-if="showNewFileModal"
+      class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 animate-in fade-in"
+    >
+      <div class="w-full max-w-md bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black ring-1 ring-white/10 rounded-2xl flex flex-col overflow-hidden">
+        <!-- Titlebar -->
+        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-4 py-2.5 select-none">
+          <div class="flex items-center gap-2">
+            <div class="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+              <FilePlus class="w-3.5 h-3.5" />
+            </div>
+            <h4 class="font-bold text-slate-100 text-xs">Buat Berkas Baru (Teks / Kode)</h4>
+          </div>
+          <button @click="showNewFileModal = false" class="w-6 h-6 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95" title="Tutup Jendela">
+            <X class="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div class="p-4 space-y-3.5">
+          <div>
+            <label class="block text-[11px] font-medium text-slate-300 mb-1">Nama Berkas & Ekstensi</label>
+            <input
+              v-model="newFileName"
+              @keyup.enter="confirmCreateFile(true)"
+              type="text"
+              class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 text-xs font-mono outline-none focus:border-emerald-400"
+              placeholder="contoh: script.js, index.html, server.go, config.yaml..."
+            />
+          </div>
+
+          <!-- Quick Template Selector -->
+          <div>
+            <span class="block text-[10px] font-bold uppercase text-slate-500 tracking-wider mb-1.5">Pilih Format / Ekstensi Cepat</span>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-for="tpl in [
+                  { id: 'txt', label: '.txt (Teks)' },
+                  { id: 'js', label: '.js (JavaScript)' },
+                  { id: 'html', label: '.html (Web)' },
+                  { id: 'css', label: '.css (Style)' },
+                  { id: 'json', label: '.json (Data)' },
+                  { id: 'py', label: '.py (Python)' },
+                  { id: 'go', label: '.go (GoLang)' },
+                  { id: 'md', label: '.md (Markdown)' },
+                  { id: 'yaml', label: '.yaml (Docker/Config)' }
+                ]"
+                :key="tpl.id"
+                @click="() => {
+                  newFileTemplate = tpl.id
+                  if (!newFileName.includes('.')) {
+                    newFileName = newFileName ? `${newFileName.split('.')[0]}.${tpl.id}` : `untitled.${tpl.id}`
+                  } else {
+                    newFileName = `${newFileName.split('.')[0]}.${tpl.id}`
+                  }
+                }"
+                class="px-2 py-1 rounded-lg border text-[11px] font-mono transition"
+                :class="newFileTemplate === tpl.id ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-bold' : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-slate-200'"
+              >
+                {{ tpl.label }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between bg-slate-950/75 border-t border-slate-800 px-4 py-2.5">
+          <button @click="showNewFileModal = false" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition">
+            Batal
+          </button>
+          <div class="flex items-center gap-2">
+            <button @click="confirmCreateFile(false)" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition">
+              Buat Saja
+            </button>
+            <button @click="confirmCreateFile(true)" class="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition flex items-center gap-1.5 shadow active:scale-95">
+              <Code2 class="w-3.5 h-3.5" />
+              <span>Buat & Buka Editor</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CUSTOM MODAL: Progress Upload File / Folder / ZIP -->
+    <div
+      v-if="showUploadModal"
+      class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 animate-in fade-in"
+    >
+      <div class="w-full max-w-sm bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black ring-1 ring-white/10 rounded-2xl flex flex-col overflow-hidden">
+        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-4 py-2.5 select-none">
+          <div class="flex items-center gap-2">
+            <div class="w-6 h-6 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
+              <UploadCloud class="w-3.5 h-3.5" />
+            </div>
+            <h4 class="font-bold text-slate-100 text-xs">
+              {{ uploadType === 'zip' ? 'Mengekstrak Arsip ZIP' : 'Mengunggah Berkas' }}
+            </h4>
+          </div>
+          <button v-if="!isUploading" @click="showUploadModal = false" class="w-6 h-6 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95">
+            <X class="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div class="p-4 space-y-3">
+          <div class="flex items-center justify-between text-xs font-mono">
+            <span class="text-slate-300 truncate max-w-[220px]">{{ uploadCurrentFileName || 'Memproses berkas...' }}</span>
+            <span class="text-sky-400 font-bold">{{ uploadProgress }}%</span>
+          </div>
+
+          <!-- Progress Bar -->
+          <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+            <div
+              class="h-full bg-gradient-to-r from-sky-500 to-emerald-400 transition-all duration-300"
+              :style="{ width: `${uploadProgress}%` }"
+            ></div>
+          </div>
+
+          <div class="flex items-center justify-between text-[11px] text-slate-400">
+            <span>{{ uploadCompletedCount }} dari {{ uploadTotalCount }} item selesai</span>
+            <span v-if="isUploading" class="flex items-center gap-1 text-sky-400">
+              <RefreshCw class="w-3 h-3 animate-spin" />
+              <span>Mengunggah...</span>
+            </span>
+            <span v-else class="text-emerald-400 flex items-center gap-1 font-semibold">
+              <Check class="w-3.5 h-3.5" />
+              <span>Selesai</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden Native Inputs untuk File, Folder, dan ZIP Upload -->
+    <input
+      ref="fileUploadInputRef"
+      type="file"
+      multiple
+      @change="handleFileUploadChange"
+      class="hidden"
+    />
+    <input
+      ref="folderUploadInputRef"
+      type="file"
+      webkitdirectory
+      directory
+      multiple
+      @change="handleFolderUploadChange"
+      class="hidden"
+    />
+    <input
+      ref="zipUploadInputRef"
+      type="file"
+      accept=".zip,application/zip"
+      @change="handleZipUploadChange"
+      class="hidden"
+    />
   </div>
 </template>

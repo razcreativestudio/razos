@@ -2331,6 +2331,132 @@ server.listen(port, () => console.log('Server berjalan pada port ' + port));
         })
       })
 
+      // 9a. Endpoint Create File (/api/v1/files/create-file)
+      server.middlewares.use('/api/v1/files/create-file', (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405
+          return res.end('Method Not Allowed')
+        }
+        let body = ''
+        req.on('data', chunk => { body += chunk })
+        req.on('end', () => {
+          try {
+            const data = JSON.parse(body)
+            const parent = resolveSafePath(data.parent_path || data.parent || '.')
+            let name = (data.file_name || data.name || 'untitled.txt').trim()
+            if (!name) name = 'untitled.txt'
+            const cleanParent = parent.endsWith('/') ? parent : parent + '/'
+            const target = (cleanParent + name).replace(/\\/g, '/')
+            const content = data.content || ''
+            
+            // Buat folder parent jika belum ada
+            fs.mkdirSync(path.dirname(target), { recursive: true })
+            
+            // Simpan file
+            fs.writeFileSync(target, content, 'utf-8')
+            
+            const ext = path.extname(name).toLowerCase()
+            const fileItem = {
+              name: name,
+              path: target,
+              is_dir: false,
+              size: Buffer.byteLength(content, 'utf-8'),
+              mod_time: new Date().toISOString(),
+              extension: ext
+            }
+
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ status: 'created', item: fileItem, path: target }))
+          } catch (err) {
+            res.statusCode = 500
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: err.message }))
+          }
+        })
+      })
+
+      // 9b. Endpoint Upload Raw Stream & Auto-Extract ZIP (/api/v1/files/upload-raw)
+      server.middlewares.use('/api/v1/files/upload-raw', (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405
+          return res.end('Method Not Allowed')
+        }
+        try {
+          const rawDest = decodeURIComponent(req.headers['x-dest-dir'] || '.')
+          const destDir = resolveSafePath(rawDest)
+          const fileName = decodeURIComponent(req.headers['x-filename'] || 'uploaded_file')
+          const relativePath = req.headers['x-relative-path'] ? decodeURIComponent(req.headers['x-relative-path']) : ''
+          const autoExtract = req.headers['x-auto-extract'] === 'true'
+
+          // Pastikan direktori tujuan tersedia
+          fs.mkdirSync(destDir, { recursive: true })
+
+          const chunks = []
+          req.on('data', chunk => { chunks.push(chunk) })
+          req.on('end', () => {
+            try {
+              const fileBuffer = Buffer.concat(chunks)
+
+              if (autoExtract && fileName.toLowerCase().endsWith('.zip')) {
+                // Skenario Auto-Extract ZIP
+                const tempZipName = `.temp_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.zip`
+                const tempZipPath = path.join(destDir, tempZipName)
+                fs.writeFileSync(tempZipPath, fileBuffer)
+
+                try {
+                  // Gunakan utilitas tar/bsdtar bawaan sistem untuk ekstraksi instan & aman
+                  execSync(`tar -xf "${tempZipPath}" -C "${destDir}"`, { stdio: 'pipe' })
+                } catch (extractErr) {
+                  // Fallback menggunakan PowerShell Expand-Archive di Windows jika tar mengalami isu
+                  try {
+                    execSync(`powershell -Command "Expand-Archive -Path '${tempZipPath}' -DestinationPath '${destDir}' -Force"`, { stdio: 'pipe' })
+                  } catch (psErr) {
+                    throw new Error(`Gagal mengekstrak arsip ZIP: ${extractErr.message} | ${psErr.message}`)
+                  }
+                } finally {
+                  // Hapus file ZIP sementara setelah ekstraksi
+                  try { if (fs.existsSync(tempZipPath)) fs.unlinkSync(tempZipPath) } catch (e) {}
+                }
+
+                res.setHeader('Content-Type', 'application/json')
+                return res.end(JSON.stringify({
+                  status: 'extracted',
+                  message: `Arsip ZIP "${fileName}" berhasil diekstrak ke ${destDir}`,
+                  target_dir: destDir
+                }))
+              }
+
+              // Skenario Upload File Tunggal atau Folder File
+              let finalPath
+              if (relativePath && relativePath.trim()) {
+                finalPath = path.join(destDir, relativePath).replace(/\\/g, '/')
+                fs.mkdirSync(path.dirname(finalPath), { recursive: true })
+              } else {
+                finalPath = path.join(destDir, fileName).replace(/\\/g, '/')
+              }
+
+              fs.writeFileSync(finalPath, fileBuffer)
+
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({
+                status: 'uploaded',
+                message: `Berkas "${fileName}" berhasil diunggah`,
+                path: finalPath,
+                size: fileBuffer.length
+              }))
+            } catch (writeErr) {
+              res.statusCode = 500
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: writeErr.message }))
+            }
+          })
+        } catch (err) {
+          res.statusCode = 500
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ error: err.message }))
+        }
+      })
+
       // 10. Endpoint Delete Item (/api/v1/files/item)
       server.middlewares.use('/api/v1/files/item', (req, res) => {
         if (req.method !== 'DELETE') {

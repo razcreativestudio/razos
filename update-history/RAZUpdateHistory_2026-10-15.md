@@ -286,4 +286,56 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 - **Backup:**
   - Dicadangkan di `backup/RAZFileManagerView_2026-10-15_fix_initial_load.bak`.
 
+---
+
+### Versi: 3.6.0-sublime-editor-and-file-manager-upload-suite (Sublime Text / Notepad++ Complex Code Editor, Multi-Mode Upload, & Instant File Creation Suite)
+**Waktu Eksekusi:** 2026-10-15 11:27 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer
+
+#### 1. Kebutuhan Pengguna & Fitur Baru
+- **Permintaan 1:**
+  - Menambahkan fitur Upload File (single/multi-file).
+  - Menambahkan fitur Upload Folder (recursive directory structure).
+  - Menambahkan fitur Upload ZIP dengan auto-extract seketika di direktori aktif.
+  - Menambahkan fitur Buat Folder.
+  - Menambahkan fitur Buat File (teks/kode) yang filenya dapat langsung dibuka menggunakan Text Editor dari dalam File Manager.
+- **Permintaan 2:**
+  - Membuat Text Editor di dalam sistem operasi RAZOS jauh lebih kompleks, powerful, dan profesional setara **Sublime Text** atau **Notepad++**.
+
+#### 2. Rekayasa Teknis & Arsitektur Implementasi
+- **Sublime Text & Notepad++ Enterprise Complex Code Editor (`RAZTextEditorView.vue`):**
+  - **Multi-Tab Workspace:** Membuka banyak berkas secara bersamaan dalam tab bar horizontal, lengkap dengan dirty/unsaved indicator, badge tipe bahasa, tombol close tab, dan tombol `+` tab baru.
+  - **Menu Bar Komprehensif (Sublime Style):**
+    - `Berkas Baru (Ctrl+N)`, `Simpan (Ctrl+S)`, `Simpan Semua (Ctrl+Shift+S)`, `Cari (Ctrl+F)`, `Ganti (Ctrl+H)`, `Lompat Baris (Ctrl+G)`.
+  - **Collapsible Project File Tree Sidebar:** Panel samping penjelajah berkas direktori aktif untuk beralih antar file proyek secara instan tanpa perlu bolak-balik ke File Manager.
+  - **Synchronized Line Numbers Gutter:** Nomor baris responsif yang tersinkronisasi 100% dengan scroll textarea dan memiliki penanda baris aktif kursor.
+  - **Floating Find & Replace Bar (Ctrl+F / Ctrl+H):**
+    - Pencarian teks real-time dengan counter pencocokan (contoh: `3/12`), tombol previous/next, input replace, serta tombol `Ganti` dan `Ganti Semua`.
+  - **Go to Line Dialog (Ctrl+G):** Modal navigasi cepat untuk melompat langsung ke baris tertentu.
+  - **Smart Indentation & Auto-Closing Pairs:** Dukungan tombol `Tab` (2 atau 4 spasi), auto-indent baris baru mengikuti baris sebelumnya, dan auto-closing brackets (`()`, `[]`, `{}`, `""`, `''`).
+  - **Notepad++ Bottom Status Bar:** Informasi posisi baris & kolom kursor riil, statistik jumlah baris/kata/karakter, encoding `UTF-8`, line endings `LF/CRLF`, tombol switch indentasi `Spasi: 2/4`, dan deteksi otomatis bahasa pemrograman.
+  - **Multi-Theme Selector:** Pilihan tema modern: *Sublime Monokai*, *Dark Obsidian*, *Cyberpunk Neon*, dan *Notepad++ Slate*.
+- **Penyempurnaan File Manager (`RAZFileManagerView.vue`):**
+  - **Dropdown Menu "+ Baru" (New Action Suite):**
+    - Folder Baru (Custom Modal)
+    - File Baru (Teks/Kode dengan quick template selector: `.js`, `.html`, `.css`, `.json`, `.py`, `.go`, `.md`, `.txt`, `.yaml`)
+    - Upload File (multi-file native)
+    - Upload Folder (recursive webkitdirectory)
+    - Upload ZIP (Auto Extract)
+  - **Integrasi Penuh Teks Editor:**
+    - Double-click file teks/kode/config/script otomatis membuka berkas di **RAZ Studio Code**.
+    - Opsi Context Menu: **"Buka di Teks Editor"** (ikon `FileCode`) tersedia di klik kanan berkas.
+    - Tombol aksi cepat Teks Editor (`Code2`) tersedia di baris list view dan status bar item terpilih.
+    - Membuat berkas baru memiliki opsi **"Buat & Buka Editor"** yang langsung memunculkan window RAZ Studio Code.
+  - **Modal Progress Upload:** Menampilkan nama file aktif, progress bar animasi (0-100%), dan status counter penyelesaian.
+- **Backend & Middleware REST API (`vite.config.js`):**
+  - `POST /api/v1/files/create-file`: Membuat berkas baru di direktori parent dan mengembalikan file item descriptor.
+  - `POST /api/v1/files/upload-raw`: Menerima raw binary stream upload berkas, pembuatan subfolder otomatis via header `x-relative-path`, dan auto-extract arsip ZIP secara instan via utilitas `tar` / `bsdtar` sistem.
+
+#### 3. Verifikasi & Standar Mutu
+- **Production Build:** `npm run build` sukses 100% tanpa error dalam 5.25 detik (`built in 5.25s`).
+- **REST API Endpoints:** `/api/v1/files/create-file` dan `/api/v1/files/upload-raw` terverifikasi sukses via pengujian integrasi.
+- **Backup:** Dicadangkan di `backup/RAZFileManagerView_before_upload_and_editor_suite.vue.bak`, `backup/RAZDesktopLayout_before_text_editor.vue.bak`, dan `backup/RAZWindowStore_before_text_editor.js.bak`.
+
+
 

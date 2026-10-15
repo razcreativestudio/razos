@@ -41,6 +41,7 @@ import RAZAppStoreInstallView from '../views/RAZAppStoreInstallView.vue'
 import RAZAppEditView from '../views/RAZAppEditView.vue'
 import RAZAppLogsView from '../views/RAZAppLogsView.vue'
 import RAZStorageManagerView from '../views/RAZStorageManagerView.vue'
+import RAZTextEditorView from '../views/RAZTextEditorView.vue'
 
 const windowStore = useWindowStore()
 const systemStore = useSystemStore()
@@ -49,6 +50,7 @@ const contextMenuStore = useContextMenuStore()
 // Mapping ID aplikasi ke komponen View
 const viewMap = {
   'file-manager': RAZFileManagerView,
+  'text-editor': RAZTextEditorView,
   'task-manager': RAZTaskManagerView,
   'terminal': RAZTerminalView,
   'app-store': RAZAppStoreView,
@@ -107,6 +109,11 @@ function handleDesktopContextMenu(e) {
           label: 'Files & Storage',
           icon: Folder,
           action: () => windowStore.openApp('file-manager')
+        },
+        {
+          label: 'RAZ Studio Code',
+          icon: Code2,
+          action: () => windowStore.openTextEditor()
         },
         {
           label: 'Web Terminal',
@@ -1302,6 +1309,9 @@ function handleDesktopDrop(e) {
 
             <!-- Standalone Storage Manager Window (CasaOS Style) -->
             <RAZStorageManagerView v-else-if="win.id === 'storage-manager'" :win="win" />
+
+            <!-- Standalone Sublime & Notepad++ Advanced Code/Text Editor -->
+            <RAZTextEditorView v-else-if="win.id === 'text-editor' || win.id.startsWith('editor-')" :initial-file="win.fileData" :win="win" />
 
             <!-- Aplikasi Utama Berdasarkan ID -->
             <component v-else :is="viewMap[win.id]" />

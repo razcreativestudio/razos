@@ -21,6 +21,15 @@ export const useWindowStore = defineStore('window', () => {
       minHeight: 340,
     },
     {
+      id: 'text-editor',
+      title: 'RAZ Studio Code',
+      icon: '/assets/icons/RAZIconCodeEditor.svg',
+      width: 880,
+      height: 560,
+      minWidth: 480,
+      minHeight: 340,
+    },
+    {
       id: 'task-manager',
       title: 'Task Manager',
       icon: '/assets/icons/RAZIconTaskManager.svg',
@@ -563,6 +572,34 @@ export const useWindowStore = defineStore('window', () => {
     })
   }
 
+  // Standalone Sublime Text & Notepad++ Enterprise Complex Code & Text Editor
+  function openTextEditor(fileItem = null) {
+    const winId = 'text-editor'
+    const existing = openWindows.value.find(w => w.id === winId)
+    if (existing) {
+      existing.isMinimized = false
+      if (fileItem) {
+        existing.fileData = fileItem
+        existing.title = `${fileItem.name} - RAZ Studio Code`
+      }
+      bringToFront(winId)
+      return
+    }
+
+    const title = fileItem ? `${fileItem.name} - RAZ Studio Code` : 'RAZ Studio Code (Sublime/Notepad++)'
+    openCustomWindow({
+      id: winId,
+      title: title,
+      icon: '/assets/icons/RAZIconCodeEditor.svg',
+      width: 880,
+      height: 560,
+      minWidth: 480,
+      minHeight: 340,
+      type: 'text-editor',
+      fileData: fileItem
+    })
+  }
+
   // Toggle window dari taskbar (minimize jika aktif di depan, atau restore/bringToFront jika minimize/di belakang)
   function toggleWindowFromTaskbar(winId) {
     const win = openWindows.value.find(w => w.id === winId)
@@ -708,6 +745,7 @@ export const useWindowStore = defineStore('window', () => {
     openApp,
     openCustomWindow,
     openFileViewer,
+    openTextEditor,
     openWebsiteCreator,
     openWebsiteEditor,
     openWebsiteGit,
