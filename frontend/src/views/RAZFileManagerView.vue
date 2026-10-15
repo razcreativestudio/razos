@@ -829,10 +829,10 @@ function handleFileItemContextMenu(e, item) {
     }
   ]
 
-  // Jika berupa berkas (bukan folder), berikan opsi Buka di Teks Editor
+  // Jika berupa berkas (bukan folder), berikan opsi Edit di Teks Editor
   if (!item.is_dir) {
     menuList.push({
-      label: 'Buka di Teks Editor',
+      label: 'Edit Berkas (Editor Teks)',
       icon: FileCode,
       action: () => openInTextEditor(item)
     })
@@ -1487,7 +1487,7 @@ onMounted(async () => {
                       <button @click="openInfoModal(item)" class="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-sky-400" title="Detail & Properti">
                         <Info class="w-3.5 h-3.5" />
                       </button>
-                      <button v-if="!item.is_dir" @click="openInTextEditor(item)" class="p-1 rounded hover:bg-slate-700 text-emerald-400" title="Buka di RAZ Studio Code (Sublime/Notepad++)">
+                      <button v-if="!item.is_dir" @click="openInTextEditor(item)" class="p-1 rounded hover:bg-slate-700 text-emerald-400" title="Edit Berkas di Editor Teks">
                         <Code2 class="w-3.5 h-3.5" />
                       </button>
                       <button v-if="!item.is_dir" @click="handleItemDoubleClick(item)" class="p-1 rounded hover:bg-slate-700 text-sky-400" title="Buka Viewer / Player">
@@ -1568,10 +1568,10 @@ onMounted(async () => {
               v-if="!selectedItem.is_dir"
               @click="openInTextEditor(selectedItem)"
               class="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[11px] font-medium flex items-center gap-1 transition"
-              title="Buka di RAZ Studio Code"
+              title="Edit Berkas di Editor Teks"
             >
               <Code2 class="w-3.5 h-3.5" />
-              <span class="hidden sm:inline">Teks Editor</span>
+              <span class="hidden sm:inline">Edit Berkas</span>
             </button>
             <button
               v-if="!selectedItem.is_dir"

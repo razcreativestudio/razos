@@ -26,10 +26,23 @@ const props = defineProps({
   initialFile: {
     type: Object,
     default: null
+  },
+  // Window frame instance descriptor dari RAZWindowStore
+  win: {
+    type: Object,
+    default: null
   }
 })
 
 const systemStore = useSystemStore()
+
+// State Custom Modals (Zero Native Dialogs: No alert/confirm/prompt)
+const showSaveAsModal = ref(false)
+const saveAsFileName = ref('')
+const showCloseTabConfirmModal = ref(false)
+const pendingCloseTabId = ref('')
+const pendingCloseTabName = ref('')
+const showCloseAllConfirmModal = ref(false)
 
 // 1. STATE MULTI-TAB WORKSPACE
 const tabs = ref([])
@@ -135,24 +148,34 @@ const wordCount = computed(() => {
 async function openFileInTab(fileItem) {
   if (!fileItem || !fileItem.path) return
 
+  // Normalisasi path
+  const targetPath = fileItem.path.replace(/\\/g, '/')
+
   // Cek apakah berkas sudah terbuka di salah satu tab
-  const existingTab = tabs.value.find(t => t.path === fileItem.path)
+  const existingTab = tabs.value.find(t => t.path === targetPath || t.path === fileItem.path)
   if (existingTab) {
     activeTabId.value = existingTab.id
-    loadSidebarDirectory(getDirectoryPath(fileItem.path))
+    loadSidebarDirectory(getDirectoryPath(targetPath))
     return
   }
 
+  // Jika saat ini hanya ada 1 tab dan itu adalah tab untitled kosong belum diedit, ganti tab tersebut
+  if (tabs.value.length === 1 && !tabs.value[0].path && !tabs.value[0].isDirty && !tabs.value[0].content) {
+    tabs.value = []
+  }
+
+  const fileName = fileItem.name || (targetPath.split('/').pop() || 'berkas.txt')
+
   const newTab = {
     id: generateTabId(),
-    name: fileItem.name || 'untitled.txt',
-    path: fileItem.path,
-    content: '',
-    originalContent: '',
+    name: fileName,
+    path: targetPath,
+    content: typeof fileItem.content === 'string' ? fileItem.content : '',
+    originalContent: typeof fileItem.content === 'string' ? fileItem.content : '',
     isDirty: false,
     isLoading: true,
     isLocked: false,
-    language: detectLanguage(fileItem.name),
+    language: detectLanguage(fileName),
     undoStack: [],
     redoStack: []
   }
@@ -161,15 +184,15 @@ async function openFileInTab(fileItem) {
   activeTabId.value = newTab.id
 
   // Muat sidebar folder
-  loadSidebarDirectory(getDirectoryPath(fileItem.path))
+  loadSidebarDirectory(getDirectoryPath(targetPath))
 
   // Ambil isi berkas dari API backend
   try {
-    const res = await fetch(`/api/v1/files/content?path=${encodeURIComponent(fileItem.path)}`)
+    const res = await fetch(`/api/v1/files/content?path=${encodeURIComponent(targetPath)}`)
     const data = await res.json()
     if (res.ok) {
-      newTab.content = data.content || ''
-      newTab.originalContent = data.content || ''
+      newTab.content = data.content ?? ''
+      newTab.originalContent = data.content ?? ''
       newTab.isLocked = !!data.isLocked
     } else {
       systemStore.showNotification('Peringatan', data.error || 'Tidak dapat memuat berkas', 'warning')
@@ -178,6 +201,12 @@ async function openFileInTab(fileItem) {
     systemStore.showNotification('Error', `Gagal membuka berkas: ${err.message}`, 'error')
   } finally {
     newTab.isLoading = false
+    nextTick(() => {
+      if (editorTextareaRef.value) {
+        editorTextareaRef.value.focus()
+        updateCursorPosition()
+      }
+    })
   }
 }
 
@@ -204,7 +233,7 @@ function createNewUntitledTab() {
   })
 }
 
-// Tutup Tab dengan konfirmasi jika ada perubahan yang belum disimpan
+// Tutup Tab dengan konfirmasi modal kustom jika ada perubahan yang belum disimpan
 function closeTab(tabId, e) {
   if (e) e.stopPropagation()
   const tabIndex = tabs.value.findIndex(t => t.id === tabId)
@@ -212,10 +241,25 @@ function closeTab(tabId, e) {
 
   const targetTab = tabs.value[tabIndex]
   if (targetTab.isDirty) {
-    const confirmed = confirm(`Berkas "${targetTab.name}" memiliki perubahan yang belum disimpan. Tetap tutup?`)
-    if (!confirmed) return
+    pendingCloseTabId.value = tabId
+    pendingCloseTabName.value = targetTab.name
+    showCloseTabConfirmModal.value = true
+    return
   }
 
+  doCloseTab(tabIndex)
+}
+
+function forceCloseTab() {
+  showCloseTabConfirmModal.value = false
+  const tabIndex = tabs.value.findIndex(t => t.id === pendingCloseTabId.value)
+  if (tabIndex !== -1) {
+    doCloseTab(tabIndex)
+  }
+}
+
+function doCloseTab(tabIndex) {
+  const tabId = tabs.value[tabIndex].id
   tabs.value.splice(tabIndex, 1)
 
   // Jika tab yang ditutup adalah tab aktif, alihkan fokus ke tab sebelahnya
@@ -224,18 +268,23 @@ function closeTab(tabId, e) {
       const nextIndex = Math.min(tabIndex, tabs.value.length - 1)
       activeTabId.value = tabs.value[nextIndex].id
     } else {
-      // Jika semua tab habis, buatkan 1 tab kosong otomatis
       createNewUntitledTab()
     }
   }
 }
 
-// Tutup Semua Tab
+// Tutup Semua Tab dengan modal konfirmasi kustom jika ada dirty tabs
 function closeAllTabs() {
   const dirtyCount = tabs.value.filter(t => t.isDirty).length
   if (dirtyCount > 0) {
-    if (!confirm(`Ada ${dirtyCount} berkas yang belum disimpan. Yakin ingin menutup semua tab?`)) return
+    showCloseAllConfirmModal.value = true
+    return
   }
+  forceCloseAllTabs()
+}
+
+function forceCloseAllTabs() {
+  showCloseAllConfirmModal.value = false
   tabs.value = []
   createNewUntitledTab()
 }
@@ -245,17 +294,33 @@ async function saveActiveFile() {
   if (!activeTab.value) return
   const cur = activeTab.value
 
-  // Jika belum punya path (untitled), minta nama / simpan ke direktori aktif
+  // Jika belum punya path (untitled), minta nama via Custom Modal
   if (!cur.path) {
-    const defaultDir = sidebarCurrentDir.value || '/DATA'
-    const fileName = prompt('Masukkan nama berkas untuk disimpan:', cur.name)
-    if (!fileName || !fileName.trim()) return
-    const cleanDir = defaultDir.endsWith('/') ? defaultDir : defaultDir + '/'
-    cur.path = cleanDir + fileName.trim()
-    cur.name = fileName.trim()
-    cur.language = detectLanguage(cur.name)
+    saveAsFileName.value = cur.name
+    showSaveAsModal.value = true
+    return
   }
 
+  await doSaveFile(cur)
+}
+
+async function confirmSaveAs() {
+  if (!activeTab.value) return
+  const cur = activeTab.value
+  const name = saveAsFileName.value.trim()
+  if (!name) return
+
+  const defaultDir = sidebarCurrentDir.value || '/DATA'
+  const cleanDir = defaultDir.endsWith('/') ? defaultDir : defaultDir + '/'
+  cur.path = cleanDir + name
+  cur.name = name
+  cur.language = detectLanguage(name)
+  showSaveAsModal.value = false
+
+  await doSaveFile(cur)
+}
+
+async function doSaveFile(cur) {
   cur.isSaving = true
   try {
     const res = await fetch('/api/v1/files/content', {
@@ -271,7 +336,6 @@ async function saveActiveFile() {
       cur.originalContent = cur.content
       cur.isDirty = false
       systemStore.showNotification('Tersimpan', `Berkas "${cur.name}" berhasil disimpan`, 'success')
-      // Muat ulang daftar sidebar
       if (sidebarCurrentDir.value) {
         loadSidebarDirectory(sidebarCurrentDir.value)
       }
@@ -649,12 +713,32 @@ function goToLine() {
 
 // Inisialisasi saat dimount
 onMounted(() => {
-  if (props.initialFile) {
-    openFileInTab(props.initialFile)
+  const target = props.initialFile || props.win?.fileData || props.win?.customData
+  if (target && target.path) {
+    openFileInTab(target)
   } else {
     createNewUntitledTab()
   }
 })
+
+// Watcher untuk merespons saat user membuka berkas baru dari File Manager saat editor sudah terbuka
+watch(() => props.initialFile, (newFile) => {
+  if (newFile && newFile.path) {
+    openFileInTab(newFile)
+  }
+}, { deep: true })
+
+watch(() => props.win?.fileData, (newFile) => {
+  if (newFile && newFile.path) {
+    openFileInTab(newFile)
+  }
+}, { deep: true })
+
+watch(() => props.win?.customData, (newData) => {
+  if (newData && newData.path) {
+    openFileInTab(newData)
+  }
+}, { deep: true })
 </script>
 
 <template>
@@ -670,10 +754,12 @@ onMounted(() => {
     <!-- 1. TOP MENU BAR (Sublime Text / Notepad++ Style) -->
     <div class="h-8 border-b border-white/10 px-3 flex items-center justify-between shrink-0 bg-black/30 backdrop-blur text-[11px] font-sans">
       <div class="flex items-center gap-4">
-        <!-- Brand Label -->
+        <!-- Brand Label (Satu Kesatuan dengan File Manager) -->
         <div class="flex items-center gap-1.5 font-bold tracking-wide" :class="activeTheme === 'monokai' ? 'text-amber-400' : 'text-sky-400'">
-          <Code2 class="w-3.5 h-3.5" />
-          <span>RAZ Studio Code</span>
+          <Folder class="w-3.5 h-3.5" />
+          <span>File Manager</span>
+          <span class="text-white/40 font-normal">/</span>
+          <span class="text-slate-300 font-medium">Editor Berkas</span>
         </div>
 
         <!-- Menu Action Dropdowns -->
@@ -992,6 +1078,98 @@ onMounted(() => {
         <span class="text-amber-400 font-bold">
           {{ activeTab?.language || 'Plain Text' }}
         </span>
+      </div>
+    </div>
+
+    <!-- 5. CUSTOM MODALS (Zero Native Dialogs: Custom Glassmorphism Modals) -->
+    <!-- Modal Simpan Berkas Baru (Save As) -->
+    <div
+      v-if="showSaveAsModal"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in"
+      @click.self="showSaveAsModal = false"
+    >
+      <div class="w-full max-w-md bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-5 text-slate-100 flex flex-col gap-4 font-sans">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2 font-bold text-sm text-sky-400">
+            <Save class="w-4 h-4" />
+            <span>Simpan Berkas Baru</span>
+          </div>
+          <button @click="showSaveAsModal = false" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200">
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+        <div class="flex flex-col gap-2">
+          <div class="text-[11px] text-slate-400">
+            Lokasi Folder: <span class="font-mono text-sky-300">{{ sidebarCurrentDir || '/DATA' }}</span>
+          </div>
+          <label class="text-xs text-slate-300 font-medium">Nama Berkas:</label>
+          <input
+            v-model="saveAsFileName"
+            @keydown.enter="confirmSaveAs"
+            type="text"
+            class="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-100 outline-none focus:border-sky-400"
+            placeholder="contoh: catatan.txt, script.js, config.json..."
+            autofocus
+          />
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+          <button @click="showSaveAsModal = false" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-300">
+            Batal
+          </button>
+          <button @click="confirmSaveAs" class="px-4 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs shadow-md">
+            Simpan Berkas
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Konfirmasi Tutup Tab Belum Disimpan -->
+    <div
+      v-if="showCloseTabConfirmModal"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in"
+      @click.self="showCloseTabConfirmModal = false"
+    >
+      <div class="w-full max-w-sm bg-slate-900 border border-amber-500/40 rounded-2xl shadow-2xl p-5 text-slate-100 flex flex-col gap-3 font-sans">
+        <div class="flex items-center gap-2 font-bold text-sm text-amber-400">
+          <AlertTriangle class="w-5 h-5" />
+          <span>Perubahan Belum Disimpan</span>
+        </div>
+        <p class="text-xs text-slate-300 leading-relaxed">
+          Berkas <span class="font-bold text-white">"{{ pendingCloseTabName }}"</span> memiliki perubahan yang belum disimpan. Tetap ingin menutup tab ini?
+        </p>
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+          <button @click="showCloseTabConfirmModal = false" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-300">
+            Batal
+          </button>
+          <button @click="forceCloseTab" class="px-4 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-white font-bold text-xs shadow-md">
+            Tutup Tanpa Simpan
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Konfirmasi Tutup Semua Tab -->
+    <div
+      v-if="showCloseAllConfirmModal"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in"
+      @click.self="showCloseAllConfirmModal = false"
+    >
+      <div class="w-full max-w-sm bg-slate-900 border border-amber-500/40 rounded-2xl shadow-2xl p-5 text-slate-100 flex flex-col gap-3 font-sans">
+        <div class="flex items-center gap-2 font-bold text-sm text-amber-400">
+          <AlertTriangle class="w-5 h-5" />
+          <span>Tutup Semua Tab</span>
+        </div>
+        <p class="text-xs text-slate-300 leading-relaxed">
+          Terdapat berkas yang belum disimpan. Yakin ingin menutup semua tab yang sedang terbuka?
+        </p>
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+          <button @click="showCloseAllConfirmModal = false" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-300">
+            Batal
+          </button>
+          <button @click="forceCloseAllTabs" class="px-4 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-white font-bold text-xs shadow-md">
+            Tutup Semua
+          </button>
+        </div>
       </div>
     </div>
   </div>

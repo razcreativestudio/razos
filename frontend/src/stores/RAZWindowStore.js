@@ -21,15 +21,6 @@ export const useWindowStore = defineStore('window', () => {
       minHeight: 340,
     },
     {
-      id: 'text-editor',
-      title: 'RAZ Studio Code',
-      icon: '/assets/icons/RAZIconCodeEditor.svg',
-      width: 880,
-      height: 560,
-      minWidth: 480,
-      minHeight: 340,
-    },
-    {
       id: 'task-manager',
       title: 'Task Manager',
       icon: '/assets/icons/RAZIconTaskManager.svg',
@@ -363,6 +354,9 @@ export const useWindowStore = defineStore('window', () => {
       if (config.data) {
         existing.customData = config.data
       }
+      if (config.fileData) {
+        existing.fileData = config.fileData
+      }
       bringToFront(config.id)
       return
     }
@@ -394,6 +388,7 @@ export const useWindowStore = defineStore('window', () => {
       isMinimized: false,
       isMaximized: isMaximized,
       customData: config.data || null,
+      fileData: config.fileData || config.data || null,
       customType: config.type || config.id
     }
 
@@ -572,31 +567,35 @@ export const useWindowStore = defineStore('window', () => {
     })
   }
 
-  // Standalone Sublime Text & Notepad++ Enterprise Complex Code & Text Editor
+  // Sublime Text & Notepad++ Enterprise Complex Code & Text Editor (Satu Kesatuan dengan File Manager)
   function openTextEditor(fileItem = null) {
-    const winId = 'text-editor'
-    const existing = openWindows.value.find(w => w.id === winId)
+    const winId = 'file-manager-editor'
+    const existing = openWindows.value.find(w => w.id === winId || w.id === 'text-editor')
+    const itemData = fileItem ? { ...fileItem, _ts: Date.now() } : null
+    const title = fileItem ? `${fileItem.name} - Editor Berkas (File Manager)` : 'Editor Berkas (File Manager)'
+
     if (existing) {
       existing.isMinimized = false
       if (fileItem) {
-        existing.fileData = fileItem
-        existing.title = `${fileItem.name} - RAZ Studio Code`
+        existing.fileData = itemData
+        existing.customData = itemData
+        existing.title = title
       }
-      bringToFront(winId)
+      bringToFront(existing.id)
       return
     }
 
-    const title = fileItem ? `${fileItem.name} - RAZ Studio Code` : 'RAZ Studio Code (Sublime/Notepad++)'
     openCustomWindow({
       id: winId,
       title: title,
-      icon: '/assets/icons/RAZIconCodeEditor.svg',
-      width: 880,
-      height: 560,
+      icon: '/assets/icons/RAZIconFileManager.svg',
+      width: 900,
+      height: 580,
       minWidth: 480,
       minHeight: 340,
       type: 'text-editor',
-      fileData: fileItem
+      data: itemData,
+      fileData: itemData
     })
   }
 

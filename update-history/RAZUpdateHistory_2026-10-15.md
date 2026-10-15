@@ -368,5 +368,36 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 - **Backup:** Dicadangkan di `backup/Readme_before_mso_style.md.bak` dan `backup/RAZFileManagerView.vue.bak`.
 - **Git Synchronization:** Sinkronisasi commit dan push ke repositori GitHub `origin/master` dan `origin/main`.
 
+---
+
+### Versi: 3.6.2-file-editor-integration-and-data-binding (Penyatuan Teks Editor ke File Manager, Perbaikan Data Binding Konten Berkas, & Penghapusan Dialog Native Browser)
+**Waktu Eksekusi:** 2026-10-15 14:22 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer
+
+#### 1. Masalah Utama yang Diperbaiki
+- **Teks Editor Sebagai Tools Terpisah:** Sebelumnya teks editor terdaftar sebagai aplikasi desktop independen (`RAZ Studio Code`) di desktop apps list, sehingga tampak seperti tools asing yang berdiri sendiri.
+- **Berkas Teks Kosong saat Dibuka (Data Binding Bug):** Saat berkas teks dibuka dari File Manager, `openCustomWindow` di `RAZWindowStore.js` tidak memetakan atribut `fileData` ke objek window, dan `RAZTextEditorView.vue` hanya memeriksa `props.initialFile` sekali saat `onMounted` tanpa watcher. Akibatnya, editor selalu membuka tab kosong `Untitled-1.txt`.
+- **Penggunaan Dialog Native Browser (`confirm` & `prompt`):** Teks editor sebelumnya menggunakan `confirm()` dan `prompt()` bawaan browser yang melanggar aturan enterprise `GEMINI.md`.
+
+#### 2. Rekayasa Teknis & Solusi Implementasi
+- **Integrasi Penuh Teks Editor Sebagai Modul Bawaan File Manager:**
+  - Menghapus `text-editor` dari daftar `apps` di `RAZWindowStore.js` dan menghapus slot posisinya di `backend/internal/store/RAZDesktopConfig.json`. Ikon tidak lagi muncul sebagai aplikasi mandiri di desktop atau app drawer.
+  - Memperbarui window ID menjadi `'file-manager-editor'` dengan title format: `${fileItem.name} - Editor Berkas (File Manager)` dan ikon resmi File Manager (`/assets/icons/RAZIconFileManager.svg`).
+  - Mengubah label brand di menu bar teks editor menjadi **"File Manager / Editor Berkas"** untuk menegaskan statusnya sebagai satu kesatuan fitur File Manager.
+- **Perbaikan Data Binding & Lifecycle Reactivity (`RAZTextEditorView.vue`):**
+  - Menambahkan dukungan `win` prop pada komponen editor.
+  - Menambahkan watcher reaktif mendalam (`deep: true`) pada `props.initialFile`, `props.win?.fileData`, dan `props.win?.customData`.
+  - Jika editor sudah terbuka dan pengguna mendobel-klik file teks lain di File Manager, editor secara otomatis membuka berkas tersebut di tab baru dan memuat kontennya tanpa jeda.
+  - Menambahkan auto-replacement: Jika tab yang ada hanya 1 dan merupakan tab kosong bawaan (untitled belum diedit), berkas yang baru dibuka langsung menggantikan tab kosong tersebut secara mulus.
+- **Zero Native Dialogs (Custom Glassmorphism Modals):**
+  - Mengganti `prompt()` penyimpanan berkas baru dengan modal kustom **Save As** yang elegan lengkap dengan lokasi folder aktif, input nama berkas, dan tombol Simpan.
+  - Mengganti `confirm()` saat menutup tab yang belum disimpan dengan modal kustom **Perubahan Belum Disimpan** (`showCloseTabConfirmModal`).
+  - Mengganti `confirm()` pada aksi Tutup Semua Tab dengan modal kustom **Tutup Semua Tab** (`showCloseAllConfirmModal`).
+
+#### 3. Verifikasi & Standar Mutu
+- **Production Build:** `npm run build` sukses 100% tanpa error dalam 7.85 detik (`built in 7.85s`).
+- **Backup:** Dicadangkan di `backup/RAZWindowStore_before_file_editor_integration.js.bak`, `backup/RAZTextEditorView_before_file_editor_integration.vue.bak`, `backup/RAZDesktopLayout_before_file_editor_integration.vue.bak`, dan `backup/RAZDesktopConfig_before_file_editor_integration.json.bak`.
+- **Git Synchronization:** Siap untuk commit dan push ke GitHub repository.
+
 
 

@@ -36,10 +36,6 @@
     "website-1": {
       "col": 1,
       "row": 3
-    },
-    "text-editor": {
-      "col": 1,
-      "row": 4
     }
   },
   "lock_position": false,

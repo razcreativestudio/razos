@@ -50,6 +50,7 @@ const contextMenuStore = useContextMenuStore()
 // Mapping ID aplikasi ke komponen View
 const viewMap = {
   'file-manager': RAZFileManagerView,
+  'file-manager-editor': RAZTextEditorView,
   'text-editor': RAZTextEditorView,
   'task-manager': RAZTaskManagerView,
   'terminal': RAZTerminalView,
@@ -1310,8 +1311,8 @@ function handleDesktopDrop(e) {
             <!-- Standalone Storage Manager Window (CasaOS Style) -->
             <RAZStorageManagerView v-else-if="win.id === 'storage-manager'" :win="win" />
 
-            <!-- Standalone Sublime & Notepad++ Advanced Code/Text Editor -->
-            <RAZTextEditorView v-else-if="win.id === 'text-editor' || win.id.startsWith('editor-')" :initial-file="win.fileData" :win="win" />
+            <!-- Sublime & Notepad++ Advanced Code/Text Editor Terintegrasi File Manager -->
+            <RAZTextEditorView v-else-if="win.id === 'file-manager-editor' || win.id === 'text-editor' || win.id.startsWith('editor-')" :initial-file="win.fileData" :win="win" />
 
             <!-- Aplikasi Utama Berdasarkan ID -->
             <component v-else :is="viewMap[win.id]" />
