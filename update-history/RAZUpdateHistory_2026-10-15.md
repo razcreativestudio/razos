@@ -525,3 +525,32 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 - **Production Build:** `npm run build` sukses 100% tanpa error dalam 6.96 detik (`built in 6.96s`).
 - **Backup Terpusat:** Salinan aman di `backup/RAZMobileLayout_before_new_logo.vue.bak` dan `backup/RAZTaskbar_before_win11_menu_and_win7_orb.vue.bak`.
 - **Git Synchronization:** Commit dan push ke GitHub repository `origin/master` dan `origin/main`.
+
+---
+
+### Versi: 3.6.7-desktop-context-menu-fix (Perbaikan Bug Context Menu Desktop: Import Code2 & Race Condition Guard)
+**Waktu Eksekusi:** 2026-10-15 15:37 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer
+
+#### 1. Masalah Utama yang Dilaporkan Pengguna
+- **Laporan:** *"context menu di desktop tidak keluar"* (Menu klik kanan kustom pada area desktop kosong tidak muncul sama sekali saat diklik kanan).
+- **Akar Masalah (*Root Cause*):**
+  1. Pada fungsi `handleDesktopContextMenu(e)` di `RAZDesktopLayout.vue`, item menu *"RAZ Studio Code"* mereferensikan ikon `Code2` (`icon: Code2`). Namun, komponen ikon `Code2` lupa diimpor dari paket `lucide-vue-next`. Hal ini memicu `Uncaught ReferenceError: Code2 is not defined` di console browser tepat saat pengguna melakukan klik kanan, sehingga eksekusi `contextMenuStore.show()` terhenti sebelum menu dapat ditampilkan ke DOM.
+  2. Adanya potensi event race condition pada listener global `click` di `RAZContextMenu.vue` yang berisiko langsung menutup menu seketika jika event klik kanan memicu event klik turunan.
+
+#### 2. Tindakan Solutif & Rekayasa Teknis
+- **Impor & Hygiene Ikon (`RAZDesktopLayout.vue`):**
+  - Menambahkan impor `Code2` secara eksplisit dari `lucide-vue-next`.
+  - Membungkus pembentukan array menu desktop dan pemanggilan `contextMenuStore.show(e, ...)` di dalam blok `try...catch` yang aman dengan pesan edukatif Bahasa Indonesia.
+- **Perlindungan Race Condition & State Store (`RAZContextMenuStore.js` & `RAZContextMenu.vue`):**
+  - Menambahkan tracking timestamp `openedAt` di dalam store saat `show()` dipanggil.
+  - Memodifikasi listener `handleGlobalClick(e)` di `RAZContextMenu.vue` agar mengabaikan event mouse button 2 (klik kanan) serta event klik yang terjadi dalam rentang waktu < 120ms sejak menu dibuka.
+  - Menambahkan modifier `@contextmenu.prevent.stop` pada kontainer menu konteks kustom agar tidak memicu menu browser native maupun tertutup tanpa sengaja.
+
+#### 3. Verifikasi & Standar Mutu
+- **Production Build:** `npm run build` sukses 100% tanpa error dalam 6.32 detik (`built in 6.32s`).
+- **Backup Terpusat:** Salinan aman telah disimpan di:
+  - `backup/RAZDesktopLayout_20261015_contextmenufix.vue.bak`
+  - `backup/RAZContextMenu_20261015_contextmenufix.vue.bak`
+  - `backup/RAZContextMenuStore_20261015_contextmenufix.js.bak`
+- **Git Synchronization:** Disinkronkan ke cabang `master` dan `main`.

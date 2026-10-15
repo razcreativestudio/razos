@@ -1,7 +1,7 @@
 <script setup>
 /**
  * RAZOS Desktop Layout Component
- * Updated: 2026-10-15 09:05:00 (v3.2.0: Slider Rekomendasi Aplikasi di bawah widget desktop, responsive grid & position lock)
+ * Updated: 2026-10-15 15:35:00 (v3.4.1: Fix Desktop Context Menu ReferenceError Code2 & import hygiene)
  * Deskripsi: Layout Desktop mode untuk breakpoint > 768px, memadukan desktop icon shortcuts,
  * window manager frame multi-jendela, taskbar bawah, context menu lengkap, dan slider rekomendasi aplikasi.
  */
@@ -16,7 +16,7 @@ import {
   Trash2, ExternalLink, AlertTriangle, X, Globe, Clock, Activity, HardDrive,
   Network, Search, Grid, Maximize2, Minimize2, Sliders, Power, RotateCw,
   HelpCircle, GitBranch, Lock, Unlock, Sparkles, ChevronLeft, ChevronRight,
-  Download, ArrowRight, Box, Database, LayoutGrid
+  Download, ArrowRight, Box, Database, LayoutGrid, Code2
 } from 'lucide-vue-next'
 
 // Import View Aplikasi
@@ -62,151 +62,155 @@ const viewMap = {
 
 // Context Menu Klik Kanan pada Area Desktop Kosong (Hierarki Submenu Modern ala OS)
 function handleDesktopContextMenu(e) {
-  contextMenuStore.show(e, [
-    // 1. Submenu: Tampilan (View)
-    {
-      label: 'Tampilan (View)',
-      icon: LayoutGrid,
-      children: [
-        {
-          label: 'Ikon Besar (Large)',
-          icon: Maximize2,
-          checked: desktopIconSize.value === 'large',
-          action: () => changeIconSize('large')
-        },
-        {
-          label: 'Ikon Sedang (Medium)',
-          icon: Grid,
-          checked: desktopIconSize.value === 'medium',
-          action: () => changeIconSize('medium')
-        },
-        {
-          label: 'Ikon Kecil (Small)',
-          icon: Minimize2,
-          checked: desktopIconSize.value === 'small',
-          action: () => changeIconSize('small')
-        },
-        { separator: true },
-        {
-          label: 'Ratakan Ikon ke Grid',
-          icon: RefreshCw,
-          action: () => autoArrangeIcons(true)
-        },
-        {
-          label: isPositionLocked.value ? 'Buka Kunci Posisi Ikon' : 'Kunci Posisi Ikon',
-          icon: isPositionLocked.value ? Unlock : Lock,
-          checked: isPositionLocked.value,
-          action: () => togglePositionLock()
-        }
-      ]
-    },
-
-    // 2. Submenu: Alat & Aplikasi Sistem
-    {
-      label: 'Alat & Sistem',
-      icon: Box,
-      children: [
-        {
-          label: 'Files & Storage',
-          icon: Folder,
-          action: () => windowStore.openApp('file-manager')
-        },
-        {
-          label: 'RAZ Studio Code',
-          icon: Code2,
-          action: () => windowStore.openTextEditor()
-        },
-        {
-          label: 'Web Terminal',
-          icon: Terminal,
-          action: () => windowStore.openApp('terminal')
-        },
-        {
-          label: 'Task Manager',
-          icon: Cpu,
-          action: () => windowStore.openApp('task-manager')
-        },
-        {
-          label: 'App Store',
-          icon: Box,
-          action: () => windowStore.openApp('app-store')
-        },
-        {
-          label: 'Website Manager',
-          icon: Globe,
-          action: () => windowStore.openApp('websites')
-        },
-        {
-          label: 'Database Manager',
-          icon: Database,
-          action: () => windowStore.openApp('databases')
-        },
-        {
-          label: 'Storage Manager',
-          icon: HardDrive,
-          action: () => windowStore.openStorageManager()
-        }
-      ]
-    },
-
-    // 3. Submenu: Manajemen Jendela
-    {
-      label: 'Jendela (Windows)',
-      icon: Layers,
-      children: [
-        {
-          label: 'Tampilkan Desktop',
-          icon: EyeOff,
-          shortcut: 'Win+D',
-          action: () => {
-            if (typeof windowStore.minimizeAllWindows === 'function') {
-              windowStore.minimizeAllWindows()
-            } else {
-              windowStore.openWindows.forEach(w => { w.isMinimized = true })
-              windowStore.activeWindowId = null
-            }
+  try {
+    contextMenuStore.show(e, [
+      // 1. Submenu: Tampilan (View)
+      {
+        label: 'Tampilan (View)',
+        icon: LayoutGrid,
+        children: [
+          {
+            label: 'Ikon Besar (Large)',
+            icon: Maximize2,
+            checked: desktopIconSize.value === 'large',
+            action: () => changeIconSize('large')
+          },
+          {
+            label: 'Ikon Sedang (Medium)',
+            icon: Grid,
+            checked: desktopIconSize.value === 'medium',
+            action: () => changeIconSize('medium')
+          },
+          {
+            label: 'Ikon Kecil (Small)',
+            icon: Minimize2,
+            checked: desktopIconSize.value === 'small',
+            action: () => changeIconSize('small')
+          },
+          { separator: true },
+          {
+            label: 'Ratakan Ikon ke Grid',
+            icon: RefreshCw,
+            action: () => autoArrangeIcons(true)
+          },
+          {
+            label: isPositionLocked.value ? 'Buka Kunci Posisi Ikon' : 'Kunci Posisi Ikon',
+            icon: isPositionLocked.value ? Unlock : Lock,
+            checked: isPositionLocked.value,
+            action: () => togglePositionLock()
           }
-        },
-        {
-          label: 'Pulihkan Semua Jendela',
-          icon: Layers,
-          action: () => {
-            if (typeof windowStore.restoreAllWindows === 'function') {
-              windowStore.restoreAllWindows()
-            } else {
-              windowStore.openWindows.forEach(w => { w.isMinimized = false })
-              if (windowStore.openWindows.length > 0) {
-                windowStore.bringToFront(windowStore.openWindows[windowStore.openWindows.length - 1].id)
+        ]
+      },
+
+      // 2. Submenu: Alat & Aplikasi Sistem
+      {
+        label: 'Alat & Sistem',
+        icon: Box,
+        children: [
+          {
+            label: 'Files & Storage',
+            icon: Folder,
+            action: () => windowStore.openApp('file-manager')
+          },
+          {
+            label: 'RAZ Studio Code',
+            icon: Code2,
+            action: () => windowStore.openTextEditor()
+          },
+          {
+            label: 'Web Terminal',
+            icon: Terminal,
+            action: () => windowStore.openApp('terminal')
+          },
+          {
+            label: 'Task Manager',
+            icon: Cpu,
+            action: () => windowStore.openApp('task-manager')
+          },
+          {
+            label: 'App Store',
+            icon: Box,
+            action: () => windowStore.openApp('app-store')
+          },
+          {
+            label: 'Website Manager',
+            icon: Globe,
+            action: () => windowStore.openApp('websites')
+          },
+          {
+            label: 'Database Manager',
+            icon: Database,
+            action: () => windowStore.openApp('databases')
+          },
+          {
+            label: 'Storage Manager',
+            icon: HardDrive,
+            action: () => windowStore.openStorageManager()
+          }
+        ]
+      },
+
+      // 3. Submenu: Manajemen Jendela
+      {
+        label: 'Jendela (Windows)',
+        icon: Layers,
+        children: [
+          {
+            label: 'Tampilkan Desktop',
+            icon: EyeOff,
+            shortcut: 'Win+D',
+            action: () => {
+              if (typeof windowStore.minimizeAllWindows === 'function') {
+                windowStore.minimizeAllWindows()
+              } else {
+                windowStore.openWindows.forEach(w => { w.isMinimized = true })
+                windowStore.activeWindowId = null
+              }
+            }
+          },
+          {
+            label: 'Pulihkan Semua Jendela',
+            icon: Layers,
+            action: () => {
+              if (typeof windowStore.restoreAllWindows === 'function') {
+                windowStore.restoreAllWindows()
+              } else {
+                windowStore.openWindows.forEach(w => { w.isMinimized = false })
+                if (windowStore.openWindows.length > 0) {
+                  windowStore.bringToFront(windowStore.openWindows[windowStore.openWindows.length - 1].id)
+                }
               }
             }
           }
+        ]
+      },
+
+      { separator: true },
+
+      // 4. Aksi Utama Langsung: Refresh / Muat Ulang
+      {
+        label: 'Muat Ulang Desktop',
+        icon: RefreshCw,
+        shortcut: 'F5',
+        action: () => {
+          systemStore.fetchMetrics()
+          fetchDesktopConfig()
+          systemStore.showNotification('Desktop', 'Tampilan desktop telah disegarkan', 'success')
         }
-      ]
-    },
+      },
 
-    { separator: true },
+      { separator: true },
 
-    // 4. Aksi Utama Langsung: Refresh / Muat Ulang
-    {
-      label: 'Muat Ulang Desktop',
-      icon: RefreshCw,
-      shortcut: 'F5',
-      action: () => {
-        systemStore.fetchMetrics()
-        fetchDesktopConfig()
-        systemStore.showNotification('Desktop', 'Tampilan desktop telah disegarkan', 'success')
+      // 5. Pengaturan Sistem
+      {
+        label: 'Pengaturan Sistem',
+        icon: Settings,
+        action: () => windowStore.openApp('settings')
       }
-    },
-
-    { separator: true },
-
-    // 5. Pengaturan Sistem
-    {
-      label: 'Pengaturan Sistem',
-      icon: Settings,
-      action: () => windowStore.openApp('settings')
-    }
-  ], 'Desktop')
+    ], 'Desktop')
+  } catch (err) {
+    console.error('Gagal memunculkan Desktop Context Menu:', err)
+  }
 }
 
 // State Modal Konfirmasi Uninstall dari Desktop

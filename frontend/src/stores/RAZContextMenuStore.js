@@ -1,6 +1,6 @@
 /**
  * RAZOS Global Context Menu Store (Pinia)
- * Updated: 2026-10-13 (Enterprise Context Menu System)
+ * Updated: 2026-10-15 15:36:00 (v3.4.1: Race condition guard & openedAt timestamp)
  * Deskripsi: State manager terpusat untuk menampilkan Custom Context Menu (klik kanan) di seluruh
  * desktop OS (Desktop wallpaper, Desktop Icons, Taskbar, Taskbar App Items, File Manager items, dan Explorer Canvas).
  * Dilengkapi kalkulasi posisi otomatis (boundary-aware) agar menu tidak keluar dari layar/viewport.
@@ -15,6 +15,7 @@ export const useContextMenuStore = defineStore('contextMenu', () => {
   const y = ref(0)
   const items = ref([])
   const title = ref('')
+  const openedAt = ref(0)
 
   /**
    * Tampilkan context menu pada koordinat event klik kanan
@@ -30,6 +31,7 @@ export const useContextMenuStore = defineStore('contextMenu', () => {
 
     title.value = menuTitle
     items.value = menuItems || []
+    openedAt.value = Date.now()
 
     const clickX = event?.clientX ?? 0
     const clickY = event?.clientY ?? 0
@@ -71,6 +73,7 @@ export const useContextMenuStore = defineStore('contextMenu', () => {
     y,
     items,
     title,
+    openedAt,
     show,
     hide
   }

@@ -77,6 +77,10 @@ function handleItemClick(item) {
 
 // Tutup menu saat klik sembarang di luar atau tekan tombol Escape
 function handleGlobalClick(e) {
+  // Cegah penutupan mendadak jika event berasal dari klik kanan (button 2) atau race-condition saat menu baru saja dibuka
+  if (e && e.button === 2) return
+  if (contextMenuStore.openedAt && (Date.now() - contextMenuStore.openedAt < 120)) return
+
   if (contextMenuStore.isOpen) {
     contextMenuStore.hide()
   }
@@ -113,11 +117,12 @@ onUnmounted(() => {
       leave-to-class="transform scale-95 -translate-y-1 opacity-0"
     >
       <div
+        id="raz-custom-context-menu"
         v-if="contextMenuStore.isOpen"
         class="fixed z-[99999] min-w-[210px] max-w-xs rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 p-1.5 shadow-2xl text-xs select-none font-sans"
         :style="{ left: `${contextMenuStore.x}px`, top: `${contextMenuStore.y}px` }"
         @click.stop
-        @contextmenu.prevent
+        @contextmenu.prevent.stop
       >
         <!-- Header Judul Menu (Opsional) -->
         <div
