@@ -399,5 +399,39 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 - **Backup:** Dicadangkan di `backup/RAZWindowStore_before_file_editor_integration.js.bak`, `backup/RAZTextEditorView_before_file_editor_integration.vue.bak`, `backup/RAZDesktopLayout_before_file_editor_integration.vue.bak`, dan `backup/RAZDesktopConfig_before_file_editor_integration.json.bak`.
 - **Git Synchronization:** Siap untuk commit dan push ke GitHub repository.
 
+---
 
+### Versi: 3.6.3-persistent-editor-session-sidebar-navigation-and-layout-fix (Persistensi Sesi Tab Antar Sesi, Navigasi Folder Sidebar Eksplorer, & Perbaikan Desain Anti-Tumpang Tindih)
+**Waktu Eksekusi:** 2026-10-15 14:41 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer
 
+#### 1. Masalah Utama yang Diperbaiki
+- **Sesi Tab Terbuka Hilang saat Editor Ditutup:** Sebelumnya, ketika jendela teks editor ditutup atau pengguna me-refresh browser, semua tab yang sedang dibuka hilang dan kembali ke tab kosong `Untitled-1.txt`.
+- **Navigasi Folder Sidebar Belum Tersedia:** Saat membuka folder di sidebar editor, pengguna tidak memiliki tombol untuk kembali (Back), naik ke folder induk (Up), atau kembali ke direktori utama (`/DATA`).
+- **Desain Teks Nama Berkas Tumpang Tindih Vertikal:** Pada subdirektori berisikan nama file panjang, tata letak teks sidebar bertumpuk secara vertikal dan menabrak baris di sekitarnya karena ketiadaan batasan tinggi baris dan `shrink-0` yang terisolasi.
+- **Tombol Tutup Tab Tersembunyi:** Tombol silang (`X`) pada tab aktif tersembunyi hingga kursor di-hover, menyulitkan pengguna touch device / mobile.
+
+#### 2. Rekayasa Teknis & Solusi Implementasi
+- **Tab Session Persistence Antar Sesi (`localStorage`):**
+  - Implementasi fungsi `saveSession()` dan `restoreSession()` yang menyimpan daftar seluruh tab terbuka, state berkas yang dimodifikasi (dirty buffer), dan active tab ID ke `localStorage`.
+  - Pada saat editor dimount (`onMounted`), sesi sebelumnya dipulihkan secara otomatis. Konten berkas yang bersih (*clean*) di-fetch ulang dari disk agar selalu mutakhir, sedangkan berkas yang sedang diedit (*dirty*) mempertahankan perubahan ketikan pengguna tanpa takut hilang.
+  - Penambahan watcher reaktif mendalam (`watch(tabs, saveSession, { deep: true })` & `watch(activeTabId, saveSession)`) untuk auto-save real-time tanpa membebani performa.
+  - Membuka file baru dari File Manager kini murni menambahkan (*append*) tab baru tanpa me-reset tab-tab sebelumnya.
+- **Navigasi Folder Lengkap pada Sidebar Eksplorer:**
+  - Header sidebar kini dilengkapi baris navigasi:
+    - **Tombol Back (`ArrowLeft`):** Kembali ke direktori sebelumnya dalam riwayat penelusuran.
+    - **Tombol Up (`ArrowUp`):** Naik satu tingkat ke direktori induk (`parent directory`).
+    - **Tombol Home (`HardDrive`):** Melompat langsung ke folder penyimpanan utama (`/DATA`).
+    - **Nama Folder Aktif:** Menampilkan nama folder yang sedang dibuka secara proporsional.
+    - **Tombol Refresh:** Memuat ulang daftar berkas direktori aktif.
+  - Di dalam pohon berkas, ditambahkan item khusus **`.. (Folder Induk)`** dengan ikon `CornerLeftUp` setiap kali pengguna masuk ke subdirektori.
+- **Perbaikan Desain & Spacing Anti-Tumpang Tindih (Zero Overlapping):**
+  - Mengubah struktur baris berkas sidebar menjadi `h-8 px-2.5 rounded-lg flex items-center gap-2.5 shrink-0 min-w-0 select-none`.
+  - Menggunakan ikon berbasis ekstensi bahasa (JS kuning, Vue hijau, TS biru langit, HTML jingga, Python biru, Go tosca, Markdown mawar, dll) dan format ukuran berkas (`formatBytes`).
+  - Memastikan nama berkas panjang menggunakan `truncate text-xs leading-normal flex-1` sehingga terpotong rapi dengan elipsis (`...`) tanpa pernah membungkus (*wrapping*) atau menimpa baris lain.
+  - Tombol tutup (`X`) pada tab aktif dibuat selalu tampak dengan opasitas 80% dan efek hover merah lembut, memudahkan penutupan tab.
+
+#### 3. Verifikasi & Standar Mutu
+- **Production Build:** `npm run build` sukses 100% tanpa error dalam 6.39 detik (`built in 6.39s`).
+- **Backup:** Dicadangkan di `backup/RAZTextEditorView_before_tab_persistence_and_sidebar_nav.vue.bak` dan `backup/RAZTextEditorView_20261015_143916.vue.bak`.
+- **Git Synchronization:** Siap untuk commit dan push ke GitHub repository.

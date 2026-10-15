@@ -14,10 +14,11 @@
  */
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import {
-  FileCode, FileText, Folder, Save, Search, RefreshCw, X, Plus,
+  FileCode, FileText, Folder, FolderOpen, Save, Search, RefreshCw, X, Plus,
   ChevronRight, ChevronDown, Check, Copy, Eye, Sliders, Type,
-  Layout, Code2, Hash, Undo2, Redo2, Scissors, ArrowDown, ArrowUp,
-  Settings, Columns, Terminal, CheckCircle2, AlertTriangle, FilePlus
+  Layout, Code2, Hash, Undo2, Redo2, Scissors, ArrowDown, ArrowUp, ArrowLeft,
+  Settings, Columns, Terminal, CheckCircle2, AlertTriangle, FilePlus,
+  CornerLeftUp, HardDrive
 } from 'lucide-vue-next'
 import { useSystemStore } from '../stores/RAZSystemStore'
 
@@ -43,6 +44,11 @@ const showCloseTabConfirmModal = ref(false)
 const pendingCloseTabId = ref('')
 const pendingCloseTabName = ref('')
 const showCloseAllConfirmModal = ref(false)
+
+// Storage Keys untuk Persistensi Sesi Tab & Direktori
+const STORAGE_KEY_TABS = 'razos_text_editor_tabs_session'
+const STORAGE_KEY_ACTIVE_TAB = 'razos_text_editor_active_tab'
+const STORAGE_KEY_DIR = 'razos_text_editor_sidebar_dir'
 
 // 1. STATE MULTI-TAB WORKSPACE
 const tabs = ref([])
@@ -78,10 +84,94 @@ const cursorCol = ref(1)
 const editorTextareaRef = ref(null)
 const gutterRef = ref(null)
 
-// 5. STATE SIDEBAR FILE TREE
+// 5. STATE SIDEBAR FILE TREE & NAVIGASI FOLDER
 const sidebarFiles = ref([])
 const sidebarCurrentDir = ref('')
 const isSidebarLoading = ref(false)
+const sidebarHistory = ref([])
+const sidebarHistoryIndex = ref(-1)
+
+// Format ukuran berkas (Bytes ke KB, MB, dll)
+function formatBytes(bytes) {
+  if (!bytes) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+// Nama ringkas folder aktif di header sidebar
+const sidebarCurrentFolderShortName = computed(() => {
+  if (!sidebarCurrentDir.value) return 'Explorer'
+  const clean = sidebarCurrentDir.value.replace(/\\/g, '/').replace(/\/+$/, '')
+  if (clean === '' || clean === '/') return 'Root'
+  if (/^[a-zA-Z]:$/.test(clean)) return `${clean.toUpperCase()} Disk`
+  const parts = clean.split('/').filter(Boolean)
+  return parts.length > 0 ? parts[parts.length - 1] : 'Explorer'
+})
+
+// Deteksi apakah bisa naik satu tingkat ke folder induk
+const canSidebarGoUp = computed(() => {
+  if (!sidebarCurrentDir.value) return false
+  const clean = sidebarCurrentDir.value.replace(/\\/g, '/').replace(/\/+$/, '')
+  if (clean === '' || clean === '/' || /^[a-zA-Z]:$/.test(clean) || /^[a-zA-Z]:\/$/.test(clean)) {
+    return false
+  }
+  return true
+})
+
+// Deteksi apakah bisa kembali dalam riwayat
+const canSidebarGoBack = computed(() => {
+  return sidebarHistoryIndex.value > 0
+})
+
+// Komponen Ikon Berkas Berdasarkan Ekstensi
+function getFileIconComponent(filename = '') {
+  const ext = (filename.includes('.') ? filename.split('.').pop() : '').toLowerCase()
+  if (['md', 'txt', 'log', 'env', 'conf', 'ini', 'pdf'].includes(ext)) {
+    return FileText
+  }
+  return FileCode
+}
+
+// Warna Ikon Berkas Berdasarkan Ekstensi (Modern VS Code Theme)
+function getFileIconColor(filename = '') {
+  const ext = (filename.includes('.') ? filename.split('.').pop() : '').toLowerCase()
+  switch (ext) {
+    case 'js':
+    case 'mjs':
+      return 'text-amber-300'
+    case 'ts':
+      return 'text-sky-400'
+    case 'vue':
+      return 'text-emerald-400'
+    case 'html':
+      return 'text-orange-400'
+    case 'css':
+    case 'scss':
+      return 'text-cyan-400'
+    case 'json':
+      return 'text-amber-400'
+    case 'py':
+      return 'text-blue-400'
+    case 'go':
+      return 'text-teal-300'
+    case 'php':
+      return 'text-indigo-400'
+    case 'sql':
+      return 'text-violet-400'
+    case 'sh':
+    case 'bash':
+      return 'text-emerald-300'
+    case 'md':
+      return 'text-rose-300'
+    case 'yaml':
+    case 'yml':
+      return 'text-rose-400'
+    default:
+      return 'text-slate-400'
+  }
+}
 
 // Deteksi bahasa pemrograman berdasarkan ekstensi berkas
 function detectLanguage(filename = '') {
@@ -375,21 +465,157 @@ function getDirectoryPath(fullPath = '') {
 }
 
 // Muat daftar berkas folder untuk Sidebar File Tree
-async function loadSidebarDirectory(dirPath) {
+async function loadSidebarDirectory(dirPath, isHistoryNav = false) {
   if (!dirPath) return
-  sidebarCurrentDir.value = dirPath
+  let clean = dirPath.replace(/\\/g, '/')
+  if (/^[a-zA-Z]:$/.test(clean)) clean += '/'
+
+  sidebarCurrentDir.value = clean
+
+  if (!isHistoryNav) {
+    if (sidebarHistoryIndex.value < sidebarHistory.value.length - 1) {
+      sidebarHistory.value = sidebarHistory.value.slice(0, sidebarHistoryIndex.value + 1)
+    }
+    sidebarHistory.value.push(clean)
+    sidebarHistoryIndex.value = sidebarHistory.value.length - 1
+  }
+
   isSidebarLoading.value = true
   try {
-    const res = await fetch(`/api/v1/files/list?path=${encodeURIComponent(dirPath)}`)
+    const res = await fetch(`/api/v1/files/list?path=${encodeURIComponent(clean)}`)
     const data = await res.json()
     if (res.ok && Array.isArray(data)) {
-      sidebarFiles.value = data
+      // Urutkan: folder di atas, berkas di bawah secara alfabetis
+      sidebarFiles.value = [...data].sort((a, b) => {
+        if (a.is_dir && !b.is_dir) return -1
+        if (!a.is_dir && b.is_dir) return 1
+        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+      })
+      localStorage.setItem(STORAGE_KEY_DIR, clean)
+    } else {
+      sidebarFiles.value = []
     }
   } catch (e) {
     sidebarFiles.value = []
   } finally {
     isSidebarLoading.value = false
   }
+}
+
+// Navigasi naik satu tingkat ke folder induk (Up)
+function navigateSidebarUp() {
+  if (!canSidebarGoUp.value) return
+  const clean = sidebarCurrentDir.value.replace(/\\/g, '/').replace(/\/+$/, '')
+  const lastSlash = clean.lastIndexOf('/')
+  let parent = '/'
+  if (lastSlash > 0) {
+    parent = clean.substring(0, lastSlash)
+  } else if (/^[a-zA-Z]:/.test(clean)) {
+    parent = clean.substring(0, 2) + '/'
+  }
+  loadSidebarDirectory(parent)
+}
+
+// Navigasi kembali dalam riwayat sidebar (Back)
+function navigateSidebarBack() {
+  if (canSidebarGoBack.value) {
+    sidebarHistoryIndex.value--
+    loadSidebarDirectory(sidebarHistory.value[sidebarHistoryIndex.value], true)
+  }
+}
+
+// Navigasi langsung ke direktori penyimpanan utama (/DATA atau root)
+function navigateSidebarHome() {
+  const home = localStorage.getItem('razos_default_storage_path') || 'C:/DATA'
+  loadSidebarDirectory(home)
+}
+
+// Simpan Sesi Tab ke localStorage
+function saveSession() {
+  try {
+    const serialized = tabs.value.map(t => ({
+      id: t.id,
+      name: t.name,
+      path: t.path,
+      content: t.isDirty ? t.content : '', // simpan konten teks jika ada perubahan belum disimpan
+      originalContent: t.originalContent,
+      isDirty: !!t.isDirty,
+      language: t.language
+    }))
+    localStorage.setItem(STORAGE_KEY_TABS, JSON.stringify(serialized))
+    if (activeTabId.value) {
+      localStorage.setItem(STORAGE_KEY_ACTIVE_TAB, activeTabId.value)
+    }
+    if (sidebarCurrentDir.value) {
+      localStorage.setItem(STORAGE_KEY_DIR, sidebarCurrentDir.value)
+    }
+  } catch (e) {}
+}
+
+// Pulihkan Sesi Tab Tersimpan dari localStorage
+async function restoreSession() {
+  try {
+    const rawDir = localStorage.getItem(STORAGE_KEY_DIR)
+    if (rawDir) {
+      loadSidebarDirectory(rawDir)
+    } else {
+      loadSidebarDirectory('C:/DATA')
+    }
+
+    const rawTabs = localStorage.getItem(STORAGE_KEY_TABS)
+    if (rawTabs) {
+      const parsed = JSON.parse(rawTabs)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const restored = []
+        for (const item of parsed) {
+          const tab = {
+            id: item.id || generateTabId(),
+            name: item.name || 'untitled.txt',
+            path: item.path || '',
+            content: item.content || '',
+            originalContent: item.originalContent || '',
+            isDirty: !!item.isDirty,
+            isLoading: false,
+            isLocked: false,
+            language: item.language || detectLanguage(item.name),
+            undoStack: [],
+            redoStack: []
+          }
+          restored.push(tab)
+
+          // Jika berkas memiliki path dan belum dirty, fetch isi terbaru dari disk
+          if (tab.path && !tab.isDirty) {
+            tab.isLoading = true
+            fetch(`/api/v1/files/content?path=${encodeURIComponent(tab.path)}`)
+              .then(res => res.json())
+              .then(data => {
+                if (data && data.content !== undefined) {
+                  tab.content = data.content
+                  tab.originalContent = data.content
+                  tab.isLocked = !!data.isLocked
+                }
+              })
+              .catch(() => {})
+              .finally(() => {
+                tab.isLoading = false
+              })
+          }
+        }
+
+        tabs.value = restored
+        const savedActive = localStorage.getItem(STORAGE_KEY_ACTIVE_TAB)
+        if (savedActive && tabs.value.some(t => t.id === savedActive)) {
+          activeTabId.value = savedActive
+        } else if (tabs.value.length > 0) {
+          activeTabId.value = tabs.value[0].id
+        }
+        return true
+      }
+    }
+  } catch (e) {
+    console.error('Gagal memulihkan sesi editor:', e)
+  }
+  return false
 }
 
 // Handle Perubahan Input Teks
@@ -711,14 +937,24 @@ function goToLine() {
   })
 }
 
-// Inisialisasi saat dimount
-onMounted(() => {
+// Inisialisasi saat dimount: Pulihkan sesi tab tersimpan & buka berkas target jika ada
+onMounted(async () => {
+  const restored = await restoreSession()
   const target = props.initialFile || props.win?.fileData || props.win?.customData
   if (target && target.path) {
-    openFileInTab(target)
-  } else {
+    await openFileInTab(target)
+  } else if (!restored || tabs.value.length === 0) {
     createNewUntitledTab()
   }
+})
+
+// Auto-save sesi setiap kali tab berubah, ditutup, atau kontennya dimodifikasi
+watch(tabs, () => {
+  saveSession()
+}, { deep: true })
+
+watch(activeTabId, () => {
+  saveSession()
 })
 
 // Watcher untuk merespons saat user membuka berkas baru dari File Manager saat editor sudah terbuka
@@ -838,7 +1074,8 @@ watch(() => props.win?.customData, (newData) => {
           <!-- Tombol Tutup Tab -->
           <button
             @click.stop="closeTab(tab.id, $event)"
-            class="p-0.5 rounded-full hover:bg-rose-500/30 text-slate-400 hover:text-rose-300 transition opacity-0 group-hover:opacity-100"
+            class="p-0.5 rounded-full transition"
+            :class="activeTabId === tab.id ? 'opacity-80 hover:opacity-100 hover:bg-rose-500/30 text-slate-300 hover:text-rose-300' : 'opacity-0 group-hover:opacity-100 hover:bg-rose-500/30 text-slate-400 hover:text-rose-300'"
             title="Tutup Tab"
           >
             <X class="w-3 h-3" />
@@ -872,16 +1109,50 @@ watch(() => props.win?.customData, (newData) => {
       <!-- SIDEBAR FILE TREE (Collapsible) -->
       <div
         v-if="showSidebar"
-        class="w-48 sm:w-56 border-r border-white/10 bg-black/30 flex flex-col shrink-0 overflow-hidden text-xs"
+        class="w-52 sm:w-60 border-r border-white/10 bg-black/30 flex flex-col shrink-0 overflow-hidden text-xs"
       >
-        <div class="p-2 border-b border-white/10 flex items-center justify-between text-slate-400 text-[11px] font-bold">
-          <div class="flex items-center gap-1.5 truncate">
-            <Folder class="w-3.5 h-3.5 text-sky-400 shrink-0" />
-            <span class="truncate">{{ sidebarCurrentDir ? sidebarCurrentDir.split('/').pop() : 'Explorer' }}</span>
+        <!-- Header Sidebar dengan Kontrol Navigasi Lengkap -->
+        <div class="h-9 px-2 border-b border-white/10 flex items-center justify-between text-slate-300 text-[11px] font-medium bg-black/20 shrink-0">
+          <div class="flex items-center gap-1 min-w-0 flex-1 mr-1">
+            <!-- Navigasi Back -->
+            <button
+              @click="navigateSidebarBack"
+              :disabled="!canSidebarGoBack"
+              class="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition"
+              title="Kembali (Back)"
+            >
+              <ArrowLeft class="w-3.5 h-3.5" />
+            </button>
+
+            <!-- Navigasi Up (Naik Satu Folder) -->
+            <button
+              @click="navigateSidebarUp"
+              :disabled="!canSidebarGoUp"
+              class="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition"
+              title="Folder Induk / Keluar Folder (Up)"
+            >
+              <ArrowUp class="w-3.5 h-3.5" />
+            </button>
+
+            <!-- Navigasi Home (/DATA) -->
+            <button
+              @click="navigateSidebarHome"
+              class="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white transition"
+              title="Ke Direktori Utama (/DATA)"
+            >
+              <HardDrive class="w-3.5 h-3.5 text-sky-400" />
+            </button>
+
+            <!-- Nama Folder Aktif -->
+            <span class="truncate font-semibold text-slate-200 ml-0.5" :title="sidebarCurrentDir">
+              {{ sidebarCurrentFolderShortName }}
+            </span>
           </div>
+
+          <!-- Tombol Refresh -->
           <button
             @click="loadSidebarDirectory(sidebarCurrentDir)"
-            class="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white transition"
+            class="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white transition shrink-0"
             title="Muat Ulang Berkas"
           >
             <RefreshCw class="w-3 h-3" :class="isSidebarLoading ? 'animate-spin' : ''" />
@@ -889,18 +1160,38 @@ watch(() => props.win?.customData, (newData) => {
         </div>
 
         <!-- File List Tree -->
-        <div class="flex-1 overflow-y-auto p-1.5 flex flex-col gap-0.5">
+        <div class="flex-1 overflow-y-auto p-1.5 flex flex-col gap-0.5" style="scrollbar-width: thin;">
+          <!-- Item Kembali ke Folder Induk (..) jika di subfolder -->
+          <div
+            v-if="canSidebarGoUp"
+            @click="navigateSidebarUp"
+            class="h-8 px-2.5 rounded-lg flex items-center gap-2.5 cursor-pointer transition select-none text-slate-400 hover:bg-white/10 hover:text-slate-200 shrink-0 min-w-0"
+            title="Kembali ke Folder Induk (..)"
+          >
+            <CornerLeftUp class="w-4 h-4 text-sky-400 shrink-0" />
+            <span class="truncate text-xs leading-normal font-mono font-medium">.. (Folder Induk)</span>
+          </div>
+
+          <!-- Loop File & Folder -->
           <div
             v-for="item in sidebarFiles"
             :key="item.path"
             @click="item.is_dir ? loadSidebarDirectory(item.path) : openFileInTab(item)"
-            class="px-2 py-1 rounded flex items-center gap-2 cursor-pointer transition truncate text-slate-300 hover:bg-white/10"
-            :class="activeTab?.path === item.path ? 'bg-sky-500/20 text-sky-300 font-semibold' : ''"
-            :title="item.name"
+            class="h-8 px-2.5 rounded-lg flex items-center gap-2.5 cursor-pointer transition select-none shrink-0 min-w-0 group"
+            :class="activeTab?.path === item.path ? 'bg-sky-500/20 text-sky-300 font-semibold' : 'text-slate-300 hover:bg-white/10 hover:text-white'"
+            :title="`${item.name} (${item.is_dir ? 'Folder' : formatBytes(item.size)})`"
           >
-            <Folder v-if="item.is_dir" class="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <FileCode v-else class="w-3.5 h-3.5 text-sky-400 shrink-0" />
-            <span class="truncate text-xs">{{ item.name }}</span>
+            <Folder v-if="item.is_dir" class="w-4 h-4 text-amber-400 shrink-0" />
+            <component
+              v-else
+              :is="getFileIconComponent(item.name)"
+              class="w-4 h-4 shrink-0"
+              :class="getFileIconColor(item.name)"
+            />
+            <span class="truncate text-xs leading-normal flex-1">{{ item.name }}</span>
+            <span v-if="!item.is_dir && item.size" class="text-[10px] text-slate-500 shrink-0 font-mono hidden sm:inline group-hover:inline">
+              {{ formatBytes(item.size) }}
+            </span>
           </div>
 
           <div v-if="sidebarFiles.length === 0 && !isSidebarLoading" class="p-4 text-center text-slate-500 text-[11px]">
