@@ -979,9 +979,14 @@ function handleDesktopDrop(e) {
       <span>Tata Letak Terkunci</span>
     </div>
 
-    <!-- Subtle Brand Watermark di pojok kanan atas -->
-    <div class="absolute top-4 right-6 pointer-events-none opacity-40 z-0">
-      <img src="/assets/brand/RAZBrandTransparent.webp" alt="RAZ STUDIO" class="h-8 object-contain" />
+    <!-- Subtle Brand Watermark di pojok kanan atas: Logo RAZOS Baru & RAZ Creative Studio Tetap Ada -->
+    <div class="absolute top-4 right-6 pointer-events-none flex items-center gap-2.5 opacity-60 z-0">
+      <div class="flex items-center gap-1.5">
+        <img src="/assets/brand/RAZOSMarkSquare.webp" alt="RAZOS" class="w-6 h-6 rounded-lg object-cover shadow-md border border-amber-500/30" />
+        <span class="text-xs font-bold bg-gradient-to-r from-amber-200 to-yellow-400 bg-clip-text text-transparent tracking-wider hidden sm:inline">RAZOS</span>
+      </div>
+      <span class="text-slate-600 text-xs hidden sm:inline">•</span>
+      <img src="/assets/brand/RAZBrandTransparent.webp" alt="RAZ STUDIO" class="h-6 object-contain drop-shadow" />
     </div>
 
     <!-- Desktop Layer (z-10, h-[calc(100vh-48px)]) -->

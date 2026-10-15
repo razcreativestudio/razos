@@ -154,10 +154,11 @@ function handleTaskbarContextMenu(e) {
     <div class="relative flex items-center gap-2">
       <button
         @click="isStartMenuOpen = !isStartMenuOpen"
-        class="h-9 px-3 flex items-center gap-2 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 font-semibold border border-sky-400/30 transition shadow-sm"
+        class="h-9 px-3 flex items-center gap-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-amber-200 font-semibold border border-amber-500/30 transition shadow-sm active:scale-95"
+        title="Buka Menu Utama RAZOS"
       >
-        <img src="/assets/images/RAZLogo.svg" alt="RAZOS" class="w-5 h-5" />
-        <span class="text-xs uppercase tracking-wider hidden sm:inline">RAZOS</span>
+        <img src="/assets/images/RAZLogo.svg" alt="RAZOS" class="w-5 h-5 object-contain drop-shadow" />
+        <span class="text-xs uppercase tracking-wider hidden sm:inline font-bold bg-gradient-to-r from-amber-200 to-yellow-400 bg-clip-text text-transparent">RAZOS</span>
       </button>
 
       <!-- Start Menu Popup -->
@@ -167,8 +168,14 @@ function handleTaskbarContextMenu(e) {
         class="absolute bottom-12 left-0 w-64 raz-glass rounded-xl p-2 shadow-2xl border border-slate-700/80 mb-1 z-50 flex flex-col gap-1"
       >
         <div class="px-3 py-2 border-b border-slate-800 flex items-center justify-between">
-          <span class="text-xs font-semibold text-slate-400 tracking-wider">APLIKASI SISTEM</span>
-          <img src="/assets/brand/RAZBrandCapsule.webp" alt="RAZ" class="h-4 object-contain" />
+          <div class="flex items-center gap-2">
+            <img src="/assets/brand/RAZOSMarkSquare.webp" alt="RAZOS" class="w-4 h-4 rounded object-cover shadow-sm" />
+            <span class="text-xs font-bold text-amber-300 tracking-wider">APLIKASI SISTEM</span>
+          </div>
+          <div class="flex items-center gap-1 opacity-75 hover:opacity-100 transition" title="Created by RAZ Creative Studio">
+            <span class="text-[9px] text-slate-400">by</span>
+            <img src="/assets/brand/RAZBrandCapsule.webp" alt="RAZ Creative Studio" class="h-3.5 object-contain" />
+          </div>
         </div>
         <div class="flex flex-col gap-0.5">
           <button

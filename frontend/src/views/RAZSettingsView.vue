@@ -150,6 +150,14 @@ const customWallpaperUrl = ref('')
 // Pilihan wallpaper preset bawaan sistem
 const presetWallpapers = [
   {
+    name: 'RAZOS Gold Luxury Edition (Resmi)',
+    url: '/assets/images/RAZOSWallpaperGold.webp'
+  },
+  {
+    name: 'RAZOS Minimalist Gold (Resmi)',
+    url: '/assets/images/RAZOSWallpaperMinimal.webp'
+  },
+  {
     name: 'RAZ Cosmic Dark (Default)',
     url: '/assets/images/RAZDesktopBg.webp'
   },
@@ -450,14 +458,19 @@ onMounted(() => {
 
           <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center justify-between gap-4">
             <div class="flex items-center gap-3.5 min-w-0">
-              <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30 shrink-0">
-                <CheckCircle2 class="w-6 h-6" />
-              </div>
+              <img 
+                src="/assets/brand/RAZOSMarkSquare.webp" 
+                alt="RAZOS" 
+                class="w-11 h-11 rounded-xl object-cover border border-amber-500/30 shadow-md shrink-0" 
+              />
               <div class="min-w-0">
-                <div class="text-sm font-bold text-slate-100 truncate">RAZOS v{{ updateStatus.current_version }}</div>
-                <div class="text-xs text-emerald-400 font-medium flex items-center gap-1.5">
-                  <span>{{ updateStatus.has_update ? 'Versi Baru Tersedia!' : 'Currently, at the latest version' }}</span>
-                  <Check class="w-3.5 h-3.5 stroke-[3]" />
+                <div class="text-sm font-bold text-slate-100 truncate flex items-center gap-2">
+                  <span class="bg-gradient-to-r from-amber-200 to-yellow-400 bg-clip-text text-transparent">RAZOS v{{ updateStatus.current_version }}</span>
+                  <span class="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30 font-mono">STB Edition</span>
+                </div>
+                <div class="text-xs text-slate-400 font-medium flex items-center gap-1.5 mt-0.5">
+                  <span>Developed by</span>
+                  <img src="/assets/brand/RAZBrandCapsule.webp" alt="RAZ Creative Studio" class="h-3.5 object-contain" />
                 </div>
               </div>
             </div>

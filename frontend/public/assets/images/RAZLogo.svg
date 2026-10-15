@@ -1,21 +1,77 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="razGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38bdf8" />
-      <stop offset="100%" stop-color="#0284c7" />
+    <!-- Dark Metallic Container Gradient -->
+    <radialGradient id="razosBgGrad" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#1e1e24" />
+      <stop offset="70%" stop-color="#111115" />
+      <stop offset="100%" stop-color="#0a0a0c" />
+    </radialGradient>
+
+    <!-- Premium Metallic Gold Gradients -->
+    <linearGradient id="goldLightGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fffbeb" />
+      <stop offset="25%" stop-color="#fde047" />
+      <stop offset="50%" stop-color="#eab308" />
+      <stop offset="75%" stop-color="#ca8a04" />
+      <stop offset="100%" stop-color="#854d0e" />
     </linearGradient>
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="4" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+
+    <linearGradient id="goldInnerGrad" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="40%" stop-color="#eab308" />
+      <stop offset="80%" stop-color="#b45309" />
+      <stop offset="100%" stop-color="#78350f" />
+    </linearGradient>
+
+    <!-- Warm Golden Ambient Glow Filter -->
+    <filter id="goldGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
+      <feFlood flood-color="#f59e0b" flood-opacity="0.35" result="glowColor" />
+      <feComposite in="glowColor" in2="blur" operator="in" result="softGlow" />
+      <feMerge>
+        <feMergeNode in="softGlow" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <!-- Drop Shadow for 3D Bevel Emboss -->
+    <filter id="gold3dShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="6" stdDeviation="5" flood-color="#000000" flood-opacity="0.8" />
     </filter>
   </defs>
-  <!-- Background Container -->
-  <rect width="128" height="128" rx="28" fill="#0f172a" stroke="#1e293b" stroke-width="2"/>
-  
-  <!-- Stylized R Glyph -->
-  <g filter="url(#glow)">
-    <path d="M40 32 H76 C88 32 96 40 96 52 C96 64 88 72 76 72 H56 V96 H40 Z" fill="url(#razGrad)" />
-    <path d="M68 68 L94 96 H74 L52 72 Z" fill="#0ea5e9" />
-    <path d="M56 46 H74 C80 46 84 50 84 52 C84 56 80 58 74 58 H56 Z" fill="#0f172a" opacity="0.9" />
+
+  <!-- Squircle Background Icon -->
+  <rect width="512" height="512" rx="112" fill="url(#razosBgGrad)" stroke="#27272a" stroke-width="3" />
+
+  <!-- Outer Ambient Gold Glow Behind Knot -->
+  <g filter="url(#goldGlow)" opacity="0.85">
+    <!-- Cloud Silhouette Ambient Halo -->
+    <path d="M 190 350 C 120 350 85 295 90 235 C 95 185 140 160 180 165 C 205 110 280 95 330 135 C 365 110 420 130 435 180 C 475 210 465 290 410 320 L 400 320" 
+          fill="none" stroke="#f59e0b" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" opacity="0.4" />
+  </g>
+
+  <!-- Main Golden Cloud Infinity Symbol -->
+  <g filter="url(#gold3dShadow)">
+    <!-- 1. Outer Cloud Arch Structure -->
+    <path d="M 195 348 C 135 348 102 300 106 244 C 110 192 148 168 185 172 C 208 120 278 106 324 142 C 358 118 410 138 424 184 C 460 212 452 284 402 312 L 315 312"
+          fill="none" stroke="url(#goldLightGrad)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- 2. Inner Track Echo (Parallel Ridge Ribbon) -->
+    <path d="M 195 324 C 150 324 126 288 128 245 C 130 206 158 188 185 190 C 204 150 256 140 292 166 C 318 148 356 162 368 196 C 394 218 388 270 352 290 L 320 290"
+          fill="none" stroke="url(#goldInnerGrad)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- 3. Dynamic Infinity Cross Loop (Pita Melintang Bawah ke Tengah) -->
+    <!-- Pita Diagonal Utama dari Kiri Bawah Melintas Menembus Tengah -->
+    <path d="M 180 348 C 240 348 275 295 335 240 C 375 205 420 230 410 280 C 400 325 340 335 285 335 L 265 335"
+          fill="none" stroke="url(#goldLightGrad)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" />
+
+    <path d="M 195 324 C 245 324 275 280 325 235 C 355 208 390 226 384 265 C 376 302 330 312 285 312"
+          fill="none" stroke="url(#goldInnerGrad)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- 4. Lower Horizontal Speed Fin Accent (Garis Aksen Emas Bawah) -->
+    <path d="M 235 370 L 390 370"
+          fill="none" stroke="url(#goldLightGrad)" stroke-width="14" stroke-linecap="round" />
+    <path d="M 275 390 L 360 390"
+          fill="none" stroke="url(#goldLightGrad)" stroke-width="8" stroke-linecap="round" opacity="0.8" />
   </g>
 </svg>

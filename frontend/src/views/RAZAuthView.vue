@@ -25,15 +25,15 @@
         <!-- Header: Logo Brand & Identitas Sistem -->
         <div class="flex flex-col items-center text-center mb-7">
           <div class="relative mb-3 group">
-            <div class="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-500 rounded-2xl blur opacity-30 group-hover:opacity-60 transition duration-500"></div>
+            <div class="absolute -inset-1.5 bg-gradient-to-r from-amber-500 to-yellow-600 rounded-3xl blur-md opacity-40 group-hover:opacity-75 transition duration-500"></div>
             <img 
-              src="/assets/brand/RAZBrandTransparent.webp" 
+              src="/assets/brand/RAZOSMarkSquare.webp" 
               alt="RAZOS Logo" 
-              class="relative w-16 h-16 object-contain drop-shadow-md"
+              class="relative w-20 h-20 rounded-2xl object-cover shadow-2xl border border-amber-500/40"
             />
           </div>
           
-          <h1 class="text-2xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
+          <h1 class="text-2xl font-bold tracking-tight bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-400 bg-clip-text text-transparent">
             {{ isSetupMode ? 'Setup Akun Administrator' : 'Selamat Datang di RAZOS' }}
           </h1>
           <p class="text-xs text-slate-400 mt-1 max-w-xs leading-relaxed">
@@ -42,6 +42,12 @@
               : 'Silakan masuk dengan kredensial sistem Anda untuk mengakses desktop.' 
             }}
           </p>
+
+          <!-- Identitas RAZ Creative Studio Tetap Ada -->
+          <div class="mt-3 flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700/60 text-[10px] text-slate-300 shadow-sm">
+            <span class="text-slate-400">Developed by</span>
+            <img src="/assets/brand/RAZBrandCapsule.webp" alt="RAZ Creative Studio" class="h-3.5 object-contain" />
+          </div>
         </div>
 
         <!-- Banner Pesan Error / Informasi -->
