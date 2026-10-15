@@ -337,5 +337,36 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 - **REST API Endpoints:** `/api/v1/files/create-file` dan `/api/v1/files/upload-raw` terverifikasi sukses via pengujian integrasi.
 - **Backup:** Dicadangkan di `backup/RAZFileManagerView_before_upload_and_editor_suite.vue.bak`, `backup/RAZDesktopLayout_before_text_editor.vue.bak`, dan `backup/RAZWindowStore_before_text_editor.js.bak`.
 
+---
+
+### Versi: 3.6.1-readme-overhaul-and-ribbon-actions (Professional Readme Architecture & Visual Gallery Overhaul, Mobile Ribbon New Menu)
+**Waktu Eksekusi:** 2026-10-15 11:42 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer
+
+#### 1. Perubahan & Fitur Baru
+- **Overhaul Total Readme.md Sesuai Standar Enterprise (Referensi `rahmanef63/mso`):**
+  - **Header Modern & Presisi:** Logo brand capsule terpusat, judul, deskripsi filosofi RAZOS, quick navigation anchor bar, dan 6 badge shields.io resmi.
+  - **Visual Showcase Gallery (Tabel 2-Kolom):**
+    - `RAZOS-Desktop-Workspace.png`: Desktop multi-window responsif & Windows 11 Snap Gesture.
+    - `RAZOS-File-Manager.png`: Hybrid file manager, upload file/folder/ZIP auto-extract & code editor.
+    - `RAZOS-App-Install-Docker.png`: Katalog 525+ Docker apps & compose suite.
+    - `RAZOS-Task-Manager.png`: Task manager hardware riil, heatmap & streaming telemetry.
+    - `RAZOS-Storage-Manager.png`: Storage manager partisi disk eMMC & MicroSD `/DATA`.
+  - **Tabel Nilai Unggulan ("Mengapa RAZOS?"):** Perbandingan komparatif kebutuhan server berdaya rendah vs solusi teknis yang dihadirkan RAZOS.
+  - **Diagram Arsitektur Mermaid Lengkap:** Pemetaan alur Client (Desktop/Mobile/PWA) -> Frontend Vue 3 -> Go 1.22+ Single Binary (Router, WS, Embed FS, Security) -> Linux Host OS (Docker, Systemd, Disk Mounts, Amlogic S905X STB).
+  - **Spesifikasi Target Hardware & Jejak Sumber Daya:** Batasan RAM 1.8 GiB, ZRAM Swap ~900 MiB, idle memori Go <= 35 MB, binary single-file <= 25 MB, dan eMMC 8 GB vs MicroSD `/DATA`.
+  - **Panduan Instalasi & Deployment 3 Jalur:** One-line curl install untuk STB, local development setup (Go & Vite), serta kompilasi produksi single binary ARM64.
+  - **Pohon Direktori Proyek (Project Tree):** Struktur direktori mutakhir dan roadmap transparan.
+- **Ribbon Action Bar "+ Baru" di File Manager (`RAZFileManagerView.vue`):**
+  - Menambahkan tombol dropdown "+ Baru" di ribbon bar atas File Manager di samping tab filter sehingga selalu terlihat pada mode mobile dan jendela sempit (di mana sidebar kiri di-hide dengan `hidden md:flex`).
+  - Menghadirkan handler penutupan popover global saat pengguna mengklik area luar menu.
+- **Aset Media Dokumentasi (`docs/media/`):**
+  - Mengamankan dan menata seluruh screenshot riil beresolusi tinggi ke dalam folder `docs/media/`.
+
+#### 2. Verifikasi & Standar Mutu
+- **Production Build:** `npm run build` sukses 100% tanpa error dalam 4.77 detik (`built in 4.77s`).
+- **Backup:** Dicadangkan di `backup/Readme_before_mso_style.md.bak` dan `backup/RAZFileManagerView.vue.bak`.
+- **Git Synchronization:** Sinkronisasi commit dan push ke repositori GitHub `origin/master` dan `origin/main`.
+
 
 

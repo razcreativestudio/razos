@@ -152,8 +152,14 @@ const searchQuery = ref('')
 const filterType = ref('all') // 'all' | 'folders' | 'code' | 'docs' | 'images' | 'video' | 'audio'
 const activeSidebarSection = ref('drive') // 'drive' | 'starred' | 'devices'
 
-// State Dropdown Menu "+ Baru"
+// State Dropdown Menu "+ Baru" (Sidebar & Ribbon Top Bar)
 const showNewMenu = ref(false)
+const showRibbonNewMenu = ref(false)
+
+function closeAllNewMenus() {
+  showNewMenu.value = false
+  showRibbonNewMenu.value = false
+}
 
 // State Modal Folder & Rename
 const showNewFolderModal = ref(false)
@@ -935,14 +941,14 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="h-full flex overflow-hidden text-xs sm:text-sm select-none bg-slate-950 text-slate-100 rounded-xl">
+  <div class="h-full flex overflow-hidden text-xs sm:text-sm select-none bg-slate-950 text-slate-100 rounded-xl" @click="closeAllNewMenus">
     <!-- LEFT SIDEBAR (Google Drive Style) -->
     <div class="w-56 border-r border-slate-800/80 bg-slate-900/60 p-3 flex flex-col justify-between hidden md:flex shrink-0">
       <div class="flex flex-col gap-4">
         <!-- New Button with Dropdown -->
         <div class="relative">
           <button
-            @click="showNewMenu = !showNewMenu"
+            @click.stop="showNewMenu = !showNewMenu"
             class="w-full h-10 px-4 rounded-2xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold flex items-center justify-between gap-2 shadow-lg transition active:scale-95"
           >
             <div class="flex items-center gap-2">
@@ -1228,14 +1234,103 @@ onMounted(async () => {
       </div>
 
       <!-- FILTER & VIEW MODE RIBBON BAR -->
-      <div class="h-10 border-b border-slate-800/60 px-4 flex items-center justify-between gap-3 bg-slate-900/30 text-xs font-mono shrink-0">
-        <!-- Filter Tabs Media Viewers -->
-        <div class="flex items-center gap-1 overflow-x-auto py-0.5" style="scrollbar-width: none;">
+      <div class="h-10 border-b border-slate-800/60 px-3 sm:px-4 flex items-center justify-between gap-2 sm:gap-3 bg-slate-900/30 text-xs font-mono shrink-0">
+        <!-- Quick Action "+ Baru" (Always Visible on Mobile / Small Windows) & Filter Tabs -->
+        <div class="flex items-center gap-2 overflow-x-auto py-0.5" style="scrollbar-width: none;">
+          <!-- Ribbon "+ Baru" Button with Dropdown -->
+          <div class="relative shrink-0">
+            <button
+              @click.stop="showRibbonNewMenu = !showRibbonNewMenu"
+              class="flex items-center gap-1.5 px-2.5 py-1 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-lg text-xs shadow-sm transition active:scale-95"
+              title="Buat folder, berkas teks/kode, atau unggah data"
+            >
+              <Plus class="w-3.5 h-3.5" />
+              <span>Baru</span>
+              <ChevronDown class="w-3 h-3 ml-0.5 opacity-80" />
+            </button>
+
+            <!-- Dropdown Menu -->
+            <div
+              v-if="showRibbonNewMenu"
+              class="absolute top-9 left-0 w-64 bg-slate-900/95 border border-slate-700/80 rounded-2xl shadow-2xl z-50 p-1.5 flex flex-col gap-1 text-xs font-sans text-slate-200 backdrop-blur-xl animate-in fade-in zoom-in-95"
+            >
+              <button
+                @click="() => { showRibbonNewMenu = false; showNewFolderModal = true; }"
+                class="w-full px-3 py-2 rounded-xl hover:bg-slate-800 flex items-center gap-3 transition text-left"
+              >
+                <div class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
+                  <FolderPlus class="w-4 h-4" />
+                </div>
+                <div>
+                  <span class="font-medium block text-slate-200">Folder Baru</span>
+                  <span class="text-[10px] text-slate-400 block">Buat folder di direktori aktif</span>
+                </div>
+              </button>
+
+              <button
+                @click="() => { showRibbonNewMenu = false; showNewFileModal = true; }"
+                class="w-full px-3 py-2 rounded-xl hover:bg-slate-800 flex items-center gap-3 transition text-left"
+              >
+                <div class="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                  <FilePlus class="w-4 h-4" />
+                </div>
+                <div>
+                  <span class="font-medium block text-slate-200">File Baru (Teks/Kode)</span>
+                  <span class="text-[10px] text-slate-400 block">Buat & langsung buka di Editor</span>
+                </div>
+              </button>
+
+              <div class="h-px bg-slate-800 my-0.5"></div>
+
+              <button
+                @click="() => { showRibbonNewMenu = false; triggerUpload('file'); }"
+                class="w-full px-3 py-2 rounded-xl hover:bg-slate-800 flex items-center gap-3 transition text-left"
+              >
+                <div class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
+                  <FileUp class="w-4 h-4" />
+                </div>
+                <div>
+                  <span class="font-medium block text-slate-200">Upload File</span>
+                  <span class="text-[10px] text-slate-400 block">Unggah satu atau banyak berkas</span>
+                </div>
+              </button>
+
+              <button
+                @click="() => { showRibbonNewMenu = false; triggerUpload('folder'); }"
+                class="w-full px-3 py-2 rounded-xl hover:bg-slate-800 flex items-center gap-3 transition text-left"
+              >
+                <div class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                  <FolderUp class="w-4 h-4" />
+                </div>
+                <div>
+                  <span class="font-medium block text-slate-200">Upload Folder</span>
+                  <span class="text-[10px] text-slate-400 block">Unggah folder beserta seluruh isinya</span>
+                </div>
+              </button>
+
+              <button
+                @click="() => { showRibbonNewMenu = false; triggerUpload('zip'); }"
+                class="w-full px-3 py-2 rounded-xl hover:bg-slate-800 flex items-center gap-3 transition text-left"
+              >
+                <div class="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                  <Archive class="w-4 h-4" />
+                </div>
+                <div>
+                  <span class="font-medium block text-purple-300">Upload ZIP (Auto Extract)</span>
+                  <span class="text-[10px] text-slate-400 block">Unggah & langsung diekstrak</span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div class="h-4 w-px bg-slate-800/80 shrink-0"></div>
+
+          <!-- Filter Tabs Media Viewers -->
           <button
             v-for="f in [{ id: 'all', label: 'Semua' }, { id: 'folders', label: 'Folder' }, { id: 'images', label: 'Gambar' }, { id: 'video', label: 'Video' }, { id: 'audio', label: 'Audio' }, { id: 'docs', label: 'Dokumen' }, { id: 'code', label: 'Kode' }]"
             :key="f.id"
             @click="filterType = f.id"
-            class="px-2.5 py-1 rounded-lg transition font-sans text-xs"
+            class="px-2.5 py-1 rounded-lg transition font-sans text-xs shrink-0"
             :class="filterType === f.id ? 'bg-sky-500/20 text-sky-400 font-bold border border-sky-500/20' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'"
           >
             {{ f.label }}
