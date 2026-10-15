@@ -32,10 +32,17 @@ const DEFAULT_SETTINGS = {
 }
 
 export const useSystemStore = defineStore('system', () => {
-  // Metrik Hardware Host
+  // Metrik Hardware Host Riil
   const metrics = ref({
     cpu_percent: 0,
     cpu_temp: 0,
+    cpu_model: '',
+    cpu_cores: 0,
+    os_arch: '',
+    os_platform: '',
+    device_name: '',
+    disk_name: '',
+    hostname: '',
     ram_total: 0,
     ram_used: 0,
     ram_percent: 0,
@@ -45,8 +52,9 @@ export const useSystemStore = defineStore('system', () => {
     disk_percent: 0,
     net_sent: 0,
     net_recv: 0,
-    net_upload_speed: '0 B/s',
-    net_download_speed: '0 B/s'
+    net_interface: 'Wi-Fi / LAN',
+    net_upload_speed: '0 KB/s',
+    net_download_speed: '0 KB/s'
   })
 
   // State Pelacak Kecepatan Jaringan
@@ -110,11 +118,13 @@ export const useSystemStore = defineStore('system', () => {
     saveSettings()
   }
 
-  // Format bytes ke ukuran yang mudah dibaca
+  // Format bytes ke ukuran yang mudah dibaca (kebal NaN & ramah pengguna)
   function formatSpeed(bytesPerSec) {
-    if (bytesPerSec < 1024) return `${Math.round(bytesPerSec)} B/s`
-    if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)} KB/s`
-    return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`
+    const val = Number(bytesPerSec)
+    if (!Number.isFinite(val) || isNaN(val) || val <= 0) return '0 KB/s'
+    if (val < 1024) return `${Math.round(val)} B/s`
+    if (val < 1024 * 1024) return `${(val / 1024).toFixed(1)} KB/s`
+    return `${(val / (1024 * 1024)).toFixed(1)} MB/s`
   }
 
   // Tampilkan custom notification modal/toast
@@ -133,15 +143,20 @@ export const useSystemStore = defineStore('system', () => {
         const data = await res.json()
         const now = Date.now()
 
-        // Hitung laju throughput kecepatan internet / LAN
+        // Hitung laju throughput kecepatan internet / LAN secara dinamis
         if (lastNetTime > 0 && now > lastNetTime) {
           const seconds = (now - lastNetTime) / 1000
           if (seconds > 0) {
-            const upDiff = (data.net_sent || 0) >= lastNetSent ? (data.net_sent - lastNetSent) : 0
-            const downDiff = (data.net_recv || 0) >= lastNetRecv ? (data.net_recv - lastNetRecv) : 0
+            const currentSent = Number(data.net_sent) || 0
+            const currentRecv = Number(data.net_recv) || 0
+            const upDiff = currentSent >= lastNetSent ? (currentSent - lastNetSent) : 0
+            const downDiff = currentRecv >= lastNetRecv ? (currentRecv - lastNetRecv) : 0
 
             data.net_upload_speed = formatSpeed(upDiff / seconds)
             data.net_download_speed = formatSpeed(downDiff / seconds)
+          } else {
+            data.net_upload_speed = metrics.value.net_upload_speed || '0 KB/s'
+            data.net_download_speed = metrics.value.net_download_speed || '0 KB/s'
           }
         } else {
           data.net_upload_speed = '0 KB/s'
@@ -149,8 +164,8 @@ export const useSystemStore = defineStore('system', () => {
         }
 
         lastNetTime = now
-        lastNetSent = data.net_sent || 0
-        lastNetRecv = data.net_recv || 0
+        lastNetSent = Number(data.net_sent) || 0
+        lastNetRecv = Number(data.net_recv) || 0
 
         metrics.value = data
         isConnected.value = true

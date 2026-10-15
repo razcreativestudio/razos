@@ -94,7 +94,7 @@ function handleTaskbarItemClick(winId) {
   }
 }
 
-// Context menu klik kanan pada area kosong taskbar
+// Context menu klik kanan pada area kosong taskbar (Hierarki Submenu)
 function handleTaskbarContextMenu(e) {
   contextMenuStore.show(e, [
     {
@@ -102,32 +102,38 @@ function handleTaskbarContextMenu(e) {
       icon: Cpu,
       action: () => windowStore.openApp('task-manager')
     },
-    { separator: true },
     {
-      label: 'Tampilkan Desktop',
-      icon: EyeOff,
-      action: () => {
-        if (typeof windowStore.minimizeAllWindows === 'function') {
-          windowStore.minimizeAllWindows()
-        } else {
-          windowStore.openWindows.forEach(w => { w.isMinimized = true })
-          windowStore.activeWindowId = null
-        }
-      }
-    },
-    {
-      label: 'Pulihkan Semua Jendela',
+      label: 'Jendela (Windows)',
       icon: Layers,
-      action: () => {
-        if (typeof windowStore.restoreAllWindows === 'function') {
-          windowStore.restoreAllWindows()
-        } else {
-          windowStore.openWindows.forEach(w => { w.isMinimized = false })
-          if (windowStore.openWindows.length > 0) {
-            windowStore.bringToFront(windowStore.openWindows[windowStore.openWindows.length - 1].id)
+      children: [
+        {
+          label: 'Tampilkan Desktop',
+          icon: EyeOff,
+          shortcut: 'Win+D',
+          action: () => {
+            if (typeof windowStore.minimizeAllWindows === 'function') {
+              windowStore.minimizeAllWindows()
+            } else {
+              windowStore.openWindows.forEach(w => { w.isMinimized = true })
+              windowStore.activeWindowId = null
+            }
+          }
+        },
+        {
+          label: 'Pulihkan Semua Jendela',
+          icon: Layers,
+          action: () => {
+            if (typeof windowStore.restoreAllWindows === 'function') {
+              windowStore.restoreAllWindows()
+            } else {
+              windowStore.openWindows.forEach(w => { w.isMinimized = false })
+              if (windowStore.openWindows.length > 0) {
+                windowStore.bringToFront(windowStore.openWindows[windowStore.openWindows.length - 1].id)
+              }
+            }
           }
         }
-      }
+      ]
     },
     { separator: true },
     {

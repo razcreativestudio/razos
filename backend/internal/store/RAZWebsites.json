@@ -3,7 +3,7 @@
     "id": 1,
     "name": "Portal Berita Raz",
     "slug": "portal-berita-raz",
-    "domain": "berita.razos.local",
+    "domain": "localhost",
     "port": 8110,
     "runtime": "php",
     "container_name": "site-portal-berita-web",

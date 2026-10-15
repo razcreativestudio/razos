@@ -14,6 +14,11 @@ frontend/node_modules/
 frontend/dist/
 .vite/
 
+# Backup & Local Temp
+backup/
+*.bak
+*.bak_*
+
 # OS Temp Files
 .DS_Store
 Thumbs.db

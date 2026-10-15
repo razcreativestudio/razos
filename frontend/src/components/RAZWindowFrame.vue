@@ -267,6 +267,7 @@ function stopResize() {
     <div
       v-show="!win.isMinimized"
       @mousedown="windowStore.bringToFront(win.id)"
+      @contextmenu.stop
       :style="{
         position: 'absolute',
         left: winLeft,

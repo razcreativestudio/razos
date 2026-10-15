@@ -2,6 +2,7 @@
 /**
  * RAZOS Website Edit Window Component
  * Created: 2026-10-13 (v2.6.0 - Standalone Window Architecture)
+ * Updated: 2026-10-14 15:10:00 (v2.9.8 Hotfix: Cegah auto-submit form saat navigasi tab dengan type="button")
  * Deskripsi: Form Edit Konfigurasi website mandiri 5-tab.
  * Berjalan sebagai Jendela OS terpisah (tidak memblokir/mengganggu Website Manager).
  */
@@ -159,6 +160,7 @@ onMounted(() => {
           { id: 'advanced', label: '5. Resource & ENV' }
         ]"
         :key="t.id"
+        type="button"
         @click="editActiveTab = t.id"
         class="px-3 py-1.5 rounded-lg font-medium transition shrink-0"
         :class="editActiveTab === t.id
@@ -415,6 +417,7 @@ onMounted(() => {
     <!-- Footer Actions -->
     <div class="flex items-center justify-between border-t border-slate-800 pt-3 shrink-0">
       <button
+        type="button"
         @click="windowStore.closeWindow(win.id)"
         class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
       >
@@ -422,7 +425,7 @@ onMounted(() => {
       </button>
 
       <button
-        @click="confirmUpdateWebsite"
+        type="submit"
         :disabled="isSavingEdit"
         class="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20 active:scale-95 disabled:opacity-50"
       >

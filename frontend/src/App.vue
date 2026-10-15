@@ -1,18 +1,22 @@
 <script setup>
 /**
  * RAZOS Main App Component
- * Updated: 2026-10-08
- * Deskripsi: Root component dengan deteksi breakpoint responsif (Desktop > 768px vs Mobile <= 768px),
+ * Updated: 2026-10-14 13:14:00
+ * Deskripsi: Root component dengan deteksi autentikasi pengguna (Login / Setup Akun),
+ * deteksi breakpoint responsif (Desktop > 768px vs Mobile <= 768px),
  * inisialisasi polling metrik backend, dan custom notification toast.
  */
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useSystemStore } from './stores/RAZSystemStore'
+import { useAuthStore } from './stores/RAZAuthStore'
 import RAZDesktopLayout from './layouts/RAZDesktopLayout.vue'
 import RAZMobileLayout from './layouts/RAZMobileLayout.vue'
+import RAZAuthView from './views/RAZAuthView.vue'
 import RAZContextMenu from './components/RAZContextMenu.vue'
-import { CheckCircle2, AlertCircle, Info } from 'lucide-vue-next'
+import { CheckCircle2, AlertCircle, Info, Loader2 } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
+const authStore = useAuthStore()
 const isMobile = ref(window.innerWidth <= 768)
 
 function handleResize() {
@@ -21,26 +25,69 @@ function handleResize() {
 
 let metricsInterval = null
 
-onMounted(() => {
-  window.addEventListener('resize', handleResize)
-  // Polling metrik setiap 3 detik
+const startMetricsPolling = () => {
+  if (metricsInterval) clearInterval(metricsInterval)
   systemStore.fetchMetrics()
   metricsInterval = setInterval(() => {
     systemStore.fetchMetrics()
   }, 3000)
+}
+
+const stopMetricsPolling = () => {
+  if (metricsInterval) {
+    clearInterval(metricsInterval)
+    metricsInterval = null
+  }
+}
+
+// Pantau perubahan status login pengguna
+watch(() => authStore.isAuthenticated, (newVal) => {
+  if (newVal) {
+    startMetricsPolling()
+  } else {
+    stopMetricsPolling()
+  }
+})
+
+onMounted(async () => {
+  window.addEventListener('resize', handleResize)
+  // Periksa status auth awal
+  await authStore.checkAuthStatus()
+  if (authStore.isAuthenticated) {
+    startMetricsPolling()
+  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-  if (metricsInterval) clearInterval(metricsInterval)
+  stopMetricsPolling()
 })
 </script>
 
 <template>
-  <div class="w-screen h-screen overflow-hidden bg-slate-950 font-sans text-slate-100 antialiased">
-    <!-- Render Layout Sesuai Breakpoint 768px -->
-    <RAZMobileLayout v-if="isMobile" />
-    <RAZDesktopLayout v-else />
+  <div class="w-screen h-screen overflow-hidden bg-slate-950 font-sans text-slate-100 antialiased select-none">
+    
+    <!-- State Loading Pengecekan Autentikasi Sistem -->
+    <div 
+      v-if="authStore.isLoading" 
+      class="w-full h-full flex flex-col items-center justify-center bg-slate-950 text-slate-400 gap-3"
+    >
+      <Loader2 class="w-8 h-8 animate-spin text-blue-500" />
+      <span class="text-xs font-medium tracking-wide">Memuat Sistem RAZOS...</span>
+    </div>
+
+    <!-- Tampilan Form Login / Registrasi Akun Awal jika belum login -->
+    <RAZAuthView v-else-if="!authStore.isAuthenticated" />
+
+    <!-- Tampilan Desktop / Mobile jika sudah login -->
+    <template v-else>
+      <!-- Render Layout Sesuai Breakpoint 768px -->
+      <RAZMobileLayout v-if="isMobile" />
+      <RAZDesktopLayout v-else />
+
+      <!-- Global Enterprise Context Menu -->
+      <RAZContextMenu />
+    </template>
 
     <!-- Custom Notification Toast (Pengganti alert bawaan browser) -->
     <transition
@@ -70,8 +117,5 @@ onUnmounted(() => {
         </div>
       </div>
     </transition>
-
-    <!-- Global Enterprise Context Menu -->
-    <RAZContextMenu />
   </div>
 </template>

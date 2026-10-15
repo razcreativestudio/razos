@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "id": "immich",
+    "name": "Immich",
+    "slug": "immich",
+    "category": "Media & Streaming",
+    "description": "Pencadangan foto dan video ponsel mandiri super cepat mirip Google Photos.",
+    "image": "ghcr.io/immich-app/immich-server:release",
+    "port": 2283,
+    "data_path": "/DATA/apps/immich",
+    "installed": true,
+    "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/immich.png",
+    "thumbnail": "https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=800&auto=format&fit=crop&q=60",
+    "container_name": "razos-immich",
+    "installed_at": "2026-10-14T08:15:23.404Z"
+  }
+]

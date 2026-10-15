@@ -1,0 +1,14 @@
+{
+  "initialized": true,
+  "user": {
+    "username": "raz",
+    "password_hash": "7748da64cb269f967cf0ece9217de9e59defbdb76305299eb060c2a719773461",
+    "created_at": "2026-10-14T06:22:11.185Z"
+  },
+  "sessions": [
+    {
+      "token": "5416b98350af37e4eda1dac1240b3be239da894308dd3ed0",
+      "created_at": "2026-10-14T06:22:26.221Z"
+    }
+  ]
+}

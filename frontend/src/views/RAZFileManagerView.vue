@@ -1,8 +1,9 @@
 <script setup>
 /**
  * RAZOS Google Drive-Style Storage & Windows File Explorer Hybrid File Manager
- * Updated: 2026-10-13 (v2.6.0 - Detached Standalone Windows Architecture)
+ * Updated: 2026-10-15 (v3.5.1 - Fix Zero-Click Direct Initial Load)
  * Deskripsi: Antarmuka File Manager tingkat lanjut memadukan arsitektur Windows File Explorer dan Google Drive:
+ * - Direct Zero-Click Initial Load: Otomatis memuat dan menampilkan berkas/folder default (/DATA atau C:/DATA) saat pertama kali dibuka.
  * - Windows Explorer Interactive Address Bar: Bilah alamat dwi-fungsi (Breadcrumbs interaktif & Editable Text Input).
  * - History Navigation Trio: Tombol Back, Forward, dan Up dengan history stack tracking yang presisi.
  * - Quick Address Actions: Tombol Copy Path (dengan notifikasi clipboard) dan Refresh folder langsung di dalam address bar.
@@ -205,28 +206,21 @@ async function fetchDevices() {
       storageDevices.value = data
       
       // Deteksi lokasi primary storage (/DATA)
-      const dataDev = data.find(d => d.mountpoint === '/DATA' || d.label.includes('DATA'))
+      const dataDev = data.find(d => d.mountpoint === '/DATA' || (d.label && d.label.includes('DATA')))
       if (dataDev) {
         defaultStoragePath.value = dataDev.mountpoint
       } else {
         // Pada host Windows dev, arahkan ke C:/DATA jika ada drive C
-        const hasCDrive = data.some(d => d.device.startsWith('C:') || d.mountpoint.startsWith('C:'))
+        const hasCDrive = data.some(d => (d.device && d.device.startsWith('C:')) || (d.mountpoint && d.mountpoint.startsWith('C:')))
         if (hasCDrive) {
           defaultStoragePath.value = 'C:/DATA'
+        } else if (data.length > 0 && data[0].mountpoint) {
+          defaultStoragePath.value = data[0].mountpoint
         }
-      }
-
-      // Inisialisasi awal ke My Storage (/DATA) jika belum diset
-      if (!currentPath.value || currentPath.value === '/' || currentPath.value === 'C:/') {
-        currentPath.value = defaultStoragePath.value
-        fetchFiles(defaultStoragePath.value)
       }
     }
   } catch (err) {
-    if (!currentPath.value) {
-      currentPath.value = 'C:/DATA'
-      fetchFiles('C:/DATA')
-    }
+    console.error('Gagal mengambil daftar storage devices:', err)
   }
 }
 
@@ -560,22 +554,18 @@ async function copyItemPath(item) {
   }
 }
 
-// Context Menu Klik Kanan pada Berkas atau Folder
+// Context Menu Klik Kanan pada Berkas atau Folder (Hierarki Submenu)
 function handleFileItemContextMenu(e, item) {
   selectedItem.value = item
-  const menuList = [
-    {
-      label: item.is_dir ? 'Masuk Folder' : 'Buka Berkas',
-      icon: item.is_dir ? Folder : Eye,
-      action: () => handleItemDoubleClick(item)
-    },
+
+  const extraOptions = [
     {
       label: 'Info & Properti',
       icon: Info,
       action: () => openInfoModal(item)
     },
     {
-      label: 'Salin Path',
+      label: 'Salin Path Direktori',
       icon: Copy,
       action: () => copyItemPath(item)
     },
@@ -583,34 +573,46 @@ function handleFileItemContextMenu(e, item) {
       label: isItemStarred(item.path) ? 'Hapus dari Bintang' : 'Beri Bintang',
       icon: Star,
       action: () => toggleStar(item)
-    },
-    {
-      label: 'Ubah Nama',
-      icon: Edit3,
-      action: () => openRenameDialog(item)
     }
   ]
 
   if (!item.is_dir) {
-    menuList.push({
+    extraOptions.push({
       label: 'Unduh Berkas',
       icon: Download,
       action: () => downloadFile(item)
     })
   }
 
-  menuList.push({ separator: true })
-  menuList.push({
-    label: 'Hapus',
-    icon: Trash2,
-    danger: true,
-    action: () => deleteItem(item)
-  })
+  const menuList = [
+    {
+      label: item.is_dir ? 'Masuk Folder' : 'Buka Berkas',
+      icon: item.is_dir ? Folder : Eye,
+      action: () => handleItemDoubleClick(item)
+    },
+    {
+      label: 'Ubah Nama',
+      icon: Edit3,
+      action: () => openRenameDialog(item)
+    },
+    {
+      label: 'Opsi & Properti',
+      icon: Sliders,
+      children: extraOptions
+    },
+    { separator: true },
+    {
+      label: 'Hapus',
+      icon: Trash2,
+      danger: true,
+      action: () => deleteItem(item)
+    }
+  ]
 
   contextMenuStore.show(e, menuList, item.name)
 }
 
-// Context Menu Klik Kanan pada Area Kosong Explorer
+// Context Menu Klik Kanan pada Area Kosong Explorer (Hierarki Submenu)
 function handleCanvasContextMenu(e) {
   contextMenuStore.show(e, [
     {
@@ -619,22 +621,29 @@ function handleCanvasContextMenu(e) {
       action: () => { showNewFolderModal.value = true }
     },
     {
+      label: 'Tampilan (View)',
+      icon: LayoutGrid,
+      children: [
+        {
+          label: 'Tampilan Grid',
+          icon: LayoutGrid,
+          checked: viewMode.value === 'grid',
+          action: () => { viewMode.value = 'grid' }
+        },
+        {
+          label: 'Tampilan List',
+          icon: List,
+          checked: viewMode.value === 'list',
+          action: () => { viewMode.value = 'list' }
+        }
+      ]
+    },
+    { separator: true },
+    {
       label: 'Muat Ulang (Refresh)',
       icon: RefreshCw,
       action: () => fetchFiles(currentPath.value)
     },
-    { separator: true },
-    {
-      label: 'Tampilan Grid',
-      icon: LayoutGrid,
-      action: () => { viewMode.value = 'grid' }
-    },
-    {
-      label: 'Tampilan List',
-      icon: List,
-      action: () => { viewMode.value = 'list' }
-    },
-    { separator: true },
     {
       label: 'Salin Path Direktori',
       icon: Copy,
@@ -645,6 +654,12 @@ function handleCanvasContextMenu(e) {
 
 onMounted(async () => {
   await fetchDevices()
+  // Selalu muat isi direktori default secara otomatis saat pertama kali dibuka (Zero Click required)
+  const targetPath = defaultStoragePath.value || '/DATA'
+  currentPath.value = targetPath
+  addressInputValue.value = targetPath
+  activeSidebarSection.value = 'drive'
+  await fetchFiles(targetPath)
 })
 </script>
 
@@ -665,7 +680,7 @@ onMounted(async () => {
         <!-- Navigation Links -->
         <div class="flex flex-col gap-1 text-xs">
           <button
-            @click="() => { activeSidebarSection = 'drive'; if (currentPath !== defaultStoragePath) fetchFiles(defaultStoragePath); }"
+            @click="() => { activeSidebarSection = 'drive'; fetchFiles(defaultStoragePath); }"
             class="px-3 py-2.5 rounded-xl flex items-center gap-3 transition font-medium text-left"
             :class="activeSidebarSection === 'drive' ? 'bg-sky-500/20 text-sky-400 font-bold' : 'text-slate-300 hover:bg-slate-800/60'"
           >

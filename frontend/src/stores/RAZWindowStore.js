@@ -1,8 +1,8 @@
 /**
  * RAZOS Window Manager Store (Pinia)
- * Updated: 2026-10-13 (Standalone Universal File & Content Viewer Integration)
+ * Updated: 2026-10-14 (v3.0.0: CasaOS App Settings & Container Logs window integration)
  * Deskripsi: State manager untuk window multi-tasking desktop OS (buka, tutup, minimize, maximize,
- * fokus Z-Index, dan dynamic standalone file viewers untuk gambar, video, musik, pdf, teks/kode).
+ * fokus Z-Index, dynamic standalone file viewers, website editors, serta CasaOS app settings & logs).
  */
 
 import { defineStore, acceptHMRUpdate } from 'pinia'
@@ -140,6 +140,30 @@ export const useWindowStore = defineStore('window', () => {
     } catch (e) {}
   }
 
+  // Validasi posisi dan dimensi window agar selalu terlihat di dalam layar host
+  function ensureWindowOnScreen(win) {
+    if (!win) return
+    const screenW = typeof window !== 'undefined' ? (window.innerWidth || 1200) : 1200
+    const screenH = typeof window !== 'undefined' ? (window.innerHeight || 800) : 800
+
+    const w = Number(win.width)
+    const h = Number(win.height)
+    win.width = Number.isFinite(w) && w >= 200 ? Math.min(w, screenW - 20) : (win.minWidth || 700)
+    win.height = Number.isFinite(h) && h >= 150 ? Math.min(h, screenH - 60) : (win.minHeight || 480)
+
+    const maxX = Math.max(10, screenW - win.width - 20)
+    const maxY = Math.max(10, screenH - win.height - 50)
+    const x = Number(win.x)
+    const y = Number(win.y)
+
+    if (!Number.isFinite(x) || x < 0 || x > screenW - 60) {
+      win.x = Math.max(20, Math.min(60, maxX))
+    }
+    if (!Number.isFinite(y) || y < 0 || y > screenH - 60) {
+      win.y = Math.max(20, Math.min(40, maxY))
+    }
+  }
+
   // Buka window aplikasi dengan memulihkan ukuran, posisi, dan status maximize terakhir
   function openApp(appId) {
     const existing = openWindows.value.find(w => w.id === appId)
@@ -147,6 +171,7 @@ export const useWindowStore = defineStore('window', () => {
       if (existing.isMinimized) {
         existing.isMinimized = false
       }
+      ensureWindowOnScreen(existing)
       bringToFront(appId)
       return
     }
@@ -160,8 +185,8 @@ export const useWindowStore = defineStore('window', () => {
 
     const winWidth = saved?.width || appDef.width
     const winHeight = saved?.height || appDef.height
-    const maxX = Math.max(20, (window.innerWidth || 1200) - winWidth - 20)
-    const maxY = Math.max(20, (window.innerHeight || 800) - winHeight - 60)
+    const maxX = Math.max(20, (typeof window !== 'undefined' ? window.innerWidth : 1200) - winWidth - 20)
+    const maxY = Math.max(20, (typeof window !== 'undefined' ? window.innerHeight : 800) - winHeight - 60)
 
     const winX = (saved && saved.x !== null && saved.x !== undefined) ? Math.min(Math.max(20, saved.x), maxX) : (60 + (offset % 200))
     const winY = (saved && saved.y !== null && saved.y !== undefined) ? Math.min(Math.max(20, saved.y), maxY) : (40 + (offset % 150))
@@ -178,6 +203,7 @@ export const useWindowStore = defineStore('window', () => {
       isMaximized: isMaximized
     }
 
+    ensureWindowOnScreen(win)
     openWindows.value.push(win)
     activeWindowId.value = appId
   }
@@ -428,17 +454,31 @@ export const useWindowStore = defineStore('window', () => {
     })
   }
 
-  // Standalone Window: Manual Install Docker Container Cepat
+  // Standalone Window: Manual Install Docker Container Cepat (CasaOS Style)
   function openAppStoreManual() {
     openCustomWindow({
       id: 'appstore-manual',
-      title: 'Instal Cepat Docker Container',
+      title: 'Manual App Install',
       icon: '/assets/icons/RAZIconAppStore.svg',
-      width: 540,
-      height: 520,
-      minWidth: 400,
-      minHeight: 360,
+      width: 740,
+      height: 640,
+      minWidth: 480,
+      minHeight: 420,
       type: 'appstore-manual'
+    })
+  }
+
+  // Standalone Window: Storage Manager (CasaOS Architecture 100% Sesuai Gambar Referensi)
+  function openStorageManager() {
+    openCustomWindow({
+      id: 'storage-manager',
+      title: 'Storage Manager',
+      icon: '/assets/icons/RAZIconStorage.svg',
+      width: 700,
+      height: 590,
+      minWidth: 460,
+      minHeight: 400,
+      type: 'storage-manager'
     })
   }
 
@@ -454,6 +494,40 @@ export const useWindowStore = defineStore('window', () => {
       minWidth: 380,
       minHeight: 300,
       type: 'appstore-install',
+      data: app
+    })
+  }
+
+  // Standalone Window: Pengaturan Detail Aplikasi & Container (CasaOS Style Settings)
+  function openAppEditor(app) {
+    if (!app) return
+    const slug = app.slug || app.id
+    openCustomWindow({
+      id: `app-edit-${slug}`,
+      title: `${app.name || app.title || slug} Settings`,
+      icon: app.icon || '/assets/icons/RAZIconAppStore.svg',
+      width: 720,
+      height: 600,
+      minWidth: 480,
+      minHeight: 420,
+      type: 'app-edit',
+      data: app
+    })
+  }
+
+  // Standalone Window: Terminal & Logs Container Real-Time (CasaOS Style Terminal/Logs)
+  function openAppLogs(app) {
+    if (!app) return
+    const slug = app.slug || app.id
+    openCustomWindow({
+      id: `app-logs-${slug}`,
+      title: `${app.name || app.title || slug} - Terminal & Logs`,
+      icon: app.icon || '/assets/icons/RAZIconTerminal.svg',
+      width: 780,
+      height: 520,
+      minWidth: 500,
+      minHeight: 380,
+      type: 'app-logs',
       data: app
     })
   }
@@ -629,6 +703,7 @@ export const useWindowStore = defineStore('window', () => {
     launchWebsiteApp,
     uninstallStoreApp,
     openWindows,
+    windows: openWindows,
     activeWindowId,
     openApp,
     openCustomWindow,
@@ -638,7 +713,10 @@ export const useWindowStore = defineStore('window', () => {
     openWebsiteGit,
     openWebsiteDetail,
     openAppStoreManual,
+    openStorageManager,
     openAppStoreInstaller,
+    openAppEditor,
+    openAppLogs,
     openDatabaseCreator,
     openFileProperties,
     closeWindow,

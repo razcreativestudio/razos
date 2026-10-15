@@ -22,17 +22,22 @@
       "row": 4
     },
     "databases": {
-      "col": 0,
-      "row": 5
-    },
-    "settings": {
       "col": 1,
       "row": 0
     },
-    "website-1": {
+    "settings": {
       "col": 1,
       "row": 1
+    },
+    "store-immich": {
+      "col": 1,
+      "row": 2
+    },
+    "website-1": {
+      "col": 1,
+      "row": 3
     }
   },
-  "updated_at": "2026-10-14T04:06:10.725Z"
+  "lock_position": false,
+  "updated_at": "2026-10-15T02:15:01.111Z"
 }

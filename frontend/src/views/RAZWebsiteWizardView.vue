@@ -2,6 +2,7 @@
 /**
  * RAZOS Website Wizard Window Component
  * Created: 2026-10-13 (v2.6.0 - Standalone Window Architecture)
+ * Updated: 2026-10-14 15:10:00 (v2.9.8 Hotfix: Cegah auto-submit form pada wizard step buttons dengan type="button")
  * Deskripsi: Form Wizard mandiri untuk pembuatan website terisolasi berbasis Docker.
  * Berjalan sebagai Jendela OS terpisah (tidak memblokir/mengganggu Website Manager).
  */
@@ -228,6 +229,7 @@ onMounted(() => {
           { num: 4, label: '4. Resource Limit' }
         ]"
         :key="st.num"
+        type="button"
         @click="wizardStep = st.num"
         class="py-1.5 rounded-lg font-medium transition flex items-center justify-center gap-1"
         :class="wizardStep === st.num

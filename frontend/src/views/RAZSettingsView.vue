@@ -1,22 +1,28 @@
 <script setup>
 /**
  * RAZOS Settings View (CasaOS Architecture Standard)
- * Updated: 2026-10-14
+ * Updated: 2026-10-15 09:00:00 (v3.2.0: Menghapus opsi News Feed dan mengintegrasikan slider rekomendasi aplikasi)
  * Deskripsi: Panel pengaturan sistem terpadu multi-tab mencakup Manajemen Akun,
  * Pengaturan Preferensi Desktop & OTA Updater, serta Konfigurasi Widget Real-time.
  */
 import { ref, onMounted } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
+import { useAuthStore } from '../stores/RAZAuthStore'
+import RAZStorageManagerView from './RAZStorageManagerView.vue'
 import {
   User, Sliders, LayoutGrid, Clock, Activity, HardDrive, Network,
   RefreshCw, Power, ArrowUpCircle, Check, Pencil, Image, CheckCircle2,
-  X, AlertTriangle, LogOut, Sparkles, ExternalLink, ShieldCheck
+  X, AlertTriangle, LogOut, Sparkles, ExternalLink, ShieldCheck, Database
 } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
+const authStore = useAuthStore()
 
 // Tab Aktif: 'account' | 'settings' | 'widgets'
 const activeTab = ref('settings')
+
+// State Modal Storage Manager
+const showStorageModal = ref(false)
 
 // State OTA Updater
 const isCheckingUpdate = ref(false)
@@ -97,17 +103,26 @@ function openEditPassword() {
   showEditPasswordModal.value = true
 }
 
-function saveEditPassword() {
-  if (!newPassword.value) {
-    systemStore.showNotification('Peringatan', 'Kata sandi baru tidak boleh kosong', 'error')
+async function saveEditPassword() {
+  if (!oldPassword.value) {
+    systemStore.showNotification('Peringatan', 'Kata sandi saat ini harus diisi', 'error')
+    return
+  }
+  if (!newPassword.value || newPassword.value.length < 4) {
+    systemStore.showNotification('Peringatan', 'Kata sandi baru minimal 4 karakter', 'error')
     return
   }
   if (newPassword.value !== confirmPassword.value) {
     systemStore.showNotification('Peringatan', 'Konfirmasi kata sandi tidak cocok', 'error')
     return
   }
-  systemStore.showNotification('Sukses', 'Kata sandi sistem berhasil diperbarui', 'success')
-  showEditPasswordModal.value = false
+  const res = await authStore.changePassword(oldPassword.value, newPassword.value)
+  if (res.success) {
+    systemStore.showNotification('Sukses', 'Kata sandi sistem berhasil diperbarui', 'success')
+    showEditPasswordModal.value = false
+  } else {
+    systemStore.showNotification('Gagal', res.error || 'Gagal mengubah kata sandi', 'error')
+  }
 }
 
 const showPortModal = ref(false)
@@ -180,9 +195,10 @@ async function confirmShutdown() {
   await systemStore.shutdownSystem()
 }
 
-function confirmLogout() {
+async function confirmLogout() {
   showLogoutModal.value = false
-  systemStore.showNotification('Logout', 'Sesi telah diakhiri. Silakan login kembali.', 'info')
+  await authStore.logout()
+  systemStore.showNotification('Logout Berhasil', 'Sesi telah diakhiri. Silakan login kembali.', 'info')
 }
 
 onMounted(() => {
@@ -260,7 +276,7 @@ onMounted(() => {
             </div>
           </div>
           <p class="mt-3 text-sm font-semibold text-slate-200 capitalize">
-            {{ systemStore.settings.account.name || 'raz' }}
+            {{ authStore.currentUser?.username || systemStore.settings.account.name || 'raz' }}
           </p>
           <span class="text-[11px] text-slate-400">Administrator Perangkat STB</span>
         </div>
@@ -271,7 +287,7 @@ onMounted(() => {
           <div class="flex items-center justify-between px-5 py-4">
             <span class="text-sm font-medium text-slate-300">Name</span>
             <div class="flex items-center gap-3">
-              <span class="text-sm font-semibold text-slate-100">{{ systemStore.settings.account.name || 'raz' }}</span>
+              <span class="text-sm font-semibold text-slate-100">{{ authStore.currentUser?.username || systemStore.settings.account.name || 'raz' }}</span>
               <button
                 @click="openEditName"
                 class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 flex items-center justify-center transition border border-slate-700/60"
@@ -383,21 +399,7 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- Row 6: Show news feed from blog -->
-          <div class="flex items-center justify-between px-5 py-3.5">
-            <span class="text-sm font-medium text-slate-200">Show news feed from RAZOS blog</span>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                v-model="systemStore.settings.showBlogFeed"
-                @change="systemStore.saveSettings()"
-                class="sr-only peer"
-              />
-              <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
-            </label>
-          </div>
-
-          <!-- Row 7: Show recommended apps -->
+          <!-- Row 6: Show recommended apps -->
           <div class="flex items-center justify-between px-5 py-3.5">
             <span class="text-sm font-medium text-slate-200">Show recommended apps</span>
             <label class="relative inline-flex items-center cursor-pointer">
@@ -423,6 +425,22 @@ onMounted(() => {
               />
               <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
             </label>
+          </div>
+
+          <!-- Row 9: Storage Manager (Sesuai Gambar 1 & 2) -->
+          <div class="flex items-center justify-between px-5 py-3.5">
+            <div class="space-y-0.5">
+              <span class="text-sm font-medium text-slate-200">Storage Manager</span>
+              <p class="text-[11px] text-slate-400">Kelola partisi eMMC, MicroSD, dan drive penyimpanan fisik</p>
+            </div>
+            <button
+              type="button"
+              @click="showStorageModal = true"
+              class="px-4 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition shadow-sm active:scale-95 flex items-center gap-1.5"
+            >
+              <HardDrive class="w-3.5 h-3.5" />
+              <span>Manage</span>
+            </button>
           </div>
         </div>
 
@@ -805,6 +823,16 @@ onMounted(() => {
           <button @click="showLogoutModal = false" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium">Batal</button>
           <button @click="confirmLogout" class="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-400 text-white text-xs font-bold">Logout</button>
         </div>
+      </div>
+    </div>
+
+    <!-- 8. Modal Storage Manager (CasaOS Style - 100% Sesuai Gambar 1 & 2) -->
+    <div
+      v-if="showStorageModal"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-md p-3 sm:p-6 animate-in fade-in"
+    >
+      <div class="w-full max-w-2xl h-[590px] rounded-2xl overflow-hidden border border-slate-700/80 shadow-2xl">
+        <RAZStorageManagerView :isModal="true" @close="showStorageModal = false" />
       </div>
     </div>
 

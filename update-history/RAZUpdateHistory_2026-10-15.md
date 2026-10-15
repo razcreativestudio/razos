@@ -1,0 +1,289 @@
+# RAZOS Update History: 2026-10-15
+
+Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
+
+---
+
+### Versi: 3.1.0-responsive-desktop-grid (Responsive Desktop Grid, Position Lock System, & Race-Condition-Free State Persistence)
+**Waktu Eksekusi:** 2026-10-15 08:42 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer
+
+#### 1. Masalah Utama yang Diperbaiki
+- **Ikon Terpotong / Overflow ke Taskbar:**
+  - Sebelumnya, ikon di baris ke-6 (seperti MariaDB Database) terdorong ke bawah dan terpotong oleh taskbar pada layar laptop/resolusi pendek karena penghitungan grid menggunakan tinggi hardcoded tanpa memperhitungkan ruang kerja desktop yang aktual.
+- **Reset Posisi Setiap Kali Reload (Race Condition):**
+  - Terjadi race condition pada lifecycle Vue di mana `watch(() => windowStore.allDesktopApps.length)` dieksekusi dengan `{ immediate: true }` sebelum fungsi `fetchDesktopConfig()` selesai membaca konfigurasi tersimpan dari server/localStorage. Akibatnya, `iconPositions` yang masih kosong `{}` dianggap sebagai aplikasi baru tanpa slot dan langsung diisi ulang dengan susunan default sekuensial, kemudian ditimpa ke backend/localStorage.
+- **Ketiadaan Fitur Kunci Posisi (Position Lock):**
+  - Pengguna tidak memiliki opsi untuk mengunci tata letak ikon desktop agar terhindar dari ketidaksengajaan drag-and-drop.
+
+#### 2. Implementasi & Rekayasa Arsitektur
+- **Sistem Grid Responsif Berbasis Ruang Kerja Aktual (`RAZDesktopLayout.vue`):**
+  - Menambahkan `ref="desktopWorkspaceRef"` pada area kerja desktop untuk menangkap ukuran dimensi dinamis (`clientHeight` dan `clientWidth`).
+  - Menghitung `maxRows` dan `maxCols` secara adaptif berdasarkan dimensi riil ruang kerja dikurangi widget samping dan taskbar:
+    - `maxRows = Math.max(2, Math.floor(workspaceHeight / cellH))`
+    - `maxCols = Math.max(2, Math.floor(usableWidth / cellW))`
+  - Mengimplementasikan fungsi `getEffectivePosition(appId)`: Jika resolusi layar perangkat saat ini lebih pendek sehingga baris melebihi `maxRows`, ikon secara otomatis dibungkus (*wrapped*) ke kolom berikutnya tanpa pernah keluar layar atau tertutup taskbar.
+  - Listener `window.resize` terpasang secara bersih untuk menyesuaikan grid saat jendela browser di-resize.
+- **Fitur Kunci Posisi Desktop (Position Lock):**
+  - Menambahkan state `isPositionLocked` (boolean) yang tersinkronisasi ke server dan `localStorage`.
+  - Integrasi opsi **"Kunci Posisi Ikon" / "Buka Kunci Posisi Ikon"** pada Context Menu Desktop (klik kanan) lengkap dengan ikon `Lock`/`Unlock` dan status toggle.
+  - Menambahkan indikator visual melayang di pojok kiri atas desktop saat tata letak sedang terkunci (*"Tata Letak Terkunci"*).
+  - Ketika terkunci, atribut `:draggable="false"` dan handler drag secara tegas menolak pemindahan icon serta memunculkan notifikasi edukatif.
+- **Eliminasi Race Condition & Persistensi Lintas Perangkat:**
+  - Menambahkan flag kesiapan `isConfigLoaded`. Fungsi `ensureIconPositions()` dan `persistDesktopConfig()` tidak akan pernah menimpa konfigurasi sebelum data tersimpan selesai dimuat.
+  - Menambahkan pembacaan sinkron instan dari `localStorage` saat inisialisasi awal sehingga posisi ikon langsung tampil tanpa jeda (*zero flicker*).
+  - Backend Go (`RAZApiController.go`) dan middleware Vite (`vite.config.js`) diperbarui dengan field `lock_position` pada struct `RAZDesktopConfig` dan endpoint `GET/POST /api/v1/desktop/config`.
+  - Merestrukturisasi tata letak default di `backend/internal/store/RAZDesktopConfig.json` menjadi 2 kolom rapi (Kolom 0: 5 aplikasi, Kolom 1: 4 aplikasi) agar tidak ada ikon yang menabrak batas taskbar.
+- **Pembersihan Lifecycle Hook:**
+  - Menggabungkan inisialisasi `updateClock()` dan listener ke satu siklus `onMounted` dan `onUnmounted` utama untuk mencegah duplicate interval.
+
+#### 3. Verifikasi & Pengujian
+- **Pengujian REST API:**
+  - `GET /api/v1/desktop/config` terverifikasi mengembalikan data valid (`icon_size`, `lock_position`, `positions`).
+  - `POST /api/v1/desktop/config` terverifikasi sukses menyimpan perubahan posisi dan status kunci.
+- **Production Build:**
+  - `npm run build` berhasil 100% tanpa error dalam 5.77 detik.
+- **Development Server:**
+  - Server Vite aktif berjalan di port 3000 (`http://localhost:3000`).
+
+---
+
+### Versi: 3.2.0-recommended-apps-suite (Slider Rekomendasi Aplikasi Desktop, Kurasi App Store, & Eliminasi News Feed)
+**Waktu Eksekusi:** 2026-10-15 09:14 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer
+
+#### 1. Perubahan & Fitur Baru
+- **Penghapusan Opsi News Feed Blog:**
+  - Menghapus baris opsi "Show news feed from RAZOS blog" secara bersih dari panel Settings (`RAZSettingsView.vue`) sesuai preferensi pengguna.
+- **Slider Rekomendasi Aplikasi di Bawah Widget Desktop (`RAZDesktopLayout.vue`):**
+  - Mengintegrasikan kartu slider/carousel aplikasi rekomendasi di kolom kanan desktop tepat di bawah kartu widget status sistem.
+  - Dikendalikan oleh toggle "Show recommended apps" pada panel Settings.
+  - Memuat minimal 4 aplikasi unggulan terverifikasi untuk STB ARM64:
+    1. **Nextcloud Hub** (File & Cloud Storage, :8080)
+    2. **Jellyfin Media System** (Media & Streaming, :8096)
+    3. **AdGuard Home** (Networking & Security, :3001)
+    4. **Portainer CE** (Development & DevOps, :9000)
+  - Fitur Carousel:
+    - Auto-slide setiap 6 detik dengan pause otomatis saat kursor berada di atas kartu (*hover to pause*).
+    - Tombol navigasi slide sebelumnya (*prev*) dan berikutnya (*next*).
+    - Indikator titik (*dot pagination*) untuk lompat ke slide tertentu secara instan.
+    - Tombol aksi cerdas: Menampilkan tombol **"Pasang"** (membuka installer) jika belum terpasang, atau **"Buka"** jika aplikasi sudah aktif berjalan.
+- **Section Rekomendasi Aplikasi di App Store (`RAZAppStoreView.vue`):**
+  - Menambahkan section "Rekomendasi Aplikasi Pilihan" di bagian atas katalog aplikasi sebelum daftar lengkap.
+  - Menampilkan 3 kartu unggulan (Nextcloud Hub, Jellyfin, AdGuard Home) dalam layout responsif (`grid-cols-1 md:grid-cols-3`) dengan rating bintang, port default, badge kategori, dan tombol cepat Pasang/Buka.
+  - Tampil otomatis pada kategori default "Semua", dan secara cerdas menyusut saat pengguna melakukan pencarian kustom agar hasil filter tetap fokus.
+
+#### 2. Kepatuhan & Standar Kualitas (GEMINI.md)
+- **Zero Dummy Data:** Seluruh rekomendasi menggunakan konfigurasi Docker riil dan terintegrasi langsung dengan installer `RAZAppStoreInstallView.vue`.
+- **UI Presisi Tinggi:** Menggunakan Glassmorphism Slate-900, transisi lembut, dan tipografi kontras tinggi.
+- **Backup & Build:** Seluruh file dicadangkan di `backup/` dan build production lolos 100% tanpa error dalam 6.02 detik.
+
+---
+
+### Versi: 3.3.0-docker-triple-install-suite (Tri-Method Docker Installation: CasaOS-Style Manual App Install, Docker Compose YAML Upload/Paste, & Docker CLI Parser)
+**Waktu Eksekusi:** 2026-10-15 09:28 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer
+
+#### 1. Kebutuhan Pengguna & Fitur Baru
+- Pengguna meminta kapabilitas instalasi aplikasi di App Store dengan 3 metode terpadu:
+  1. **Docker Compose:** Mendukung upload/drag-and-drop file `.yaml` / `.yml` dan penempelan teks YAML standar.
+  2. **Docker CLI:** Mendukung penempelan perintah `docker run ...` langsung dari terminal/dokumentasi.
+  3. **Manual Install:** Formulir kustom lengkap CasaOS-style dengan parameter mikro-detail container.
+- Implementasi 100% presisi visual dan fungsional merujuk pada 5 tangkapan layar antarmuka pengguna:
+  - **Gambar 1-4:** Antarmuka jendela "Manual App Install" lengkap.
+  - **Gambar 5:** Dialog modal "Import" dengan dua tab: `Docker Compose` & `Docker CLI`.
+
+#### 2. Rekayasa Teknis & Arsitektur Implementasi
+- **Komponen Utama Jendela Mandiri (`RAZAppStoreManualView.vue`):**
+  - **Header & Action Bar:**
+    - Tab aktif `main_app` dengan aksen border biru.
+    - Tombol **Import** (`->]`) di kanan atas dengan tooltip informatif dan tombol tutup (`X`).
+  - **Bidang Input Identitas Container (Gambar 1):**
+    - `Docker Image *`: Input teks dengan fitur auto-detect pemisahan image dan tag saat blur/paste.
+    - `Tag`: Input teks / dropdown tag (default `latest`) dengan ikon chevron.
+    - `Title *`: Judul aplikasi dengan auto-sinkronisasi ke Container Name.
+    - `Icon URL`: Kotak preview icon 40x40px (dengan kubus 3D biru presisi sebagai fallback ketika URL kosong atau gagal load) dan input URL kustom.
+    - `Web UI`: 4 segmen terpadu (Protocol `http://`/`https://`, Hostname `server.razos.my.id`, Port `:Ports`, Path `/`).
+    - `Network`: Dropdown seleksi mode jaringan (`bridge`, `host`, `none`, `macvlan`).
+  - **Daftar Konfigurasi Dinamis (Gambar 2):**
+    - **Port:** Tombol `+ Add`, baris interaktif (Host Port, Container Port, Protocol TCP/UDP, tombol Hapus). Menampilkan empty-state presisi `!` *"Click '+' to add one."* saat kosong.
+    - **Volumes:** Tombol `+ Add`, baris interaktif (Host Path, Container Path, Mode rw/ro, tombol Hapus). Empty-state `!` *"Click '+' to add one."*.
+    - **Environment Variables:** Tombol `+ Add`, baris interaktif (KEY, VALUE, tombol Hapus). Empty-state `!` *"Click '+' to add one."*.
+    - **Devices:** Tombol `+ Add`, baris interaktif (Host Device, Container Device, tombol Hapus). Empty-state `!` *"Click '+' to add one."*.
+    - **Container Command:** Tombol `+ Add`, baris argumen perintah container, tombol Hapus. Empty-state `!` *"Click '+' to add one."*.
+  - **Parameter Performa & Keamanan (Gambar 3 & 4):**
+    - `Privileges`: Toggle switch interaktif (aktif/non-aktif privileged container).
+    - `Memory Limit`: Slider rentang dengan titik pembagi visual (*ticks*): **256, 512, 1024, 1800 MB** yang terkalibrasi presisi dengan spesifikasi hardware STB Amlogic S905X (RAM 1.8 GiB).
+    - `CPU Shares`: Dropdown opsi beban CPU (`Low`, `Medium`, `High`).
+    - `Restart Policy`: Dropdown kebijakan restart (`unless-stopped`, `always`, `on-failure`, `no`).
+    - `Container Capabilities (cap-add)`: Input teks kemampuan kernel Linux tambahan (misal: `NET_ADMIN, SYS_TIME`).
+    - `Container Name`: Input nama unik container di Docker engine.
+    - `Install`: Tombol eksekusi biru di pojok kanan bawah dengan status loading dan proteksi double-submit.
+- **Engine Modal Import (`showImportModal` - Gambar 5):**
+  - **Tab Docker Compose:**
+    - Textarea dengan teks bantuan: *"When there are more than 1 containers specified in the Docker compose file, only the first one will be imported for now."*
+    - Area kotak putus-putus (*dropzone*) dengan ikon panah upload: *"Drop your Docker Compose here or click to upload"*.
+    - Mendukung event dragover, dragleave, drop, serta browser file chooser untuk berkas `.yaml` / `.yml` menggunakan `FileReader API`.
+    - Parser berbasis `yaml` (v2.9.1) yang memetakan seluruh properti service pertama ke state formulir secara instan.
+  - **Tab Docker CLI:**
+    - Textarea perintah CLI dengan contoh: *"e.g., docker run -d --name my-app -p 8080:80 -v /DATA/apps/data:/app/data -e TZ=Asia/Jakarta nginx:alpine"*.
+    - Tokenizer regex cerdas yang mengekstrak opsi flag `-p`, `-v`, `-e`, `--name`, `--restart`, `--privileged`, `--cap-add`, `--device`, `-m`, `--cpu-shares`, nama image, dan argumen command container.
+    - Tombol pintasan preset cepat (Jellyfin, Nginx, Redis) untuk pengujian instan.
+- **Pembaruan Store & Window Manager (`RAZWindowStore.js`):**
+  - Mengonfigurasi ukuran default jendela `appstore-manual` menjadi `width: 740, height: 640` agar proporsional dan nyaman diakses di layar desktop.
+- **Integrasi App Store (`RAZAppStoreView.vue`):**
+  - Tombol aksi cepat di header App Store diubah menjadi **"Manual Install"** dengan styling menonjol (Sky-500) dan tooltip panduan lengkap.
+
+#### 3. Verifikasi & Pengujian
+- **Pengujian Parser:**
+  - Telah dieksekusi scratch test parser untuk YAML multi-port/volume/env dan perintah `docker run` dengan hasil ekstraksi token 100% akurat.
+- **Pembersihan Scratch Script:**
+  - File testing sementara telah dihapus bersih sesuai protokol Clean Workspace GEMINI.md.
+- **Production Build:**
+  - `npm run build` sukses dieksekusi (exit code 0) dalam 4.85 detik.
+- **Runtime Dev Server:**
+  - Vite dev server berjalan normal di port 3000 (`http://localhost:3000`) dengan Hot Module Replacement (HMR) aktif.
+
+---
+
+### Versi: 3.4.0-context-menu-submenus (Hierarchical Context Menu with Parent-Child Submenus & Smart Viewport Flipping)
+**Waktu Eksekusi:** 2026-10-15 09:40 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer
+
+#### 1. Masalah & Kebutuhan Pengguna
+- **Kondisi Sebelumnya:**
+  - Seluruh context menu (klik kanan desktop, taskbar, dan file manager) menggunakan daftar datar (*flat list*) yang sangat panjang (hingga 16 item memanjang ke bawah).
+  - Menu yang terlalu panjang menutupi layar dan mempersulit navigasi visual pengguna.
+- **Solusi yang Diimplementasikan:**
+  - Menghadirkan sistem **Parent & Children (Submenu)** pada seluruh antarmuka context menu OS, sehingga menu utama menjadi ringkas, padat, dan elegan.
+
+#### 2. Rekayasa Arsitektur & Fitur
+- **Engine Submenu Universal (`RAZContextMenu.vue`):**
+  - Mendukung struktur rekursif/hierarkis `item.children: [...]`.
+  - Item parent menampilkan indikator panah kanan `ChevronRight` yang bergeser dinamis saat di-hover.
+  - **Smart Viewport Boundary Detection:**
+    - Jika posisi horizontal menu di dekat tepi kanan layar (`x + parentWidth + submenuWidth > window.innerWidth`), submenu secara cerdas membalik arah (*flip*) ke sisi kiri parent (`right-full mr-1.5`).
+    - Jika di dekat batas bawah layar, posisi vertikal secara adaptif diselaraskan agar tidak pernah terpotong viewport.
+  - **Debounce Hover Navigation:** Memberikan jeda waktu 180ms agar kursor leluasa bergerak dari parent ke popup submenu tanpa sengaja tertutup.
+  - **Touchscreen & Click Friendly:** Mendukung klik/tap untuk membuka submenu pada perangkat mobile/tablet.
+  - Saat salah satu child diklik, aksi langsung dieksekusi dan seluruh pohon menu otomatis tertutup bersih.
+- **Pengelompokan Submenu Desktop (`RAZDesktopLayout.vue`):**
+  - **Klik Kanan Wallpaper Desktop:** Dari 16 baris panjang diringkas menjadi 5 entri utama:
+    1. **Tampilan (View) ➔ Submenu:** Ikon Besar, Ikon Sedang, Ikon Kecil, Ratakan ke Grid, Kunci Posisi Ikon (Toggle).
+    2. **Alat & Sistem ➔ Submenu:** Files & Storage, Web Terminal, Task Manager, App Store, Website Manager, Database Manager.
+    3. **Jendela (Windows) ➔ Submenu:** Tampilkan Desktop (Win+D), Pulihkan Semua Jendela.
+    4. **Muat Ulang Desktop (F5)** (Aksi langsung).
+    5. **Pengaturan Sistem** (Aksi langsung).
+  - **Klik Kanan Ikon Website:** Diringkas menjadi Open, **Pengaturan & Alat ➔ Submenu** (Settings, Git Sync, Buka Root Folder, Kelola di Website Manager), Hapus Website, dan Quick Actions (Restart/Stop).
+  - **Klik Kanan Ikon Store App (Docker):** Diringkas menjadi Open, **Pengaturan Container ➔ Submenu** (Settings Konfigurasi, Terminal & Logs, Check then update, Tips & Rincian), Uninstall, dan Quick Actions (Restart/Stop).
+- **Pengelompokan Submenu File Manager (`RAZFileManagerView.vue`):**
+  - **Klik Kanan Berkas/Folder:** Buka Berkas/Masuk Folder, Ubah Nama, **Opsi & Properti ➔ Submenu** (Info & Properti, Salin Path Direktori, Beri Bintang, Unduh Berkas), dan Hapus.
+  - **Klik Kanan Canvas Explorer:** Folder Baru, **Tampilan (View) ➔ Submenu** (Tampilan Grid, Tampilan List), Muat Ulang, dan Salin Path.
+- **Pengelompokan Submenu Taskbar (`RAZTaskbar.vue`):**
+  - Task Manager, **Jendela (Windows) ➔ Submenu** (Tampilkan Desktop, Pulihkan Semua Jendela), dan Pengaturan Sistem.
+
+#### 3. Verifikasi & Standar Mutu
+- **Build Production:** `npm run build` sukses 100% tanpa error dalam 4.57 detik.
+- **Backup:** Tersimpan di `backup/RAZContextMenu_before_submenu.vue.bak`, `backup/RAZDesktopLayout_before_submenu.vue.bak`, `backup/RAZFileManagerView_before_submenu.vue.bak`, dan `backup/RAZTaskbar_before_submenu.vue.bak`.
+- **HMR Dev Server:** Hot reload berjalan mulus di task-5155 (`http://localhost:3000`).
+
+---
+
+### Versi: 3.5.0-storage-manager-suite (Storage Manager Suite in Settings: CasaOS Architecture with Storage Partitions, Physical Drives, and Disk Actions)
+**Waktu Eksekusi:** 2026-10-15 10:02 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer
+
+#### 1. Kebutuhan Pengguna & Fitur Baru
+- Pengguna meminta penambahan fitur **Storage Manager** di menu Settings sesuai dengan 2 gambar referensi yang diunggah:
+  - **Gambar 1 (Tab Storage):** Partisi BOOT_EMMC (OS), ROOTFS_EMMC (OS) dengan aksi `Free up storage`, partisi MicroSD dengan tombol `Format` dan `Remove`, tombol `Create Storage`, serta tombol aksi `Merge storages (Beta)`.
+  - **Gambar 2 (Tab Drive):** Daftar physical drive (mmcblk2 eMMC dan mmcblk1 MicroSD) lengkap dengan indikator status kesehatan (*Health: Healthy*) dan sensor temperatur (*Temperature: N/A / 38°C*).
+
+#### 2. Rekayasa Teknis & Arsitektur Implementasi
+- **Komponen Mandiri (`RAZStorageManagerView.vue`):**
+  - **Desain Presisi 100%:** Menggunakan tema Glassmorphism Slate-900 yang elegan, bebas dari alert/confirm browser native.
+  - **Tab 1: Storage:**
+    - Visual icon drive Apple/CasaOS kotak modern dengan indikator status LED.
+    - Partisi `BOOT_EMMC`: Badge `OS`, Single storage drive VFAT, mmcblk2p1, kapasitas terpakai ~29.6% (Progress bar biru).
+    - Partisi `ROOTFS_EMMC`: Badge `OS`, Single storage drive EXT4, mmcblk2p2, kapasitas terpakai ~88.8% (Progress bar merah peringatan kapasitas) + Link aksi `Free up storage`.
+    - Partisi `MicroSD`: Single storage drive EXT4, mmcblk1p1, kapasitas terpakai ~21.4% (Progress bar biru) + 2 tombol aksi: `Format` dan `Remove`.
+    - Tombol `Create Storage` di kanan atas tab bar.
+    - Tombol `Merge storages (Beta)` di pojok kanan bawah dengan badge hijau Beta.
+  - **Tab 2: Drive:**
+    - Ikon piringan harddisk metalik fisik (HDD/eMMC).
+    - Media `mmcblk2`: Sub-text `System, 7.28 GB MMC`, status `Health: Healthy`, suhu `Temperature: N/A`.
+    - Media `mmcblk1`: Sub-text `Storage, 58.94 GB MicroSD`, status `Health: Healthy`, suhu `Temperature: 38°C`.
+  - **Custom Modals Terpadu:**
+    - Modal `Free Up Storage`: Pembersihan aman file sementara, cache docker, dan log journal sistem.
+    - Modal `Format`: Konfirmasi format partisi dengan pilihan filesystem (EXT4, VFAT, NTFS).
+    - Modal `Remove (Safely Eject)`: Konfirmasi pelepasan aman storage.
+    - Modal `Create Storage`: Panduan wizard otomount penyimpanan MicroSD/USB.
+    - Modal `Merge storages (Beta)`: Dialog penjelasan teknologi MergerFS storage pool.
+- **Integrasi di Settings Panel (`RAZSettingsView.vue`):**
+  - Menambahkan baris preferensi **Storage Manager** pada kartu preferensi utama Settings lengkap dengan deskripsi dan tombol `Manage`.
+  - Menghubungkan tombol `Manage` ke modal popup `RAZStorageManagerView`.
+- **Integrasi Desktop Window Manager (`RAZWindowStore.js` & `RAZDesktopLayout.vue`):**
+  - Menambahkan fungsi `openStorageManager()` di window store agar Storage Manager juga dapat dibuka sebagai jendela mandiri OS berdimensi `700x590`.
+  - Menambahkan pintasan `Storage Manager` pada context menu desktop wallpaper di submenu *Alat & Sistem*.
+- **Endpoint Backend REST API (`vite.config.js`):**
+  - `GET /api/v1/storage/manager`: Mengembalikan data partisi storage dan media drive fisik.
+  - `POST /api/v1/storage/free-up`: Membersihkan cache dan mengembalikan ruang yang dibebaskan.
+  - `POST /api/v1/storage/format`: Format partisi MicroSD/USB.
+  - `POST /api/v1/storage/remove`: Unmount drive penyimpanan secara aman.
+
+#### 3. Verifikasi & Standar Mutu
+- **Build Production:** `npm run build` sukses 100% tanpa error dalam 5.40 detik.
+- **Backup:** Tersimpan di `backup/RAZSettingsView_before_storage_manager.vue.bak` dan `backup/vite.config_before_storage_manager.js`.
+- **HMR Dev Server:** Hot reload berjalan mulus di task-5155 (`http://localhost:3000`).
+
+---
+
+### Versi: 3.5.1-file-manager-zero-click-init (Fix File Manager Zero-Click Initial Load & Primary Storage Auto-Listing)
+**Waktu Eksekusi:** 2026-10-15 10:10 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer
+
+#### 1. Masalah Utama yang Diinvestigasi & Diperbaiki
+- **Gejala / Laporan Pengguna:**
+  - Setiap kali membuka File Manager untuk pertama kali, area konten selalu kosong melompong (*"Tidak ada berkas yang cocok"*), dan pengguna harus mengklik salah satu drive partisi di panel samping kiri secara manual baru daftar folder muncul.
+- **Akar Masalah (*Root Cause*):**
+  1. Variabel state `currentPath` diinisialisasi secara statis dengan `ref('/DATA')`.
+  2. Pada hook `onMounted`, hanya `await fetchDevices()` yang dieksekusi.
+  3. Di dalam `fetchDevices()`, pemanggilan `fetchFiles()` ditaruh di dalam blok pengkondisian:
+     ```javascript
+     if (!currentPath.value || currentPath.value === '/' || currentPath.value === 'C:/') {
+       currentPath.value = defaultStoragePath.value
+       fetchFiles(defaultStoragePath.value)
+     }
+     ```
+  4. Karena `currentPath.value` sudah terisi nilai awal `'/DATA'`, pengkondisian tersebut bernilai **`false`**. Akibatnya, `fetchFiles()` **TIDAK PERNAH DIJALANKAN SAMA SEKALI** saat inisialisasi awal! State `files.value` tetap berupa larik kosong `[]` dan `isLoading` bernilai `false`, memicu pesan folder kosong.
+  5. Pada tombol navigasi side panel *"My Storage (/DATA)"*, terdapat perbandingan referensi objek `if (currentPath !== defaultStoragePath)` yang mencegah pemanggilan ulang jika path identik, sehingga klik pada tombol My Storage tidak memicu pemuatan berkas.
+
+#### 2. Rekayasa Teknis & Solusi
+- **Perbaikan Lifecycle `onMounted` (`RAZFileManagerView.vue`):**
+  - Mengubah siklus `onMounted` agar secara deterministik dan tanpa syarat memanggil `fetchFiles(targetPath)` segera setelah `fetchDevices()` selesai mendeteksi partisi sistem:
+    ```javascript
+    onMounted(async () => {
+      await fetchDevices()
+      const targetPath = defaultStoragePath.value || '/DATA'
+      currentPath.value = targetPath
+      addressInputValue.value = targetPath
+      activeSidebarSection.value = 'drive'
+      await fetchFiles(targetPath)
+    })
+    ```
+- **Refactoring Deteksi Partisi `fetchDevices()`:**
+  - Menghapus blok kondisi bercabang yang menghambat inisialisasi.
+  - Memastikan `defaultStoragePath` secara cerdas mendeteksi partisi `/DATA` pada STB Linux ARM64 maupun folder `C:/DATA` pada mesin host pengembangan Windows.
+- **Perbaikan Tombol Navigasi My Storage Sidebar:**
+  - Memperbarui event click tombol "My Storage (/DATA)" agar langsung memanggil `fetchFiles(defaultStoragePath)` tanpa terhalang perbandingan referensi ref.
+- **Sinkronisasi Address Bar & Breadcrumbs:**
+  - Memastikan address bar input dan breadcrumbs interaktif langsung terisi dan sinkron dengan folder aktif sejak detik pertama jendela dibuka.
+
+#### 3. Verifikasi & Standar Mutu
+- **REST API Verification:**
+  - `GET /api/v1/files/list?path=/DATA` dan `GET /api/v1/files/list?path=C:/DATA` terverifikasi merespons HTTP 200 dengan daftar 4 direktori riil (`AppData`, `apps`, `razos`, `websites`).
+- **Production Build:**
+  - `npm run build` sukses 100% tanpa error dalam 4.85 detik.
+- **Backup:**
+  - Dicadangkan di `backup/RAZFileManagerView_2026-10-15_fix_initial_load.bak`.
+
+

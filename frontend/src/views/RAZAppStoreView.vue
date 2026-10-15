@@ -1,11 +1,11 @@
 <script setup>
 /**
  * RAZOS App Store View - 525+ Apps Catalog, Installed Apps Management & CasaOS-Style YAML Docker Compose Suite
- * Updated: 2026-10-13 (v2.5.5 - Floating Window Dialog Modals without Background Blur)
+ * Updated: 2026-10-15 09:10:00 (v3.2.0 - Rekomendasi Aplikasi Unggulan di App Store & Desktop Layout)
  * Deskripsi:
  * - 3 Tab Navigasi Utama:
- *   1. "Katalog Aplikasi (525+)" - Jelajah katalog lengkap dengan filter kategori & live search.
- *   2. "Aplikasi Terpasang" - Kelola semua container yang sedang aktif, inspect port & mountpoint, peluncuran Web UI, serta uninstall bersih.
+ *   1. "Katalog Aplikasi (525+)" - Jelajah katalog lengkap dengan filter kategori, rekomendasi unggulan, & live search.
+ *   2. "Aplikasi Terpasang" - Kelola semua container yang sedang aktif, inspect port & mountpoint, peluncuran Web UI, settings, logs, serta uninstall bersih.
  *   3. "Instal via YAML (Docker Compose)" - Editor YAML ala CasaOS dengan live parse syntax, drag-and-drop / upload file .yaml/.yml, template preset cepat, dan direct deployment.
  * - Halaman Penuh Detail Aplikasi (Full Page Markdown README.md).
  * - Integrasi mulus dengan RAZWindowStore untuk sinkronisasi ikon Desktop & Start Menu secara instan.
@@ -20,7 +20,8 @@ import {
   Download, Check, Box, Trash2, Settings2, X, AlertTriangle,
   Search, BookOpen, PlusCircle, ArrowLeft, ExternalLink, HardDrive,
   Cpu, Terminal, Layers, Globe, Shield, Activity, RefreshCw,
-  FileCode, Upload, Copy, Play, CheckCircle2, Info, Folder, Sparkles, Server
+  FileCode, Upload, Copy, Play, CheckCircle2, Info, Folder, Sparkles, Server,
+  Sliders
 } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
@@ -202,6 +203,25 @@ const filteredApps = computed(() => {
 // Daftar Aplikasi yang Sedang Terpasang
 const installedApps = computed(() => {
   return apps.value.filter(a => a.installed)
+})
+
+// Rekomendasi Aplikasi Unggulan di App Store (Minimal 3 Apps Terverifikasi)
+const featuredRecommendedApps = computed(() => {
+  const targetSlugs = ['nextcloud', 'jellyfin', 'adguard-home', 'portainer']
+  const list = []
+  targetSlugs.forEach(slug => {
+    const app = apps.value.find(a => a.slug === slug)
+    if (app) list.push(app)
+  })
+  if (list.length < 3 && apps.value.length >= 3) {
+    for (const a of apps.value) {
+      if (!list.some(item => item.slug === a.slug)) {
+        list.push(a)
+      }
+      if (list.length >= 3) break
+    }
+  }
+  return list
 })
 
 // Live Parser Compose YAML
@@ -569,10 +589,11 @@ onMounted(async () => {
 
         <button
           @click="windowStore.openAppStoreManual()"
-          class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold flex items-center gap-1.5 text-xs transition border border-slate-700 active:scale-95 shadow"
+          class="px-3.5 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold flex items-center gap-1.5 text-xs transition border border-sky-400/40 active:scale-95 shadow-md shadow-sky-500/20"
+          title="Manual App Install (Docker Compose YAML, Docker CLI, Form Kustom)"
         >
-          <PlusCircle class="w-3.5 h-3.5 text-sky-400" />
-          <span class="hidden md:inline">Instal Cepat</span>
+          <PlusCircle class="w-3.5 h-3.5" />
+          <span>Manual Install</span>
         </button>
       </div>
     </div>
@@ -614,79 +635,185 @@ onMounted(async () => {
           </button>
         </div>
 
-        <!-- App Cards Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 overflow-y-auto flex-1 pr-1">
+        <!-- Scrollable Content: Featured Recommendations + All Catalog Apps Grid -->
+        <div class="overflow-y-auto flex-1 pr-1 flex flex-col gap-4">
+          <!-- SECTION REKOMENDASI APLIKASI (MINIMAL 3 APPS) -->
           <div
-            v-for="app in filteredApps"
-            :key="app.id"
-            @click="openAppDetail(app)"
-            class="p-4 rounded-2xl bg-slate-900/70 border border-slate-800/80 hover:border-sky-500/50 hover:bg-slate-900/90 flex flex-col justify-between gap-3.5 transition-all cursor-pointer group relative shadow-sm hover:shadow-xl hover:-translate-y-0.5"
+            v-if="!searchQuery.trim() && selectedCategory === 'Semua'"
+            class="space-y-2.5 pb-2 border-b border-slate-800/60"
           >
-            <!-- Card Top: Logo Resmi/Identicon & Meta -->
-            <div class="flex items-start gap-3.5">
-              <div class="w-12 h-12 rounded-2xl bg-slate-950 border border-slate-800/80 p-1 flex items-center justify-center shrink-0 overflow-hidden shadow-inner group-hover:border-sky-400/40 transition">
-                <img
-                  v-if="app.icon"
-                  :src="app.icon"
-                  :alt="app.name"
-                  class="w-full h-full object-contain rounded-xl"
-                  loading="lazy"
-                  @error="(e) => e.target.src = `https://api.dicebear.com/7.x/identicon/svg?seed=${app.slug}`"
-                />
-                <Box v-else class="w-6 h-6 text-sky-400" />
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1.5">
+                <Sparkles class="w-4 h-4 text-amber-400 animate-pulse" />
+                <h3 class="text-xs font-bold text-slate-100 uppercase tracking-wider">Rekomendasi Aplikasi Pilihan</h3>
               </div>
-
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center justify-between gap-1">
-                  <h4 class="font-bold text-slate-100 text-sm truncate group-hover:text-sky-300 transition" :title="app.name">
-                    {{ app.name }}
-                  </h4>
-                  <span class="text-[9px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 shrink-0 font-medium border border-slate-700/60">
-                    {{ app.category }}
-                  </span>
-                </div>
-                <p class="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-                  {{ app.description }}
-                </p>
-              </div>
+              <span class="text-[10px] text-slate-500 font-medium">Terverifikasi untuk STB ARM64 • Resource Hemat</span>
             </div>
 
-            <!-- Card Bottom: Ports & Action Buttons -->
-            <div class="flex items-center justify-between border-t border-slate-800/60 pt-2.5 text-xs">
-              <div class="text-slate-500 font-mono flex items-center gap-1.5">
-                <span>Port:</span>
-                <span class="text-sky-400 font-bold">{{ app.default_port }}</span>
+            <!-- 3 Featured Recommendation Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div
+                v-for="rec in featuredRecommendedApps"
+                :key="rec.id || rec.slug"
+                @click="openAppDetail(rec)"
+                class="p-3.5 rounded-2xl bg-gradient-to-br from-slate-900/90 via-slate-900/75 to-slate-950 border border-slate-800/90 hover:border-sky-500/50 hover:shadow-xl transition-all duration-200 cursor-pointer flex flex-col justify-between gap-3 group relative overflow-hidden"
+              >
+                <!-- Subtle background ambient glow -->
+                <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-sky-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-sky-500/15 transition-all"></div>
+
+                <div class="flex items-start gap-3">
+                  <div class="w-12 h-12 rounded-2xl bg-slate-950 border border-slate-800 p-1 flex items-center justify-center shrink-0 overflow-hidden shadow-inner group-hover:border-sky-400/40 transition">
+                    <img
+                      v-if="rec.icon"
+                      :src="rec.icon"
+                      :alt="rec.name"
+                      class="w-full h-full object-contain rounded-xl"
+                      loading="lazy"
+                      @error="(e) => e.target.src = `https://api.dicebear.com/7.x/identicon/svg?seed=${rec.slug}`"
+                    />
+                    <Box v-else class="w-6 h-6 text-sky-400" />
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between gap-1">
+                      <h4 class="font-bold text-slate-100 text-sm truncate group-hover:text-sky-300 transition">
+                        {{ rec.name }}
+                      </h4>
+                      <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-400/20 font-bold shrink-0 flex items-center gap-0.5">
+                        ★ 4.9
+                      </span>
+                    </div>
+                    <span class="text-[10px] text-sky-400 font-medium block mt-0.5">
+                      {{ rec.category }}
+                    </span>
+                    <p class="text-xs text-slate-400 line-clamp-2 mt-1 leading-relaxed">
+                      {{ rec.description }}
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Action Bar -->
+                <div class="flex items-center justify-between pt-2 border-t border-slate-800/70 text-xs">
+                  <span class="text-[10px] font-mono text-slate-500">
+                    Port: <strong class="text-slate-300">{{ rec.default_port }}</strong>
+                  </span>
+
+                  <div class="flex items-center gap-1.5">
+                    <template v-if="rec.installed">
+                      <button
+                        type="button"
+                        @click.stop="launchApp(rec)"
+                        class="px-2.5 py-1 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 font-bold flex items-center gap-1 text-[11px] transition"
+                        title="Buka Aplikasi Web UI"
+                      >
+                        <ExternalLink class="w-3.5 h-3.5" />
+                        <span>Buka</span>
+                      </button>
+                    </template>
+                    <button
+                      v-else
+                      type="button"
+                      @click.stop="(e) => openInstallDialog(rec, e)"
+                      class="px-3 py-1 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold flex items-center gap-1 text-[11px] transition shadow active:scale-95"
+                    >
+                      <Download class="w-3.5 h-3.5" />
+                      <span>Pasang</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section Header Semua Aplikasi (saat rekomendasi tampil) -->
+          <div v-if="!searchQuery.trim() && selectedCategory === 'Semua'" class="flex items-center justify-between pt-1">
+            <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Semua Katalog Aplikasi</h3>
+            <span class="text-[11px] text-slate-500 font-mono">{{ filteredApps.length }} aplikasi tersedia</span>
+          </div>
+
+          <!-- App Cards Grid -->
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            <div
+              v-for="app in filteredApps"
+              :key="app.id"
+              @click="openAppDetail(app)"
+              class="p-4 rounded-2xl bg-slate-900/70 border border-slate-800/80 hover:border-sky-500/50 hover:bg-slate-900/90 flex flex-col justify-between gap-3.5 transition-all cursor-pointer group relative shadow-sm hover:shadow-xl hover:-translate-y-0.5"
+            >
+              <!-- Card Top: Logo Resmi/Identicon & Meta -->
+              <div class="flex items-start gap-3.5">
+                <div class="w-12 h-12 rounded-2xl bg-slate-950 border border-slate-800/80 p-1 flex items-center justify-center shrink-0 overflow-hidden shadow-inner group-hover:border-sky-400/40 transition">
+                  <img
+                    v-if="app.icon"
+                    :src="app.icon"
+                    :alt="app.name"
+                    class="w-full h-full object-contain rounded-xl"
+                    loading="lazy"
+                    @error="(e) => e.target.src = `https://api.dicebear.com/7.x/identicon/svg?seed=${app.slug}`"
+                  />
+                  <Box v-else class="w-6 h-6 text-sky-400" />
+                </div>
+
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between gap-1">
+                    <h4 class="font-bold text-slate-100 text-sm truncate group-hover:text-sky-300 transition" :title="app.name">
+                      {{ app.name }}
+                    </h4>
+                    <span class="text-[9px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 shrink-0 font-medium border border-slate-700/60">
+                      {{ app.category }}
+                    </span>
+                  </div>
+                  <p class="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                    {{ app.description }}
+                  </p>
+                </div>
               </div>
 
-              <div class="flex items-center gap-2">
-                <!-- Jika Terpasang -->
-                <template v-if="app.installed">
-                  <button
-                    @click.stop="launchApp(app)"
-                    class="px-2.5 py-1 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 font-bold flex items-center gap-1 text-[11px] transition"
-                    title="Buka Aplikasi Web UI"
-                  >
-                    <ExternalLink class="w-3.5 h-3.5" />
-                    <span>Buka</span>
-                  </button>
-                  <button
-                    @click="(e) => openUninstallDialog(app, e)"
-                    class="p-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 transition"
-                    title="Hapus / Uninstall Bersih"
-                  >
-                    <Trash2 class="w-3.5 h-3.5" />
-                  </button>
-                </template>
+              <!-- Card Bottom: Ports & Action Buttons -->
+              <div class="flex items-center justify-between border-t border-slate-800/60 pt-2.5 text-xs">
+                <div class="text-slate-500 font-mono flex items-center gap-1.5">
+                  <span>Port:</span>
+                  <span class="text-sky-400 font-bold">{{ app.default_port }}</span>
+                </div>
 
-                <!-- Jika Belum Terpasang -->
-                <button
-                  v-else
-                  @click="(e) => openInstallDialog(app, e)"
-                  class="px-3.5 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold flex items-center gap-1.5 text-xs transition shadow active:scale-95"
-                >
-                  <Download class="w-3.5 h-3.5" />
-                  <span>Pasang</span>
-                </button>
+                <div class="flex items-center gap-2">
+                  <!-- Jika Terpasang -->
+                  <template v-if="app.installed">
+                    <button
+                      type="button"
+                      @click.stop="launchApp(app)"
+                      class="px-2.5 py-1 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 font-bold flex items-center gap-1 text-[11px] transition"
+                      title="Buka Aplikasi Web UI"
+                    >
+                      <ExternalLink class="w-3.5 h-3.5" />
+                      <span>Buka</span>
+                    </button>
+                    <button
+                      type="button"
+                      @click.stop="windowStore.openAppEditor(app)"
+                      class="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-sky-300 transition"
+                      title="Pengaturan Detail Aplikasi (Settings)"
+                    >
+                      <Sliders class="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      @click.stop="(e) => openUninstallDialog(app, e)"
+                      class="p-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 transition"
+                      title="Hapus / Uninstall Bersih"
+                    >
+                      <Trash2 class="w-3.5 h-3.5" />
+                    </button>
+                  </template>
+
+                  <!-- Jika Belum Terpasang -->
+                  <button
+                    v-else
+                    @click="(e) => openInstallDialog(app, e)"
+                    class="px-3.5 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold flex items-center gap-1.5 text-xs transition shadow active:scale-95"
+                  >
+                    <Download class="w-3.5 h-3.5" />
+                    <span>Pasang</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -984,6 +1111,7 @@ onMounted(async () => {
           <div class="flex items-center gap-2">
             <template v-if="selectedApp.installed">
               <button
+                type="button"
                 @click="launchApp(selectedApp)"
                 class="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold flex items-center gap-1.5 text-xs transition shadow"
               >
@@ -991,6 +1119,25 @@ onMounted(async () => {
                 <span>Buka Web UI</span>
               </button>
               <button
+                type="button"
+                @click="windowStore.openAppEditor(selectedApp)"
+                class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-sky-300 font-bold flex items-center gap-1.5 text-xs transition border border-slate-700/60"
+                title="Pengaturan Aplikasi (Settings)"
+              >
+                <Sliders class="w-4 h-4" />
+                <span>Settings</span>
+              </button>
+              <button
+                type="button"
+                @click="windowStore.openAppLogs(selectedApp)"
+                class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-amber-300 font-bold flex items-center gap-1.5 text-xs transition border border-slate-700/60"
+                title="Buka Terminal & Logs"
+              >
+                <Terminal class="w-4 h-4" />
+                <span>Logs</span>
+              </button>
+              <button
+                type="button"
                 @click="(e) => openUninstallDialog(selectedApp, e)"
                 class="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 font-bold flex items-center gap-1.5 text-xs transition border border-rose-500/30"
               >

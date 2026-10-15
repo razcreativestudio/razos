@@ -2,6 +2,7 @@
 /**
  * RAZOS Website Git Sync Window Component
  * Created: 2026-10-13 (v2.6.0 - Standalone Window Architecture)
+ * Updated: 2026-10-14 15:10:00 (v2.9.8 Hotfix: Tambahkan type="button" eksplisit untuk semua tombol aksi non-submit)
  * Deskripsi: Komponen pengelolaan GitHub & Git Pull mandiri.
  * Berjalan sebagai Jendela OS terpisah (tidak memblokir/mengganggu Website Manager).
  */
@@ -143,6 +144,7 @@ onMounted(() => {
           <span class="font-mono text-slate-300 truncate block">{{ site.root_folder }}</span>
         </div>
         <button
+          type="button"
           @click="openWebsiteFolder"
           class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-medium flex items-center gap-1 transition"
         >
@@ -210,7 +212,7 @@ onMounted(() => {
             <Terminal class="w-3 h-3 text-sky-400" />
             <span>Status Log Tarikan Kode (Pull Output)</span>
           </span>
-          <button @click="gitModalLogs = ''" class="hover:text-slate-200 text-[10px]">Bersihkan</button>
+          <button type="button" @click="gitModalLogs = ''" class="hover:text-slate-200 text-[10px]">Bersihkan</button>
         </div>
         <pre class="bg-black/90 p-3 rounded-xl border border-slate-800 text-[10px] font-mono text-emerald-400 whitespace-pre-wrap max-h-40 overflow-y-auto leading-relaxed">{{ gitModalLogs }}</pre>
       </div>
@@ -219,6 +221,7 @@ onMounted(() => {
     <!-- Window Footer Actions -->
     <div class="flex items-center justify-between border-t border-slate-800 pt-3 shrink-0">
       <button
+        type="button"
         @click="windowStore.closeWindow(win.id)"
         class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
       >
@@ -227,12 +230,14 @@ onMounted(() => {
 
       <div class="flex items-center gap-2">
         <button
+          type="button"
           @click="saveGitModalConfig"
           class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-400 border border-sky-500/30 text-xs font-bold transition active:scale-95"
         >
           Simpan Pengaturan
         </button>
         <button
+          type="button"
           @click="executeGitPull"
           :disabled="gitModalIsPulling || !gitModalRepo"
           class="px-4 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition shadow-lg shadow-sky-500/20 active:scale-95 disabled:opacity-50"
