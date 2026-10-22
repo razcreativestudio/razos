@@ -8,15 +8,20 @@
 import { ref, onMounted } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
 import { useAuthStore } from '../stores/RAZAuthStore'
+import { useWindowStore } from '../stores/RAZWindowStore'
+import { useCloudStore } from '../stores/RAZCloudStore'
 import RAZStorageManagerView from './RAZStorageManagerView.vue'
 import {
   User, Sliders, LayoutGrid, Clock, Activity, HardDrive, Network,
   RefreshCw, Power, ArrowUpCircle, Check, Pencil, Image, CheckCircle2,
-  X, AlertTriangle, LogOut, Sparkles, ExternalLink, ShieldCheck, Database
+  X, AlertTriangle, LogOut, Sparkles, ExternalLink, ShieldCheck, Database,
+  Users, Cloud, CloudUpload, Shield, Key
 } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
 const authStore = useAuthStore()
+const windowStore = useWindowStore()
+const cloudStore = useCloudStore()
 
 // Tab Aktif: 'account' | 'settings' | 'widgets'
 const activeTab = ref('settings')
@@ -283,10 +288,18 @@ onMounted(() => {
               <Check class="w-4 h-4 stroke-[3]" />
             </div>
           </div>
-          <p class="mt-3 text-sm font-semibold text-slate-200 capitalize">
-            {{ authStore.currentUser?.username || systemStore.settings.account.name || 'raz' }}
+          <p class="mt-3 text-sm font-semibold text-slate-200 capitalize flex items-center gap-2">
+            <span>{{ authStore.currentUser?.name || authStore.currentUser?.username || systemStore.settings.account.name || 'raz' }}</span>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded-full uppercase font-bold border" :class="{
+              'bg-purple-500/20 text-purple-300 border-purple-500/30': authStore.isAdmin(),
+              'bg-sky-500/20 text-sky-300 border-sky-500/30': authStore.isOperator(),
+              'bg-emerald-500/20 text-emerald-300 border-emerald-500/30': authStore.isMember(),
+              'bg-amber-500/20 text-amber-300 border-amber-500/30': authStore.isGuest()
+            }">
+              {{ authStore.currentUser?.role || 'admin' }}
+            </span>
           </p>
-          <span class="text-[11px] text-slate-400">Administrator Perangkat STB</span>
+          <span class="text-[11px] text-slate-400 font-mono mt-0.5">Home: {{ authStore.getUserHomeDir() }}</span>
         </div>
 
         <!-- Account Credentials List Card -->
@@ -319,6 +332,28 @@ onMounted(() => {
                 <Pencil class="w-3.5 h-3.5" />
               </button>
             </div>
+          </div>
+        </div>
+
+        <!-- RBAC & User Management Card -->
+        <div class="rounded-2xl bg-gradient-to-br from-slate-900/90 to-purple-950/20 border border-purple-800/30 p-5 shadow-lg flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center border border-purple-500/30">
+                <Users class="w-5 h-5" />
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-slate-100">Manajemen Pengguna & RBAC</h3>
+                <p class="text-[11px] text-slate-400">Kelola pengguna multi-user, izin peran, dan pembatasan direktori</p>
+              </div>
+            </div>
+            <button
+              @click="windowStore.openUsersManager()"
+              class="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow transition active:scale-95 flex items-center gap-2"
+            >
+              <span>Kelola Pengguna</span>
+              <ExternalLink class="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </div>
@@ -448,6 +483,22 @@ onMounted(() => {
             >
               <HardDrive class="w-3.5 h-3.5" />
               <span>Manage</span>
+            </button>
+          </div>
+
+          <!-- Row 10: Cloud Storage & Sync (rclone WebDAV / Nextcloud) -->
+          <div class="flex items-center justify-between px-5 py-3.5">
+            <div class="space-y-0.5">
+              <span class="text-sm font-medium text-slate-200">Sinkronisasi Cloud Eksternal</span>
+              <p class="text-[11px] text-slate-400">Integrasi WebDAV / Nextcloud remote storage via rclone</p>
+            </div>
+            <button
+              type="button"
+              @click="windowStore.openCloudSync()"
+              class="px-4 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-400 border border-sky-500/30 font-bold text-xs transition shadow-sm active:scale-95 flex items-center gap-1.5"
+            >
+              <Cloud class="w-3.5 h-3.5" />
+              <span>Buka Sync</span>
             </button>
           </div>
         </div>

@@ -20,7 +20,8 @@ import {
   Maximize2, Cpu, HardDrive, Thermometer, Clock, Minus, Square,
   X, Layers, EyeOff, Settings, Search, Power, RefreshCw, LogOut,
   ChevronRight, ArrowLeft, Check, Sparkles, AlertTriangle, User,
-  FileText, ShieldCheck, Folder, Terminal, Globe, Database
+  FileText, ShieldCheck, Folder, Terminal, Globe, Database,
+  Users, CloudLightning, ArrowRightLeft
 } from 'lucide-vue-next'
 
 const windowStore = useWindowStore()
@@ -91,23 +92,25 @@ function handleStartStoreAppClick(app) {
   windowStore.launchStoreApp(app)
 }
 
-// 1. PINNED APPS (Windows 11 Pinned Section)
+// 1. PINNED APPS (Windows 11 Pinned Section - Filtered by RBAC)
 const pinnedApps = computed(() => {
+  const allowed = windowStore.apps.filter(app => authStore.canAccessApp(app.id))
   const query = startSearchQuery.value.trim().toLowerCase()
   if (!query) {
-    return windowStore.apps
+    return allowed
   }
-  return windowStore.apps.filter(app => 
+  return allowed.filter(app => 
     (app.title && app.title.toLowerCase().includes(query)) ||
     (app.id && app.id.toLowerCase().includes(query))
   )
 })
 
-// 2. ALL APPS (Alphabetical View A-Z)
+// 2. ALL APPS (Alphabetical View A-Z - Filtered by RBAC)
 const allAppsAlphabetical = computed(() => {
+  const allowedCore = windowStore.apps.filter(app => authStore.canAccessApp(app.id))
   const combined = [
-    ...windowStore.apps.map(a => ({ ...a, isStore: false })),
-    ...windowStore.installedStoreApps.map(s => ({
+    ...allowedCore.map(a => ({ ...a, isStore: false })),
+    ...windowStore.installedStoreApps.filter(s => authStore.canAccessApp('app-store') || authStore.canAccessApp(s.slug)).map(s => ({
       id: s.slug || s.id,
       title: s.name,
       icon: s.icon,
@@ -558,8 +561,25 @@ function handleTaskbarContextMenu(e) {
           <!-- Power Menu Popover -->
           <div
             v-if="showPowerMenu"
-            class="absolute bottom-12 right-0 w-44 rounded-2xl bg-slate-950/95 backdrop-blur-xl border border-white/15 p-1.5 shadow-2xl flex flex-col gap-0.5 z-50 animate-in fade-in zoom-in-95 duration-150"
+            class="absolute bottom-12 right-0 w-48 rounded-2xl bg-slate-950/95 backdrop-blur-xl border border-white/15 p-1.5 shadow-2xl flex flex-col gap-0.5 z-50 animate-in fade-in zoom-in-95 duration-150"
           >
+            <button
+              v-if="authStore.canManageUsers()"
+              @click="windowStore.openUsersManager(); showPowerMenu = false; isStartMenuOpen = false"
+              class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 text-left text-xs text-purple-300 transition"
+            >
+              <Users class="w-3.5 h-3.5 text-purple-400" />
+              <span>Kelola Pengguna & RBAC</span>
+            </button>
+            <button
+              v-if="authStore.canMountCloud()"
+              @click="windowStore.openCloudSync(); showPowerMenu = false; isStartMenuOpen = false"
+              class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 text-left text-xs text-sky-300 transition"
+            >
+              <CloudLightning class="w-3.5 h-3.5 text-sky-400" />
+              <span>Sinkronisasi Cloud</span>
+            </button>
+            <div v-if="authStore.canManageUsers() || authStore.canMountCloud()" class="my-1 border-t border-white/10"></div>
             <button
               @click="showConfirmPowerModal = 'restart'"
               class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 text-left text-xs text-slate-200 transition"

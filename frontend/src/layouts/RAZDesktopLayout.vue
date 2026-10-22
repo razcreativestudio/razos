@@ -16,7 +16,7 @@ import {
   Trash2, ExternalLink, AlertTriangle, X, Globe, Clock, Activity, HardDrive,
   Network, Search, Grid, Maximize2, Minimize2, Sliders, Power, RotateCw,
   HelpCircle, GitBranch, Lock, Unlock, Sparkles, ChevronLeft, ChevronRight,
-  Download, ArrowRight, Box, Database, LayoutGrid, Code2
+  Download, ArrowRight, Box, Database, LayoutGrid, Code2, Shield
 } from 'lucide-vue-next'
 
 // Import View Aplikasi
@@ -28,6 +28,8 @@ import RAZDatabasesView from '../views/RAZDatabasesView.vue'
 import RAZSettingsView from '../views/RAZSettingsView.vue'
 import RAZFileManagerView from '../views/RAZFileManagerView.vue'
 import RAZFileViewerView from '../views/RAZFileViewerView.vue'
+import RAZUsersManagerView from '../views/RAZUsersManagerView.vue'
+import RAZCloudSyncView from '../views/RAZCloudSyncView.vue'
 
 // Import View Jendela Khusus / Standalone Child Windows (v3.0.0)
 import RAZWebsiteWizardView from '../views/RAZWebsiteWizardView.vue'
@@ -42,10 +44,12 @@ import RAZAppEditView from '../views/RAZAppEditView.vue'
 import RAZAppLogsView from '../views/RAZAppLogsView.vue'
 import RAZStorageManagerView from '../views/RAZStorageManagerView.vue'
 import RAZTextEditorView from '../views/RAZTextEditorView.vue'
+import { useAuthStore } from '../stores/RAZAuthStore'
 
 const windowStore = useWindowStore()
 const systemStore = useSystemStore()
 const contextMenuStore = useContextMenuStore()
+const authStore = useAuthStore()
 
 // Mapping ID aplikasi ke komponen View
 const viewMap = {
@@ -57,8 +61,15 @@ const viewMap = {
   'app-store': RAZAppStoreView,
   'websites': RAZWebsitesView,
   'databases': RAZDatabasesView,
-  'settings': RAZSettingsView
+  'settings': RAZSettingsView,
+  'users-manager': RAZUsersManagerView,
+  'cloud-sync': RAZCloudSyncView
 }
+
+// Filter aplikasi desktop berdasarkan hak akses peran (RBAC Enforcement)
+const visibleDesktopApps = computed(() => {
+  return windowStore.allDesktopApps.filter(app => authStore.canAccessApp(app.id))
+})
 
 // Context Menu Klik Kanan pada Area Desktop Kosong (Hierarki Submenu Modern ala OS)
 function handleDesktopContextMenu(e) {
@@ -146,6 +157,16 @@ function handleDesktopContextMenu(e) {
             label: 'Storage Manager',
             icon: HardDrive,
             action: () => windowStore.openStorageManager()
+          },
+          {
+            label: 'Cloud Sync & WebDAV',
+            icon: Globe,
+            action: () => windowStore.openCloudSync()
+          },
+          {
+            label: 'Users & Roles (RBAC)',
+            icon: Shield,
+            action: () => windowStore.openUsersManager()
           }
         ]
       },
@@ -1039,9 +1060,9 @@ function handleDesktopDrop(e) {
           </div>
         </div>
 
-        <!-- Windows Desktop Grid Icons (Draggable & Absolute Grid Positioned) -->
+        <!-- Windows Desktop Grid Icons (Draggable & Absolute Grid Positioned, Filtered by RBAC) -->
         <div
-          v-for="app in windowStore.allDesktopApps"
+          v-for="app in visibleDesktopApps"
           :key="app.id"
           :draggable="!isPositionLocked"
           @dragstart="handleIconDragStart($event, app)"

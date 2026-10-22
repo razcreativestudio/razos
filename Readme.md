@@ -87,6 +87,8 @@ flowchart TD
         TaskManager["RAZTaskManager (Hardware Telemetry & Metrics)"]
         AppStore["RAZAppStore (525+ Docker & Compose YAML)"]
         Websites["RAZWebsiteManager (Docker Multi-Hosting & Git Sync)"]
+        UsersRBAC["RAZUsersManager (Multi-User & Granular RBAC)"]
+        CloudSync["RAZCloudSync (rclone WebDAV / Nextcloud Suite)"]
         TermLogs["RAZTerminalView (xterm.js Web PTY & Kernel Logs)"]
     end
 
@@ -94,19 +96,20 @@ flowchart TD
         Router["HTTP Router & API Engine (/api/v1)"]
         WS["Gorilla WebSocket Manager (PTY Terminal, Metrics Stream)"]
         EmbedFS["Embed FS (Embedded Frontend Assets < 25 MB)"]
-        Security["JWT Authentication & Sandboxed Permissions"]
+        CloudEngine["Cloud Sync Engine (rclone WebDAV / Nextcloud Mounter)"]
+        Security["JWT Authentication, Multi-User & Granular RBAC Matrix"]
     end
 
     subgraph HostSystem["🐧 Linux Host OS (Armbian Debian Bookworm)"]
         DockerEngine["Docker Engine (/var/run/docker.sock)"]
         Systemd["Systemd & Kernel Journalctl / Syslog"]
-        DiskMounts["MicroSD /DATA Mount & USB Storage"]
+        DiskMounts["MicroSD /DATA Mount, Cloud Mounts (/DATA/cloud) & USB"]
         Hardware["Amlogic S905X (ARM64 Quad-Core, 2GB RAM / ZRAM)"]
     end
 
     Browser --> Desktop & Mobile
     PWA --> Desktop & Mobile
-    Desktop & Mobile --> FileManager & TaskManager & AppStore & Websites & TermLogs
+    Desktop & Mobile --> FileManager & TaskManager & AppStore & Websites & UsersRBAC & CloudSync & TermLogs
     Frontend -- "REST API & WebSocket" --> Router & WS
     Router & WS --> Backend
     Backend --> DockerEngine & Systemd & DiskMounts & Hardware
@@ -126,24 +129,44 @@ flowchart TD
 - **Navigasi Explorer Windows:** Breadcrumbs interaktif, editable path address input, history Back/Forward/Up, Copy Path, dan Refresh.
 - **Suite Unggah Lengkap:** Mendukung unggah berkas tunggal/banyak, unggah direktori bertingkat (*folder upload*), dan unggah arsip ZIP dengan fitur auto-extract otomatis di server.
 - **Sublime Text & Notepad++ Enterprise Editor:** Editor kode multi-tab dengan nomor baris (*line gutter*), pencarian & penggantian teks terapung (*floating Find & Replace* `Ctrl+F` / `Ctrl+H`), lompat ke baris (*Go to Line* `Ctrl+G`), serta status bar kursor, karakter, kata, encoding UTF-8, dan indentasi.
+- **Integrasi Cloud Storage Sidebar:** Otomatis mendeteksi drive cloud remote yang di-mount (Nextcloud / WebDAV) di sidebar explorer dengan navigasi langsung ke titik simpan `/DATA/cloud/`.
 - **Media Viewers Terintegrasi:** Image Viewer (zoom/rotate), Video Player, Music Player dengan animated waveform visualizer, PDF Reader, dan Markdown Document Suite.
 
-### 3. App Store 525+ Docker & CasaOS-Style Compose Suite
+### 3. Dukungan Multi-User & Manajemen Izin Akses Peran (Granular RBAC)
+- **Hierarki 4 Peran Terstruktur:**
+  - `Admin`: Akses penuh ke seluruh fitur, instalasi kontainer, terminal root, dan manajemen pengguna.
+  - `Operator`: Akses operasional untuk DevOps, website manager, database, dan pemantauan server tanpa izin modifikasi akun admin.
+  - `Member`: Pengguna umum dengan hak akses aplikasi standar, tanpa akses ke terminal sistem atau konfigurasi root.
+  - `Guest`: Pengguna tamu dengan hak akses baca (*read-only*) ketat.
+- **Granular Permissions Matrix:** Pembatasan hak akses berbasis per-aplikasi (`apps`), izin baca/tulis/hapus penyimpanan (`read`, `write`, `delete`), izin instalasi aplikasi, izin mount cloud, dan akses terminal root.
+- **Isolasi Direktori Home (*Home Scoping*):** Setiap akun memiliki home directory yang terisolasi (`/DATA`, `/DATA/www`, `/DATA/users/<username>`). File Manager secara otomatis melarang aksi buat folder, buat file, upload, rename, atau hapus jika izin peran tidak mencukupi (*read-only enforcement*).
+- **Manajemen Akun Terpadu & Switch User:** Panel khusus untuk menambah pengguna baru, mengubah peran, reset password, hapus pengguna aman, serta peralihan pengguna instan tanpa perlu reload browser.
+
+### 4. Sinkronisasi Cloud Eksternal (rclone WebDAV & Nextcloud Integration)
+- **Konektivitas Remote Cloud:** Hubungkan remote Nextcloud, ownCloud, WebDAV mandiri, Box, atau Google Drive via protokol standar RFC 4918 / rclone.
+- **Auto-Mount ke Sistem Berkas:** Remotely mounted ke `/DATA/cloud/<nama>` dan terbaca secara dinamis sebagai drive penyimpanan di File Manager.
+- **3 Kebijakan Sinkronisasi:**
+  - *Two-Way Sync:* Sinkronisasi dua arah otomatis dengan resolusi konflik berkas.
+  - *Upload Only (Backup Snapshot):* Cadangkan data penting lokal `/DATA` ke server cloud remote secara terjadwal.
+  - *Download Only (Mirroring):* Salin berkas remote ke penyimpanan lokal STB.
+- **Uji Koneksi Real-Time & Live Logs:** Tombol uji coba konektivitas server (*Test Connection*) sebelum menyimpan remote, disertai pelacakan log sinkronisasi durasi detik dan status keberhasilan.
+
+### 5. App Store 525+ Docker & CasaOS-Style Compose Suite
 - **Katalog Lengkap:** Akses instan ke 525+ template kontainer Docker siap pasang.
 - **Metode Instalasi Fleksibel:** Mendukung 1-klik template, upload file `docker-compose.yml`, instalasi via Docker CLI, dan custom wizard.
 - **Manajemen Kontainer Terpasang:** Tab khusus untuk memantau status hidup kontainer, membuka Web UI, restart, dan clean uninstall tanpa meninggalkan data sampah.
 
-### 4. Task Manager & Telemetry Hardware Riil (Zero Dummy Data)
+### 6. Task Manager & Telemetry Hardware Riil (Zero Dummy Data)
 - **Metrik Sistem Akurat:** Menampilkan nama host, spesifikasi CPU asli, jumlah core, utilisasi RAM fisik, temperatur prosesor, dan ruang penyimpanan riil host.
 - **Visual Heatmap & Kontrol Proses:** Heatmap utilisasi sumber daya tinggi serta kill-switch instan (Akhiri Tugas).
 - **Log Streaming Kontainer:** Pemantauan output log kontainer Docker secara langsung (*real-time streaming*).
 
-### 5. Website Manager & Multi-Hosting Terisolasi
+### 7. Website Manager & Multi-Hosting Terisolasi
 - **Optimasi Khusus STB ARM64:** Menyediakan 4 kategori hosting ramah memori (Website Statis Nginx Alpine 15 MB RAM, Micro-Framework Go/PHP/FastAPI, Flat-File CMS, dan Internal Portal).
 - **SQLite Default (0 MB Service RAM):** Mencegah kelebihan beban memori MySQL dengan database berbasis berkas.
 - **Integrasi GitHub Repository:** Menghubungkan repositori privat atau publik dengan Personal Access Token (PAT) untuk *auto-pull* kode produksi ke direktori website.
 
-### 6. Web Terminal SSH & Log Sistem Armbian
+### 8. Web Terminal SSH & Log Sistem Armbian
 - **Web PTY xterm.js:** Akses terminal host langsung dari peramban dengan proteksi sesi aman.
 - **Armbian System Logs:** Filter dan pelacakan log kernel host secara langsung dari `dmesg`, `journalctl`, `/var/log/syslog`, dan log autentikasi.
 

@@ -73,6 +73,24 @@ export const useWindowStore = defineStore('window', () => {
       height: 450,
       minWidth: 400,
       minHeight: 300,
+    },
+    {
+      id: 'cloud-sync',
+      title: 'Cloud Sync & WebDAV',
+      icon: '/assets/icons/RAZIconCloudSync.svg',
+      width: 820,
+      height: 560,
+      minWidth: 500,
+      minHeight: 380,
+    },
+    {
+      id: 'users-manager',
+      title: 'Users & Roles (RBAC)',
+      icon: '/assets/icons/RAZIconUsers.svg',
+      width: 800,
+      height: 560,
+      minWidth: 480,
+      minHeight: 380,
     }
   ])
 
@@ -550,6 +568,34 @@ export const useWindowStore = defineStore('window', () => {
     })
   }
 
+  // Standalone Window: Sinkronisasi Cloud Eksternal (Nextcloud / WebDAV)
+  function openCloudSync() {
+    openCustomWindow({
+      id: 'cloud-sync',
+      title: 'Sinkronisasi Cloud & WebDAV',
+      icon: '/assets/icons/RAZIconCloudSync.svg',
+      width: 820,
+      height: 580,
+      minWidth: 520,
+      minHeight: 400,
+      type: 'cloud-sync'
+    })
+  }
+
+  // Standalone Window: Manajemen Pengguna & Hak Akses Peran (RBAC)
+  function openUsersManager() {
+    openCustomWindow({
+      id: 'users-manager',
+      title: 'Manajemen Pengguna & Peran (RBAC)',
+      icon: '/assets/icons/RAZIconUsers.svg',
+      width: 820,
+      height: 580,
+      minWidth: 500,
+      minHeight: 400,
+      type: 'users-manager'
+    })
+  }
+
   // Standalone Window: Informasi & Properti Berkas
   function openFileProperties(fileItem) {
     if (!fileItem || !fileItem.path) return
@@ -751,6 +797,8 @@ export const useWindowStore = defineStore('window', () => {
     openWebsiteDetail,
     openAppStoreManual,
     openStorageManager,
+    openCloudSync,
+    openUsersManager,
     openAppStoreInstaller,
     openAppEditor,
     openAppLogs,

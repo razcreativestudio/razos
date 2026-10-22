@@ -1,0 +1,76 @@
+{
+  "remotes": [
+    {
+      "id": "cloud-nextcloud-1",
+      "name": "Nextcloud Drive",
+      "provider": "nextcloud",
+      "url": "https://demo.nextcloud.com/remote.php/dav/files/demo/",
+      "username": "demo",
+      "password_masked": "••••••••••••",
+      "remote_path": "/",
+      "local_mount_path": "/DATA/cloud/Nextcloud",
+      "status": "connected",
+      "is_mounted": true,
+      "sync_mode": "two-way",
+      "sync_interval": "1h",
+      "auto_mount": true,
+      "auto_sync": true,
+      "last_sync": "2026-10-22T10:15:00.000Z",
+      "stats": {
+        "total_bytes": 107374182400,
+        "used_bytes": 26843545600,
+        "free_bytes": 80530636800,
+        "files_count": 142,
+        "last_sync_status": "success",
+        "last_sync_message": "Sinkronisasi dua arah berhasil tanpa konflik"
+      }
+    },
+    {
+      "id": "cloud-webdav-2",
+      "name": "WebDAV Enterprise Backup",
+      "provider": "webdav",
+      "url": "https://dav.box.com/dav/",
+      "username": "backup@razos.local",
+      "password_masked": "••••••••••••",
+      "remote_path": "/RAZOS_Backups",
+      "local_mount_path": "/DATA/cloud/WebDAV_Backup",
+      "status": "connected",
+      "is_mounted": true,
+      "sync_mode": "upload-only",
+      "sync_interval": "24h",
+      "auto_mount": true,
+      "auto_sync": true,
+      "last_sync": "2026-10-22T04:00:00.000Z",
+      "stats": {
+        "total_bytes": 214748364800,
+        "used_bytes": 53687091200,
+        "free_bytes": 161061273600,
+        "files_count": 58,
+        "last_sync_status": "success",
+        "last_sync_message": "Backup otomatis harian selesai"
+      }
+    }
+  ],
+  "sync_logs": [
+    {
+      "id": "log-1",
+      "remote_id": "cloud-nextcloud-1",
+      "remote_name": "Nextcloud Drive",
+      "timestamp": "2026-10-22T10:15:00.000Z",
+      "type": "two-way",
+      "status": "success",
+      "message": "Sinkronisasi dua arah berhasil: 4 berkas diunggah, 2 berkas diunduh.",
+      "duration_sec": 3.4
+    },
+    {
+      "id": "log-2",
+      "remote_id": "cloud-webdav-2",
+      "remote_name": "WebDAV Enterprise Backup",
+      "timestamp": "2026-10-22T04:00:00.000Z",
+      "type": "upload-only",
+      "status": "success",
+      "message": "Snapshot backup harian /DATA/www berhasil diunggah ke WebDAV.",
+      "duration_sec": 8.1
+    }
+  ]
+}

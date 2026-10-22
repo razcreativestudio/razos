@@ -17,18 +17,22 @@ import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
 import { useWindowStore } from '../stores/RAZWindowStore'
 import { useContextMenuStore } from '../stores/RAZContextMenuStore'
+import { useAuthStore } from '../stores/RAZAuthStore'
+import { useCloudStore } from '../stores/RAZCloudStore'
 import {
   HardDrive, Folder, File, FileText, FileCode, Plus, Trash2, Edit3,
   ChevronRight, ArrowLeft, ArrowRight, ArrowUp, RefreshCw, X, Save, AlertTriangle, Eye, Usb,
   Grid, List, Search, Star, Download, Info, CheckCircle2, Clock, Upload,
   Share2, MoreVertical, LayoutGrid, Server, Image, Film, Music, FileCheck, Play,
   Copy, Check, BookOpen, FilePlus, FolderPlus, FileUp, FolderUp, Archive, UploadCloud,
-  ChevronDown, Sparkles, Loader2, Code2
+  ChevronDown, Sparkles, Loader2, Code2, Cloud, CloudUpload, ShieldAlert, Lock
 } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
 const windowStore = useWindowStore()
 const contextMenuStore = useContextMenuStore()
+const authStore = useAuthStore()
+const cloudStore = useCloudStore()
 
 import RAZThumbnail from '../components/RAZThumbnail.vue'
 
@@ -251,6 +255,15 @@ async function fetchDevices() {
     console.error('Gagal mengambil daftar storage devices:', err)
   }
 }
+
+// Partisi Fisik dan Remote Cloud (rclone/WebDAV/Nextcloud)
+const physicalDisks = computed(() => {
+  return storageDevices.value.filter(dev => !dev.is_cloud)
+})
+
+const cloudDisks = computed(() => {
+  return storageDevices.value.filter(dev => dev.is_cloud)
+})
 
 // Komputasi Total Penyimpanan Riil dari seluruh Disk/Partisi yang terbaca
 const totalStorageBytes = computed(() => {
@@ -508,8 +521,12 @@ function toggleStar(item, e) {
   saveStarredItems()
 }
 
-// Buat Folder Baru
+// Buat Folder Baru (RBAC Guarded)
 async function confirmCreateFolder() {
+  if (!authStore.canWriteStorage()) {
+    systemStore.showNotification('Akses Dibatasi', 'Peran akun Anda tidak memiliki izin untuk membuat folder.', 'warning')
+    return
+  }
   if (!newFolderName.value.trim()) return
   try {
     const res = await fetch('/api/v1/files/folder', {
@@ -569,8 +586,12 @@ body {
   }
 }
 
-// Buat Berkas Baru (Teks / Kode) & Langsung Buka di Editor
+// Buat Berkas Baru (Teks / Kode) & Langsung Buka di Editor (RBAC Guarded)
 async function confirmCreateFile(openInEditor = true) {
+  if (!authStore.canWriteStorage()) {
+    systemStore.showNotification('Akses Dibatasi', 'Peran akun Anda tidak memiliki izin untuk membuat berkas.', 'warning')
+    return
+  }
   let name = newFileName.value.trim()
   if (!name) return
 
@@ -617,8 +638,12 @@ function openInTextEditor(item) {
   windowStore.openTextEditor(item)
 }
 
-// Trigger Input Upload
+// Trigger Input Upload (RBAC Guarded)
 function triggerUpload(type) {
+  if (!authStore.canWriteStorage()) {
+    systemStore.showNotification('Akses Dibatasi', 'Peran akun Anda tidak memiliki izin untuk mengunggah berkas atau folder.', 'warning')
+    return
+  }
   uploadType.value = type
   if (type === 'file' && fileUploadInputRef.value) {
     fileUploadInputRef.value.value = ''
@@ -733,8 +758,12 @@ async function handleZipUploadChange(e) {
   }
 }
 
-// Hapus Berkas/Folder
+// Hapus Berkas/Folder (RBAC Guarded)
 async function deleteItem(item) {
+  if (!authStore.canDeleteStorage()) {
+    systemStore.showNotification('Akses Dibatasi', 'Peran akun Anda tidak memiliki izin untuk menghapus berkas atau folder.', 'warning')
+    return
+  }
   try {
     const res = await fetch(`/api/v1/files/item?path=${encodeURIComponent(item.path)}`, { method: 'DELETE' })
     if (res.ok) {
@@ -744,14 +773,22 @@ async function deleteItem(item) {
   } catch (e) {}
 }
 
-// Rename Berkas
+// Rename Berkas (RBAC Guarded)
 function openRenameDialog(item) {
+  if (!authStore.canWriteStorage()) {
+    systemStore.showNotification('Akses Dibatasi', 'Peran akun Anda tidak memiliki izin untuk mengubah nama berkas/folder.', 'warning')
+    return
+  }
   renameTargetOldPath.value = item.path
   renameTargetNewName.value = item.name
   showRenameModal.value = true
 }
 
 async function confirmRename() {
+  if (!authStore.canWriteStorage()) {
+    systemStore.showNotification('Akses Dibatasi', 'Peran akun Anda tidak memiliki izin untuk mengubah nama berkas/folder.', 'warning')
+    return
+  }
   if (!renameTargetNewName.value.trim()) return
   const dir = currentPath.value
   const newPath = dir.endsWith('/') || dir.endsWith('\\') ? dir + renameTargetNewName.value : dir + '/' + renameTargetNewName.value
@@ -838,65 +875,81 @@ function handleFileItemContextMenu(e, item) {
     })
   }
 
-  menuList.push(
-    {
+  // Hanya izinkan Ubah Nama jika punya hak tulis
+  if (authStore.canWriteStorage()) {
+    menuList.push({
       label: 'Ubah Nama',
       icon: Edit3,
       action: () => openRenameDialog(item)
-    },
-    {
-      label: 'Opsi & Properti',
-      icon: Sliders,
-      children: extraOptions
-    },
-    { separator: true },
-    {
-      label: 'Hapus',
-      icon: Trash2,
-      danger: true,
-      action: () => deleteItem(item)
-    }
-  )
+    })
+  }
+
+  menuList.push({
+    label: 'Opsi & Properti',
+    icon: Sliders,
+    children: extraOptions
+  })
+
+  // Hanya izinkan Hapus jika punya hak hapus (RBAC)
+  if (authStore.canDeleteStorage()) {
+    menuList.push(
+      { separator: true },
+      {
+        label: 'Hapus',
+        icon: Trash2,
+        danger: true,
+        action: () => deleteItem(item)
+      }
+    )
+  }
 
   contextMenuStore.show(e, menuList, item.name)
 }
 
-// Context Menu Klik Kanan pada Area Kosong Explorer (Hierarki Submenu)
+// Context Menu Klik Kanan pada Area Kosong Explorer (Hierarki Submenu & RBAC Guarded)
 function handleCanvasContextMenu(e) {
-  contextMenuStore.show(e, [
-    {
-      label: 'Folder Baru',
-      icon: FolderPlus,
-      action: () => { showNewFolderModal.value = true }
-    },
-    {
-      label: 'File Baru (Teks/Kode)',
-      icon: FilePlus,
-      action: () => { showNewFileModal.value = true }
-    },
-    { separator: true },
-    {
-      label: 'Unggah (Upload)',
-      icon: UploadCloud,
-      children: [
-        {
-          label: 'Upload File',
-          icon: FileUp,
-          action: () => triggerUpload('file')
-        },
-        {
-          label: 'Upload Folder Lengkap',
-          icon: FolderUp,
-          action: () => triggerUpload('folder')
-        },
-        {
-          label: 'Upload & Ekstrak ZIP',
-          icon: Archive,
-          action: () => triggerUpload('zip')
-        }
-      ]
-    },
-    { separator: true },
+  const canvasMenu = []
+
+  // Tambahkan opsi Folder, File, dan Upload hanya jika akun memiliki izin tulis
+  if (authStore.canWriteStorage()) {
+    canvasMenu.push(
+      {
+        label: 'Folder Baru',
+        icon: FolderPlus,
+        action: () => { showNewFolderModal.value = true }
+      },
+      {
+        label: 'File Baru (Teks/Kode)',
+        icon: FilePlus,
+        action: () => { showNewFileModal.value = true }
+      },
+      { separator: true },
+      {
+        label: 'Unggah (Upload)',
+        icon: UploadCloud,
+        children: [
+          {
+            label: 'Upload File',
+            icon: FileUp,
+            action: () => triggerUpload('file')
+          },
+          {
+            label: 'Upload Folder Lengkap',
+            icon: FolderUp,
+            action: () => triggerUpload('folder')
+          },
+          {
+            label: 'Upload & Ekstrak ZIP',
+            icon: Archive,
+            action: () => triggerUpload('zip')
+          }
+        ]
+      },
+      { separator: true }
+    )
+  }
+
+  canvasMenu.push(
     {
       label: 'Tampilan (View)',
       icon: LayoutGrid,
@@ -917,6 +970,12 @@ function handleCanvasContextMenu(e) {
     },
     { separator: true },
     {
+      label: 'Sinkronisasi Cloud',
+      icon: Cloud,
+      action: () => windowStore.openCloudSync()
+    },
+    { separator: true },
+    {
       label: 'Muat Ulang (Refresh)',
       icon: RefreshCw,
       action: () => fetchFiles(currentPath.value)
@@ -926,13 +985,16 @@ function handleCanvasContextMenu(e) {
       icon: Copy,
       action: () => copyCurrentPath()
     }
-  ], 'File Manager')
+  )
+
+  contextMenuStore.show(e, canvasMenu, 'File Manager')
 }
 
 onMounted(async () => {
   await fetchDevices()
-  // Selalu muat isi direktori default secara otomatis saat pertama kali dibuka (Zero Click required)
-  const targetPath = defaultStoragePath.value || '/DATA'
+  // Tentukan path awal berbasis izin RBAC & direktori home pengguna
+  const userHome = authStore.getUserHomeDir()
+  const targetPath = userHome || defaultStoragePath.value || '/DATA'
   currentPath.value = targetPath
   addressInputValue.value = targetPath
   activeSidebarSection.value = 'drive'
@@ -945,8 +1007,15 @@ onMounted(async () => {
     <!-- LEFT SIDEBAR (Google Drive Style) -->
     <div class="w-56 border-r border-slate-800/80 bg-slate-900/60 p-3 flex flex-col justify-between hidden md:flex shrink-0">
       <div class="flex flex-col gap-4">
-        <!-- New Button with Dropdown -->
-        <div class="relative">
+        <!-- New Button with Dropdown (RBAC Guarded) -->
+        <div v-if="!authStore.canWriteStorage()" class="w-full h-10 px-3.5 rounded-2xl bg-slate-800/60 border border-slate-700/50 text-slate-400 font-medium flex items-center justify-between text-xs opacity-80 cursor-not-allowed shadow-inner" title="Peran akun ini hanya memiliki izin baca (Read-Only)">
+          <div class="flex items-center gap-2">
+            <Lock class="w-4 h-4 text-amber-400" />
+            <span class="tracking-wide">Hanya Baca</span>
+          </div>
+          <span class="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-slate-700/60 text-slate-300">RO</span>
+        </div>
+        <div v-else class="relative">
           <button
             @click.stop="showNewMenu = !showNewMenu"
             class="w-full h-10 px-4 rounded-2xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold flex items-center justify-between gap-2 shadow-lg transition active:scale-95"
@@ -1058,13 +1127,13 @@ onMounted(async () => {
           </button>
         </div>
 
-        <!-- Devices Section -->
+        <!-- Devices Section (Physical Disks) -->
         <div class="flex flex-col gap-2 pt-2 border-t border-slate-800/80">
           <span class="text-[10px] font-bold text-slate-500 tracking-wider uppercase px-2">Storage Disks</span>
           <div class="flex flex-col gap-1.5">
             <div
-              v-for="(dev, idx) in storageDevices"
-              :key="idx"
+              v-for="(dev, idx) in physicalDisks"
+              :key="'phys-' + idx"
               @click="() => { activeSidebarSection = 'devices'; fetchFiles(dev.mountpoint); }"
               class="p-2 rounded-xl bg-slate-950/60 hover:bg-slate-800/60 border border-slate-800/60 cursor-pointer transition flex flex-col gap-1"
               :class="currentPath.startsWith(dev.mountpoint) && activeSidebarSection === 'devices' ? 'ring-1 ring-sky-400/40 bg-sky-950/20' : ''"
@@ -1080,6 +1149,53 @@ onMounted(async () => {
                 <div class="bg-sky-400 h-full" :style="{ width: `${dev.percent}%` }"></div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- Cloud Storage Section (Nextcloud / WebDAV) -->
+        <div class="flex flex-col gap-2 pt-2 border-t border-slate-800/80">
+          <div class="flex items-center justify-between px-2">
+            <span class="text-[10px] font-bold text-sky-400/90 tracking-wider uppercase">Cloud Storage</span>
+            <button
+              @click="windowStore.openCloudSync()"
+              class="text-[10px] text-sky-400 hover:text-sky-300 transition hover:underline flex items-center gap-1"
+              title="Kelola & Sinkronisasi Cloud"
+            >
+              <Cloud class="w-3 h-3" />
+              <span>Kelola</span>
+            </button>
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <div
+              v-for="(dev, idx) in cloudDisks"
+              :key="'cloud-' + idx"
+              @click="() => { activeSidebarSection = 'cloud'; fetchFiles(dev.mountpoint); }"
+              class="p-2 rounded-xl bg-sky-950/20 hover:bg-sky-900/30 border border-sky-800/40 cursor-pointer transition flex flex-col gap-1"
+              :class="currentPath.startsWith(dev.mountpoint) ? 'ring-1 ring-sky-400/60 bg-sky-950/40' : ''"
+            >
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1.5 truncate">
+                  <Cloud class="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                  <span class="text-[11px] font-medium text-sky-200 truncate">{{ dev.label }}</span>
+                </div>
+                <span class="text-[10px] text-sky-300 font-mono">{{ dev.percent.toFixed(0) }}%</span>
+              </div>
+              <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                <div class="bg-gradient-to-r from-sky-500 to-indigo-500 h-full" :style="{ width: `${dev.percent}%` }"></div>
+              </div>
+            </div>
+
+            <!-- Tombol Tambah/Hubungkan Cloud jika belum ada cloud terpasang -->
+            <button
+              v-if="cloudDisks.length === 0"
+              @click="windowStore.openCloudSync()"
+              class="p-2 rounded-xl border border-dashed border-slate-700/80 hover:border-sky-500/60 bg-slate-900/40 hover:bg-sky-950/20 text-slate-400 hover:text-sky-300 text-left transition flex items-center gap-2 group"
+            >
+              <div class="w-6 h-6 rounded-lg bg-sky-500/10 group-hover:bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
+                <Plus class="w-3.5 h-3.5" />
+              </div>
+              <span class="text-[11px]">Hubungkan Cloud...</span>
+            </button>
           </div>
         </div>
       </div>
@@ -1237,8 +1353,12 @@ onMounted(async () => {
       <div class="h-10 border-b border-slate-800/60 px-3 sm:px-4 flex items-center justify-between gap-2 sm:gap-3 bg-slate-900/30 text-xs font-mono shrink-0">
         <!-- Quick Action "+ Baru" (Always Visible on Mobile / Small Windows) & Filter Tabs -->
         <div class="flex items-center gap-2 overflow-x-auto py-0.5" style="scrollbar-width: none;">
-          <!-- Ribbon "+ Baru" Button with Dropdown -->
-          <div class="relative shrink-0">
+          <!-- Ribbon "+ Baru" Button with Dropdown (RBAC Guarded) -->
+          <div v-if="!authStore.canWriteStorage()" class="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800/60 border border-slate-700/50 text-slate-400 font-medium rounded-lg text-xs opacity-80 cursor-not-allowed shrink-0" title="Akun Anda hanya memiliki izin baca (Read-Only)">
+            <Lock class="w-3.5 h-3.5 text-amber-400" />
+            <span class="hidden sm:inline">Read Only</span>
+          </div>
+          <div v-else class="relative shrink-0">
             <button
               @click.stop="showRibbonNewMenu = !showRibbonNewMenu"
               class="flex items-center gap-1.5 px-2.5 py-1 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-lg text-xs shadow-sm transition active:scale-95"
@@ -1337,8 +1457,18 @@ onMounted(async () => {
           </button>
         </div>
 
-        <!-- Right Side: Item Count & Grid/List View Mode -->
-        <div class="flex items-center gap-3 shrink-0">
+        <!-- Right Side: Cloud Sync Shortcut, Item Count & Grid/List View Mode -->
+        <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+          <!-- Tombol Cloud Sync Cepat -->
+          <button
+            @click="windowStore.openCloudSync()"
+            class="px-2 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 flex items-center gap-1.5 transition text-[11px] font-sans font-medium active:scale-95 shadow-sm"
+            title="Kelola & Sinkronisasi Cloud Eksternal (WebDAV/Nextcloud)"
+          >
+            <Cloud class="w-3.5 h-3.5" />
+            <span class="hidden sm:inline">Cloud Sync</span>
+          </button>
+
           <span class="text-[11px] text-slate-500 hidden sm:inline">
             {{ filteredFiles.length }} item
           </span>
