@@ -1,15 +1,15 @@
 <script setup>
 /**
- * RAZOS Taskbar Component with Windows 11 Start Menu & Windows 7 Glass Start Orb
- * Updated: 2026-10-15 (v3.6.5 - Windows 11 Enterprise Start Menu & Windows 7 Orb Architecture)
+ * RAZOS Taskbar Component with Windows 11 All Apps Start Menu & Windows 7 Glass Start Orb
+ * Updated: 2026-10-22 (v3.7.5 - Windows 11 All-Apps Alphabetical Grouping & Interactive Folder Expansion)
  * Deskripsi: 
  * - Windows 7 Start Orb: Tombol bulat 3D Glass Orb bercahaya dengan logo emas RAZOS & efek gloss refleksi kaca.
- * - Windows 11 Start Menu: Menu mengambang rounded-3xl glassmorphism berisikan:
- *   1. Search capsule bar di bagian atas ("Search for apps, settings, and documents")
- *   2. Section "Pinned" aplikasi dengan grid 6 kolom & tombol "All >" untuk melihat seluruh aplikasi
- *   3. Section "Recommended" aplikasi & berkas terbaru dengan grid 2 kolom
- *   4. Bottom footer bar memuat avatar pengguna (Administrator), kredit RAZ Creative Studio, dan tombol daya Power.
- * - Zero Native Dialogs: Menggunakan custom popover & glassmorphism modal untuk aksi restart, shutdown, dan logout.
+ * - Windows 11 Start Menu (All Apps Layout Sesuai Referensi Pengguna):
+ *   1. Search capsule bar di bagian atas ("Search for apps, settings, and documents") dengan ikon search cyan.
+ *   2. Sub-header bar memuat judul "All" tebal dan tombol navigasi "< Back".
+ *   3. Daftar vertikal A-Z rapi memuat aplikasi individual dan folder sistem dengan drop-down chevron interaktif.
+ *   4. Bottom footer bar memuat avatar pengguna (Administrator / Active User) di sisi kiri dan tombol daya Power di sisi kanan.
+ * - Zero Native Dialogs: Menggunakan custom modal & popover Glassmorphism Slate-900 terintegrasi.
  */
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useWindowStore } from '../stores/RAZWindowStore'
@@ -19,9 +19,9 @@ import { useAuthStore } from '../stores/RAZAuthStore'
 import {
   Maximize2, Cpu, HardDrive, Thermometer, Clock, Minus, Square,
   X, Layers, EyeOff, Settings, Search, Power, RefreshCw, LogOut,
-  ChevronRight, ArrowLeft, Check, Sparkles, AlertTriangle, User,
+  ChevronRight, ChevronLeft, ChevronDown, ArrowLeft, Check, Sparkles, AlertTriangle, User,
   FileText, ShieldCheck, Folder, Terminal, Globe, Database,
-  Users, CloudLightning, ArrowRightLeft
+  Users, CloudLightning, ArrowRightLeft, Shield
 } from 'lucide-vue-next'
 
 const windowStore = useWindowStore()
@@ -29,12 +29,24 @@ const systemStore = useSystemStore()
 const contextMenuStore = useContextMenuStore()
 const authStore = useAuthStore()
 
-// State Start Menu & Navigasi Internal
+// State Start Menu & Navigasi Internal (Default ke tampilan 'All Apps' sesuai referensi)
 const isStartMenuOpen = ref(false)
-const showAllAppsView = ref(false)
+const showAllAppsView = ref(true) // Default langsung tampil All Apps list
 const startSearchQuery = ref('')
 const showPowerMenu = ref(false)
+const showUserMenu = ref(false)
 const showConfirmPowerModal = ref(null) // null | 'restart' | 'shutdown' | 'logout'
+
+// State Folder Expand / Collapse di All Apps List
+const openFolders = ref({
+  'accessibility': false,
+  'antigravity': false,
+  'anydesk': false
+})
+
+function toggleFolder(folderId) {
+  openFolders.value[folderId] = !openFolders.value[folderId]
+}
 
 // Format Waktu Real-Time Taskbar
 const currentTime = ref(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }))
@@ -60,14 +72,19 @@ function handleGlobalClick(e) {
     if (!startMenuEl.contains(e.target) && !startOrbEl.contains(e.target)) {
       isStartMenuOpen.value = false
       showPowerMenu.value = false
+      showUserMenu.value = false
     }
   }
 }
 
 function toggleStartMenu() {
   isStartMenuOpen.value = !isStartMenuOpen.value
-  if (!isStartMenuOpen.value) {
+  if (isStartMenuOpen.value) {
+    // Selalu buka mode 'All Apps' secara default sesuai permintaan
+    showAllAppsView.value = true
+  } else {
     showPowerMenu.value = false
+    showUserMenu.value = false
     startSearchQuery.value = ''
   }
 }
@@ -83,16 +100,177 @@ function toggleFullscreen() {
 function handleStartItemClick(appId) {
   isStartMenuOpen.value = false
   showPowerMenu.value = false
+  showUserMenu.value = false
   windowStore.openApp(appId)
 }
 
 function handleStartStoreAppClick(app) {
   isStartMenuOpen.value = false
   showPowerMenu.value = false
+  showUserMenu.value = false
   windowStore.launchStoreApp(app)
 }
 
-// 1. PINNED APPS (Windows 11 Pinned Section - Filtered by RBAC)
+// Folder Sistem Khas Windows 11 / RAZOS (Expandable with yellow folder icon)
+const systemFolders = [
+  {
+    id: 'accessibility',
+    title: 'Accessibility',
+    letter: 'A',
+    isFolder: true,
+    items: [
+      {
+        id: 'acc-contrast',
+        title: 'High Contrast Mode',
+        icon: '/assets/icons/RAZIconSettings.svg',
+        action: () => systemStore.showNotification('Aksesibilitas', 'Mode kontras tinggi aktif', 'info')
+      },
+      {
+        id: 'acc-magnifier',
+        title: 'Screen Magnifier',
+        icon: '/assets/icons/RAZIconSettings.svg',
+        action: () => systemStore.showNotification('Aksesibilitas', 'Fitur pembesar layar aktif', 'info')
+      },
+      {
+        id: 'acc-keyboard',
+        title: 'On-Screen Virtual Keyboard',
+        icon: '/assets/icons/RAZIconSettings.svg',
+        action: () => systemStore.showNotification('Aksesibilitas', 'Keyboard virtual siap digunakan', 'info')
+      }
+    ]
+  },
+  {
+    id: 'antigravity',
+    title: 'Antigravity',
+    letter: 'A',
+    isFolder: true,
+    items: [
+      {
+        id: 'antigravity-code',
+        title: 'Antigravity Code Editor',
+        icon: '/assets/icons/RAZIconFileManager.svg',
+        action: () => handleStartItemClick('file-manager')
+      },
+      {
+        id: 'antigravity-telemetry',
+        title: 'Antigravity Telemetry Host',
+        icon: '/assets/icons/RAZIconTaskManager.svg',
+        action: () => handleStartItemClick('task-manager')
+      },
+      {
+        id: 'antigravity-terminal',
+        title: 'Antigravity Root Console',
+        icon: '/assets/icons/RAZIconTerminal.svg',
+        action: () => handleStartItemClick('terminal')
+      }
+    ]
+  },
+  {
+    id: 'anydesk',
+    title: 'AnyDesk & Remote Tools',
+    letter: 'A',
+    isFolder: true,
+    items: [
+      {
+        id: 'cloud-sync',
+        title: 'Cloud Sync Engine (WebDAV / Nextcloud)',
+        icon: '/assets/icons/RAZIconCloudSync.svg',
+        action: () => handleStartItemClick('cloud-sync')
+      },
+      {
+        id: 'websites',
+        title: 'Website & Virtual Host Manager',
+        icon: '/assets/icons/RAZIconWebsites.svg',
+        action: () => handleStartItemClick('websites')
+      },
+      {
+        id: 'databases',
+        title: 'Database Studio (SQLite & MariaDB)',
+        icon: '/assets/icons/RAZIconDatabases.svg',
+        action: () => handleStartItemClick('databases')
+      }
+    ]
+  }
+]
+
+// 1. ALL APPS DENGAN PENGELOMPOKAN ALFABETIK A-Z (PERSIS SEPERTI SCREENSHOT USER)
+const groupedAlphabeticalApps = computed(() => {
+  const query = startSearchQuery.value.trim().toLowerCase()
+
+  // Ambil aplikasi bawaan RAZOS yang diizinkan oleh izin RBAC
+  const coreApps = windowStore.apps
+    .filter(app => authStore.canAccessApp(app.id))
+    .map(app => ({
+      id: app.id,
+      title: app.title,
+      icon: app.icon,
+      isFolder: false,
+      isStore: false,
+      letter: (app.title.trim()[0] || '#').toUpperCase(),
+      action: () => handleStartItemClick(app.id)
+    }))
+
+  // Ambil aplikasi Docker App Store yang terpasang
+  const storeApps = windowStore.installedStoreApps
+    .filter(s => authStore.canAccessApp('app-store') || authStore.canAccessApp(s.slug))
+    .map(s => ({
+      id: s.slug || s.id,
+      title: s.name,
+      icon: s.icon,
+      isFolder: false,
+      isStore: true,
+      letter: (s.name.trim()[0] || '#').toUpperCase(),
+      action: () => handleStartStoreAppClick(s)
+    }))
+
+  // Ambil folder sistem
+  const folders = systemFolders.map(f => ({
+    id: f.id,
+    title: f.title,
+    icon: '/assets/icons/RAZIconWinFolder.svg',
+    isFolder: true,
+    letter: f.letter || (f.title.trim()[0] || '#').toUpperCase(),
+    items: f.items
+  }))
+
+  const allItems = [...coreApps, ...storeApps, ...folders]
+
+  // Filter query jika pengguna sedang mengetik di search bar
+  let filteredItems = allItems
+  if (query) {
+    filteredItems = allItems.filter(item => {
+      if (item.title.toLowerCase().includes(query)) return true
+      if (item.isFolder && item.items) {
+        return item.items.some(sub => sub.title.toLowerCase().includes(query))
+      }
+      return false
+    })
+  }
+
+  // Urutkan item berdasarkan abjad judul
+  filteredItems.sort((a, b) => a.title.localeCompare(b.title))
+
+  // Kelompokkan ke huruf abjad
+  const groups = {}
+  filteredItems.forEach(item => {
+    const char = (item.title.trim()[0] || '#').toUpperCase()
+    const letter = /[A-Z]/.test(char) ? char : '#'
+    if (!groups[letter]) {
+      groups[letter] = []
+    }
+    groups[letter].push(item)
+  })
+
+  // Format ke array terurut berdasarkan abjad
+  return Object.keys(groups)
+    .sort()
+    .map(letter => ({
+      letter,
+      items: groups[letter]
+    }))
+})
+
+// 2. PINNED APPS (Windows 11 Pinned Section - Backup jika user klik Back)
 const pinnedApps = computed(() => {
   const allowed = windowStore.apps.filter(app => authStore.canAccessApp(app.id))
   const query = startSearchQuery.value.trim().toLowerCase()
@@ -105,33 +283,9 @@ const pinnedApps = computed(() => {
   )
 })
 
-// 2. ALL APPS (Alphabetical View A-Z - Filtered by RBAC)
-const allAppsAlphabetical = computed(() => {
-  const allowedCore = windowStore.apps.filter(app => authStore.canAccessApp(app.id))
-  const combined = [
-    ...allowedCore.map(a => ({ ...a, isStore: false })),
-    ...windowStore.installedStoreApps.filter(s => authStore.canAccessApp('app-store') || authStore.canAccessApp(s.slug)).map(s => ({
-      id: s.slug || s.id,
-      title: s.name,
-      icon: s.icon,
-      isStore: true,
-      raw: s
-    }))
-  ]
-
-  const query = startSearchQuery.value.trim().toLowerCase()
-  const filtered = query 
-    ? combined.filter(item => item.title.toLowerCase().includes(query))
-    : combined
-
-  return [...filtered].sort((a, b) => a.title.localeCompare(b.title))
-})
-
-// 3. RECOMMENDED SECTION (Windows 11 Style)
+// 3. RECOMMENDED SECTION
 const recommendedItems = computed(() => {
   const items = []
-
-  // Tambahkan aplikasi baru dari store jika ada
   if (windowStore.installedStoreApps.length > 0) {
     const latest = windowStore.installedStoreApps.slice(0, 2)
     latest.forEach(app => {
@@ -145,7 +299,6 @@ const recommendedItems = computed(() => {
     })
   }
 
-  // Rekomendasi bawaan yang esensial
   const recApps = [
     {
       id: 'file-manager',
@@ -372,21 +525,21 @@ function handleTaskbarContextMenu(e) {
       </div>
     </div>
 
-    <!-- WINDOWS 11 FLOATING START MENU -->
+    <!-- WINDOWS 11 FLOATING START MENU (PERSIS SEPERTI SCREENSHOT USER) -->
     <div
       v-if="isStartMenuOpen"
       id="raz-win11-start-menu"
       @click.stop
-      class="absolute bottom-14 left-2 sm:left-4 z-50 w-[94vw] sm:w-[580px] md:w-[620px] h-[590px] max-h-[85vh] rounded-3xl bg-slate-900/95 backdrop-blur-2xl border border-white/10 shadow-2xl shadow-black/90 p-5 sm:p-6 flex flex-col justify-between overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200 text-slate-100 font-sans"
+      class="absolute bottom-14 left-2 sm:left-4 z-50 w-[94vw] sm:w-[490px] md:w-[510px] h-[610px] max-h-[85vh] rounded-2xl bg-[#1e1e1e]/95 backdrop-blur-2xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.9)] p-4 sm:p-5 flex flex-col justify-between overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200 text-slate-100 font-sans"
     >
       <!-- 1. TOP SEARCH CAPSULE (Windows 11 Search for apps, settings, and documents) -->
-      <div class="relative w-full shrink-0 mb-4">
+      <div class="relative w-full shrink-0 mb-3">
         <Search class="w-4 h-4 text-sky-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
         <input
           v-model="startSearchQuery"
           type="text"
           placeholder="Search for apps, settings, and documents"
-          class="w-full h-11 pl-11 pr-10 rounded-full bg-slate-950/80 border border-white/10 text-xs text-slate-100 placeholder-slate-400 outline-none focus:border-amber-400/60 focus:ring-2 focus:ring-amber-500/20 transition shadow-inner"
+          class="w-full h-10 pl-11 pr-10 rounded-full bg-[#2a2a2c]/80 border border-white/5 text-xs text-slate-100 placeholder-slate-400 outline-none focus:border-sky-400/60 focus:ring-1 focus:ring-sky-400/30 transition shadow-inner"
         />
         <button
           v-if="startSearchQuery"
@@ -397,43 +550,113 @@ function handleTaskbarContextMenu(e) {
         </button>
       </div>
 
-      <!-- 2. CONTENT AREA: PINNED & RECOMMENDED atau ALL APPS LIST -->
-      <div class="flex-1 overflow-y-auto pr-1 flex flex-col gap-5" style="scrollbar-width: thin;">
+      <!-- 2. CONTENT AREA: ALL APPS ALPHABETICAL (DEFAULT) ATAU PINNED -->
+      <div class="flex-1 overflow-y-auto pr-1 flex flex-col" style="scrollbar-width: thin;">
         
-        <!-- MODE A: TAMPILAN ALL APPS (Saat klik 'All >') -->
+        <!-- MODE A: ALL APPS VIEW (Sesuai Screenshot User) -->
         <template v-if="showAllAppsView">
-          <div class="flex items-center justify-between pb-1 border-b border-white/10">
+          <!-- Sub-Header: 'All' di kiri, '< Back' di kanan -->
+          <div class="flex items-center justify-between px-2 pb-2 mb-1 shrink-0">
+            <span class="text-sm font-semibold text-slate-100">All</span>
             <button
               @click="showAllAppsView = false"
-              class="flex items-center gap-1.5 text-xs font-semibold text-sky-400 hover:text-sky-300 transition"
+              class="px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-200 hover:text-white flex items-center gap-1.5 transition active:scale-95 border border-white/5"
             >
-              <ArrowLeft class="w-3.5 h-3.5" />
-              <span>Kembali ke Pinned</span>
+              <ChevronLeft class="w-3.5 h-3.5" />
+              <span>Back</span>
             </button>
-            <span class="text-xs font-bold text-slate-300">Semua Aplikasi ({{ allAppsAlphabetical.length }})</span>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-            <button
-              v-for="item in allAppsAlphabetical"
-              :key="item.id"
-              @click="item.isStore ? handleStartStoreAppClick(item.raw) : handleStartItemClick(item.id)"
-              class="flex items-center gap-3 p-2 rounded-xl hover:bg-white/10 text-left transition group active:scale-98"
+          <!-- Daftar Aplikasi Terkelompok Berdasarkan Huruf Abjad (A-Z) -->
+          <div class="flex flex-col gap-1 pb-2">
+            <div
+              v-for="group in groupedAlphabeticalApps"
+              :key="group.letter"
+              class="flex flex-col"
             >
-              <img :src="item.icon" :alt="item.title" class="w-7 h-7 object-contain rounded-lg shrink-0 group-hover:scale-110 transition" />
-              <div class="min-w-0 flex-1">
-                <div class="text-xs font-medium text-slate-200 truncate">{{ item.title }}</div>
-                <div class="text-[10px] text-slate-400 font-mono">{{ item.isStore ? 'Store App' : 'System App' }}</div>
+              <!-- Header Huruf (A, B, C, ...) -->
+              <div class="text-xs font-semibold text-slate-400 px-3 pt-3 pb-1.5 select-none">
+                {{ group.letter }}
               </div>
-            </button>
+
+              <!-- Item List di bawah huruf -->
+              <div class="flex flex-col gap-0.5">
+                <template v-for="item in group.items" :key="item.id">
+                  <!-- Tipe 1: Folder Sistem (Contoh: Accessibility, Antigravity, AnyDesk) -->
+                  <div v-if="item.isFolder" class="flex flex-col">
+                    <button
+                      @click="toggleFolder(item.id)"
+                      class="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white/5 text-left transition group active:scale-[0.99]"
+                    >
+                      <div class="flex items-center gap-3 min-w-0">
+                        <img
+                          src="/assets/icons/RAZIconWinFolder.svg"
+                          alt="Folder"
+                          class="w-6 h-6 object-contain shrink-0 drop-shadow-sm"
+                        />
+                        <span class="text-xs sm:text-[13px] font-normal text-slate-200 truncate group-hover:text-white">
+                          {{ item.title }}
+                        </span>
+                      </div>
+                      <ChevronDown
+                        class="w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0"
+                        :class="openFolders[item.id] ? 'rotate-180 text-slate-200' : ''"
+                      />
+                    </button>
+
+                    <!-- Sub-items di dalam Folder jika Di-expand -->
+                    <div
+                      v-if="openFolders[item.id]"
+                      class="pl-9 pr-1 py-1 flex flex-col gap-0.5 animate-in fade-in duration-150"
+                    >
+                      <button
+                        v-for="sub in item.items"
+                        :key="sub.id"
+                        @click="sub.action"
+                        class="w-full flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-white/10 text-left transition group active:scale-[0.99]"
+                      >
+                        <img :src="sub.icon" :alt="sub.title" class="w-5 h-5 object-contain rounded-md shrink-0 opacity-90 group-hover:opacity-100" />
+                        <span class="text-xs font-normal text-slate-300 truncate group-hover:text-white">
+                          {{ sub.title }}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Tipe 2: Aplikasi Individual Biasa -->
+                  <button
+                    v-else
+                    @click="item.action"
+                    class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 text-left transition group active:scale-[0.99]"
+                  >
+                    <img
+                      :src="item.icon"
+                      :alt="item.title"
+                      class="w-6 h-6 sm:w-7 sm:h-7 object-contain rounded-md shrink-0 transition group-hover:scale-105"
+                    />
+                    <span class="text-xs sm:text-[13px] font-normal text-slate-200 truncate group-hover:text-white">
+                      {{ item.title }}
+                    </span>
+                  </button>
+                </template>
+              </div>
+            </div>
+
+            <!-- Jika tidak ada hasil pencarian -->
+            <div
+              v-if="groupedAlphabeticalApps.length === 0"
+              class="py-12 text-center text-slate-400 text-xs flex flex-col items-center gap-2"
+            >
+              <Search class="w-8 h-8 opacity-30 text-slate-400" />
+              <span>Tidak ada aplikasi yang cocok dengan "{{ startSearchQuery }}"</span>
+            </div>
           </div>
         </template>
 
-        <!-- MODE B: STANDARD WINDOWS 11 (PINNED + RECOMMENDED) -->
+        <!-- MODE B: PINNED & RECOMMENDED VIEW (Jika User Klik '< Back') -->
         <template v-else>
           <!-- SECTION 1: PINNED APPS -->
           <div class="flex flex-col gap-2.5">
-            <!-- Pinned Header -->
             <div class="flex items-center justify-between px-1">
               <span class="text-xs font-bold text-slate-200 tracking-wide">Pinned</span>
               <button
@@ -445,7 +668,6 @@ function handleTaskbarContextMenu(e) {
               </button>
             </div>
 
-            <!-- Pinned Grid 6 Kolom Sesuai Screenshot Windows 11 -->
             <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
               <button
                 v-for="app in pinnedApps"
@@ -462,7 +684,6 @@ function handleTaskbarContextMenu(e) {
                 </span>
               </button>
 
-              <!-- Jika ada installed store apps, tambahkan ke pinned grid -->
               <button
                 v-for="app in windowStore.installedStoreApps.slice(0, 3)"
                 :key="app.slug || app.id"
@@ -480,9 +701,8 @@ function handleTaskbarContextMenu(e) {
             </div>
           </div>
 
-          <!-- SECTION 2: RECOMMENDED (Sesuai Screenshot Windows 11) -->
-          <div class="flex flex-col gap-2 pt-2 border-t border-white/10">
-            <!-- Recommended Header -->
+          <!-- SECTION 2: RECOMMENDED -->
+          <div class="flex flex-col gap-2 pt-3 border-t border-white/10 mt-3">
             <div class="flex items-center justify-between px-1">
               <span class="text-xs font-bold text-slate-200 tracking-wide">Recommended</span>
               <button
@@ -494,7 +714,6 @@ function handleTaskbarContextMenu(e) {
               </button>
             </div>
 
-            <!-- Recommended 2 Kolom Grid -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 v-for="item in recommendedItems"
@@ -520,39 +739,70 @@ function handleTaskbarContextMenu(e) {
         </template>
       </div>
 
-      <!-- 3. BOTTOM FOOTER BAR (Akun Administrator, RAZ Brand, dan Tombol Power) -->
-      <div class="pt-4 border-t border-white/10 flex items-center justify-between shrink-0 relative">
-        <!-- Kiri: Akun Administrator Windows 11 -->
-        <button
-          @click="handleStartItemClick('settings')"
-          class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl hover:bg-white/10 transition group"
-          title="Pengaturan Akun Pengguna"
-        >
-          <img
-            :src="systemStore.settings?.account?.avatar || '/assets/brand/RAZBrandSquare.webp'"
-            alt="Avatar"
-            class="w-8 h-8 rounded-full object-cover border border-amber-500/40 shadow-sm group-hover:border-amber-400 transition"
-          />
-          <div class="text-left">
-            <span class="text-xs font-semibold text-slate-100 block group-hover:text-amber-300 transition">
-              {{ authStore.currentUser?.username || systemStore.settings?.account?.name || 'Administrator' }}
-            </span>
-            <span class="text-[9px] text-emerald-400 font-mono block leading-none">● Online</span>
-          </div>
-        </button>
-
-        <!-- Tengah: Brand RAZ Creative Studio Tetap Ada -->
-        <div class="hidden sm:flex items-center gap-1.5 opacity-60 hover:opacity-100 transition px-2" title="Created by RAZ Creative Studio">
-          <span class="text-[9px] text-slate-400">by</span>
-          <img src="/assets/brand/RAZBrandCapsule.webp" alt="RAZ Creative Studio" class="h-3.5 object-contain" />
-        </div>
-
-        <!-- Kanan: Tombol Power Windows 11 -->
+      <!-- 3. BOTTOM FOOTER BAR (Akun Administrator & Tombol Power Khas Windows 11) -->
+      <div class="pt-3 border-t border-white/10 flex items-center justify-between shrink-0 relative mt-1">
+        <!-- Kiri: Akun Administrator Windows 11 (Avatar bulat + Nama pengguna) -->
         <div class="relative">
           <button
-            @click="showPowerMenu = !showPowerMenu"
-            class="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center text-slate-300 hover:text-amber-300 transition active:scale-95"
-            :class="showPowerMenu ? 'bg-white/10 text-amber-300 ring-2 ring-amber-400/30' : ''"
+            @click="showUserMenu = !showUserMenu; showPowerMenu = false"
+            class="flex items-center gap-3 px-2 py-1.5 rounded-xl hover:bg-white/10 transition group text-left"
+            title="Pengaturan Akun Pengguna"
+          >
+            <img
+              :src="authStore.currentUser?.avatar || systemStore.settings?.account?.avatar || '/assets/brand/RAZBrandSquare.webp'"
+              alt="Avatar"
+              class="w-8 h-8 rounded-full object-cover border border-white/20 shadow-sm transition group-hover:border-white/40"
+            />
+            <span class="text-xs sm:text-[13px] font-medium text-slate-200 group-hover:text-white transition">
+              {{ authStore.currentUser?.name || authStore.currentUser?.username || systemStore.settings?.account?.name || 'Administrator' }}
+            </span>
+          </button>
+
+          <!-- User Menu Popover -->
+          <div
+            v-if="showUserMenu"
+            class="absolute bottom-12 left-0 w-56 rounded-2xl bg-[#1e1e1e]/98 backdrop-blur-2xl border border-white/15 p-1.5 shadow-2xl flex flex-col gap-0.5 z-50 animate-in fade-in zoom-in-95 duration-150 text-xs"
+          >
+            <div class="px-3 py-2 border-b border-white/10">
+              <div class="font-semibold text-slate-100 truncate">{{ authStore.currentUser?.name || 'Administrator' }}</div>
+              <div class="text-[10px] text-slate-400 font-mono capitalize">Peran: {{ authStore.currentUser?.role || 'admin' }}</div>
+            </div>
+
+            <button
+              @click="handleStartItemClick('settings'); showUserMenu = false"
+              class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 text-left text-slate-200 transition"
+            >
+              <Settings class="w-3.5 h-3.5 text-sky-400" />
+              <span>Pengaturan Akun</span>
+            </button>
+
+            <button
+              v-if="authStore.canManageUsers()"
+              @click="windowStore.openUsersManager(); showUserMenu = false; isStartMenuOpen = false"
+              class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 text-left text-purple-300 transition"
+            >
+              <Users class="w-3.5 h-3.5 text-purple-400" />
+              <span>Kelola Pengguna (RBAC)</span>
+            </button>
+
+            <div class="my-0.5 border-t border-white/10"></div>
+
+            <button
+              @click="showConfirmPowerModal = 'logout'; showUserMenu = false"
+              class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-rose-500/20 text-left text-rose-300 transition"
+            >
+              <LogOut class="w-3.5 h-3.5 text-rose-400" />
+              <span>Keluar Sesi (Logout)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Kanan: Tombol Power Bulat Khas Windows 11 -->
+        <div class="relative">
+          <button
+            @click="showPowerMenu = !showPowerMenu; showUserMenu = false"
+            class="w-9 h-9 rounded-full hover:bg-white/10 flex items-center justify-center text-slate-200 hover:text-white transition active:scale-95"
+            :class="showPowerMenu ? 'bg-white/15 text-white ring-2 ring-white/20' : ''"
             title="Daya Sistem (Power)"
           >
             <Power class="w-4 h-4" />
@@ -561,7 +811,7 @@ function handleTaskbarContextMenu(e) {
           <!-- Power Menu Popover -->
           <div
             v-if="showPowerMenu"
-            class="absolute bottom-12 right-0 w-48 rounded-2xl bg-slate-950/95 backdrop-blur-xl border border-white/15 p-1.5 shadow-2xl flex flex-col gap-0.5 z-50 animate-in fade-in zoom-in-95 duration-150"
+            class="absolute bottom-12 right-0 w-48 rounded-2xl bg-[#1e1e1e]/98 backdrop-blur-2xl border border-white/15 p-1.5 shadow-2xl flex flex-col gap-0.5 z-50 animate-in fade-in zoom-in-95 duration-150"
           >
             <button
               v-if="authStore.canManageUsers()"

@@ -4,6 +4,33 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 
 ---
 
+### Versi: 3.7.5-win11-all-apps-start-menu (Windows 11 All Apps Alphabetical Grouping & Interactive Folder Expansion)
+**Waktu Eksekusi:** 2026-10-22 13:24 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah & Kebutuhan Pengguna
+- Pengguna meminta agar tampilan Start Menu diubah secara presisi mengikuti referensi visual Windows 11 "All apps" view (berdasarkan tangkapan layar `media_1792649799836_9eff3c5e.png`).
+- Diperlukan antarmuka minimalis, vertikal, dan elegan yang berfokus langsung pada daftar alfabetis A-Z lengkap dengan dukungan folder sistem ber-chevron yang dapat di-expand/collapse.
+- Mempertahankan tombol Start Orb Windows 7 bulat dengan logo emas RAZOS serta navigasi dwi-arah (All Apps <-> Pinned).
+
+#### 2. Implementasi & Rekayasa Tampilan
+- **Search Capsule Windows 11 Fluent:**
+  - Penataan ulang kapsul pencarian di posisi atas dengan background semi-transparan `#2a2a2c`, border halus `border-white/5`, ikon search cyan, dan placeholder asli: `"Search for apps, settings, and documents"`.
+- **Sub-Header Navigasi ("All" & "< Back"):**
+  - Judul "All" tebal di sisi kiri dan tombol kapsul `< Back` di sisi kanan untuk kembali ke mode Pinned jika diinginkan.
+  - Mode default Start Menu saat dibuka langsung diarahkan ke tampilan "All Apps".
+- **Alphabetical Grouping (A-Z) & Folder Dropdown Interaktif:**
+  - Pengelompokan seluruh aplikasi sistem (`windowStore.apps`) dan aplikasi Docker yang terpasang (`windowStore.installedStoreApps`) ke dalam huruf abjad awal masing-masing.
+  - Menghadirkan folder sistem khas Windows 11 (contoh: *Accessibility*, *Antigravity*, dan *AnyDesk & Remote Tools*) dengan ikon folder kuning Windows Fluent (`RAZIconWinFolder.svg`) dan panah chevron down di sebelah kanan.
+  - Interaksi klik folder melakukan toggle expand/collapse untuk menampilkan sub-item aplikasi yang terindentasi rapi.
+- **Windows 11 Footer Bar:**
+  - Kiri: Profil akun pengguna aktif (*Administrator*) dengan avatar bulat, nama pengguna, dan popover menu profil/switch user.
+  - Kanan: Tombol daya Power bulat dengan popover daya terpadu (Restart, Shutdown, Logout) berbasis custom modal tanpa alert native browser.
+- **Aset Baru:**
+  - Dibuat aset vektor SVG `frontend/public/assets/icons/RAZIconWinFolder.svg` bergradien kuning khas Windows 11 Fluent Design.
+
+---
+
 ### Versi: 3.7.0-multi-user-rbac-cloud-sync (Dukungan Multi-User, Granular RBAC, & Sinkronisasi Cloud Eksternal rclone WebDAV / Nextcloud)
 **Waktu Eksekusi:** 2026-10-22 11:55 WIB  
 **Pelaksana:** Antigravity AI Senior Systems Engineer  
