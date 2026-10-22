@@ -551,7 +551,7 @@ function handleTaskbarContextMenu(e) {
       </div>
 
       <!-- 2. CONTENT AREA: ALL APPS ALPHABETICAL (DEFAULT) ATAU PINNED -->
-      <div class="flex-1 overflow-y-auto pr-1 flex flex-col" style="scrollbar-width: thin;">
+      <div class="flex-1 overflow-y-auto pr-1 flex flex-col raz-win11-scrollbar">
         
         <!-- MODE A: ALL APPS VIEW (Sesuai Screenshot User) -->
         <template v-if="showAllAppsView">
@@ -950,5 +950,34 @@ function handleTaskbarContextMenu(e) {
   background: rgba(15, 23, 42, 0.85);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+}
+
+/* Custom Windows 11 Fluent Scrollbar (Mica/Acrylic Slim Scrollbar) */
+.raz-win11-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+.raz-win11-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.raz-win11-scrollbar::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0;
+  height: 0;
+}
+.raz-win11-scrollbar::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+.raz-win11-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+  transition: background 0.2s ease;
+}
+.raz-win11-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.45);
+}
+.raz-win11-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
 }
 </style>

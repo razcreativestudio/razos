@@ -4,6 +4,25 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 
 ---
 
+### Versi: 3.7.6-win11-custom-fluent-scrollbar (Windows 11 Fluent Overlay Scrollbar & Eliminasi Total Native Browser Scrollbar)
+**Waktu Eksekusi:** 2026-10-22 13:46 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah yang Diperbaiki
+- Pengguna melaporkan bahwa scrollbar di Start Menu menampilkan scrollbar native browser Windows yang kaku (track putih lebar dengan tombol panah atas-bawah).
+- Hal ini mengurangi keindahan visual dark mica glassmorphism Start Menu Windows 11.
+
+#### 2. Solusi Rekayasa Visual
+- **Penghapusan Total Scrollbar Native:**
+  - Menghapus tombol panah `::-webkit-scrollbar-button { display: none !important; width: 0; height: 0; }` secara global di `RAZTheme.css` dan scoped di `RAZTaskbar.vue`.
+  - Mengubah track menjadi transparan penuh (`background: transparent !important`).
+- **Implementasi Windows 11 Fluent Overlay Scrollbar (`.raz-win11-scrollbar`):**
+  - Lebar ultra-slim: 5px dengan kelengkungan kapsul penuh (`border-radius: 9999px`).
+  - Thumb semi-transparan `rgba(255, 255, 255, 0.2)` yang berpadu mulus dengan tema gelap, dan menjadi `rgba(255, 255, 255, 0.45)` saat di-hover.
+  - Dukungan cross-browser standar modern: `scrollbar-width: thin;` dan `scrollbar-color: rgba(255, 255, 255, 0.22) transparent;`.
+
+---
+
 ### Versi: 3.7.5-win11-all-apps-start-menu (Windows 11 All Apps Alphabetical Grouping & Interactive Folder Expansion)
 **Waktu Eksekusi:** 2026-10-22 13:24 WIB  
 **Pelaksana:** Antigravity AI Senior Systems Engineer  
