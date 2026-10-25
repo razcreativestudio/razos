@@ -1,7 +1,7 @@
 #!/bin/bash
 # ==============================================================================
 # RAZOS 1-Click Smart Installer Script
-# Updated: 2026-10-25 (v3.8.1 - Fix Go Module Dependencies & Automatic go mod tidy)
+# Updated: 2026-10-25 (v3.8.2 - Automated Go 1.22 Toolchain Setup for ARM64)
 # Deskripsi: Skrip pemasangan mandiri RAZOS pada STB Linux ARM64 (aarch64).
 # Mengonfigurasi direktori MicroSD (/DATA), mengunduh binary rilis resmi,
 # atau melakukan kompilasi otomatis langsung di host jika release binary belum tersedia.
@@ -44,11 +44,29 @@ fi
 if [ "$DOWNLOAD_SUCCESS" = false ]; then
     echo "[!] Binary pra-rilis GitHub belum tersedia. Memulai mode kompilasi otomatis di STB..."
     
-    # Pastikan git dan golang terpasang
-    if ! command -v git &> /dev/null || ! command -v go &> /dev/null; then
-        echo "[+] Memasang dependensi kompilasi ringan (git, golang-go)..."
+    # Pastikan git dan curl terpasang
+    if ! command -v git &> /dev/null || ! command -v curl &> /dev/null; then
+        echo "[+] Memasang dependensi ringan (git, curl)..."
         apt update -y
-        apt install -y git golang-go
+        apt install -y git curl
+    fi
+
+    # Pastikan Go 1.22+ terpasang untuk mendukung modul modern (cmp, slices, log/slog)
+    GO_NEED_INSTALL=false
+    if ! command -v go &> /dev/null; then
+        GO_NEED_INSTALL=true
+    else
+        GO_CUR_VER=$(go version 2>/dev/null | awk '{print $3}' | sed 's/go//' | cut -d'.' -f1,2)
+        if [ "$GO_CUR_VER" = "1.18" ] || [ "$GO_CUR_VER" = "1.19" ] || [ "$GO_CUR_VER" = "1.20" ]; then
+            GO_NEED_INSTALL=true
+        fi
+    fi
+
+    if [ "$GO_NEED_INSTALL" = true ]; then
+        echo "[+] Memasang Go 1.22 ARM64 resmi dari go.dev..."
+        curl -fsSL https://go.dev/dl/go1.22.7.linux-arm64.tar.gz | tar -C /usr/local -xz
+        ln -sf /usr/local/go/bin/go /usr/bin/go
+        ln -sf /usr/local/go/bin/gofmt /usr/bin/gofmt
     fi
 
     echo "[+] Mengambil source code terbaru dari GitHub..."
