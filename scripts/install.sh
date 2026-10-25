@@ -1,7 +1,7 @@
 #!/bin/bash
 # ==============================================================================
 # RAZOS 1-Click Smart Installer Script
-# Updated: 2026-10-25 (v3.8.0 - Self-Healing Binary Download & Automatic Fallback Build)
+# Updated: 2026-10-25 (v3.8.1 - Fix Go Module Dependencies & Automatic go mod tidy)
 # Deskripsi: Skrip pemasangan mandiri RAZOS pada STB Linux ARM64 (aarch64).
 # Mengonfigurasi direktori MicroSD (/DATA), mengunduh binary rilis resmi,
 # atau melakukan kompilasi otomatis langsung di host jika release binary belum tersedia.
@@ -55,9 +55,12 @@ if [ "$DOWNLOAD_SUCCESS" = false ]; then
     rm -rf /DATA/razos/src
     git clone --depth 1 https://github.com/razcreativestudio/razos.git /DATA/razos/src
 
-    echo "[+] Melakukan kompilasi binary server RAZOS..."
-    cd /DATA/razos/src/backend/cmd/server
-    go build -ldflags="-s -w" -o /DATA/razos/bin/razos RAZMainServer.go
+    echo "[+] Menyiapkan dependensi modul Go (go mod tidy)..."
+    cd /DATA/razos/src/backend
+    go mod tidy
+
+    echo "[+] Melakukan kompilasi binary server RAZOS ARM64..."
+    go build -ldflags="-s -w" -o /DATA/razos/bin/razos ./cmd/server/RAZMainServer.go
     chmod +x /DATA/razos/bin/razos
     echo "[✓] Kompilasi binary RAZOS ARM64 berhasil diselesaikan."
 fi
