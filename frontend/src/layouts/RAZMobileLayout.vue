@@ -68,7 +68,7 @@ function toggleFullscreen() {
       <div class="flex items-center gap-3">
         <div class="flex items-center gap-1 text-[11px]">
           <Thermometer class="w-3.5 h-3.5 text-amber-400" />
-          <span>{{ systemStore.metrics.cpu_temp.toFixed(0) }}°C</span>
+          <span>{{ (systemStore.metrics?.cpu_temp ?? 0).toFixed(0) }}°C</span>
         </div>
         <button @click="toggleFullscreen" class="p-1 hover:text-white">
           <Maximize2 class="w-3.5 h-3.5" />
@@ -93,14 +93,14 @@ function toggleFullscreen() {
             <Cpu class="w-4 h-4 text-sky-400 shrink-0" />
             <div>
               <div class="text-[10px] text-slate-400">CPU Load</div>
-              <div class="font-bold text-slate-200">{{ systemStore.metrics.cpu_percent.toFixed(0) }}%</div>
+              <div class="font-bold text-slate-200">{{ (systemStore.metrics?.cpu_percent ?? 0).toFixed(0) }}%</div>
             </div>
           </div>
           <div class="flex items-center gap-2 p-2 rounded-xl bg-slate-900/60">
             <HardDrive class="w-4 h-4 text-emerald-400 shrink-0" />
             <div>
               <div class="text-[10px] text-slate-400">RAM Load</div>
-              <div class="font-bold text-slate-200">{{ systemStore.metrics.ram_percent.toFixed(0) }}%</div>
+              <div class="font-bold text-slate-200">{{ (systemStore.metrics?.ram_percent ?? 0).toFixed(0) }}%</div>
             </div>
           </div>
         </div>

@@ -9,6 +9,7 @@ package store
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -20,6 +21,9 @@ import (
 	"github.com/docker/go-connections/nat"
 	"github.com/shirou/gopsutil/v3/mem"
 )
+
+//go:embed RAZApps.json
+var embeddedAppsJSON []byte
 
 // AppManifest struktur skema aplikasi di App Store
 type AppManifest struct {
@@ -51,13 +55,23 @@ type DeployRequest struct {
 
 // GetCatalog membaca katalog aplikasi dan mencocokkan status instalasi container
 func GetCatalog() ([]AppManifest, error) {
-	data, err := os.ReadFile("internal/store/RAZApps.json")
-	if err != nil {
-		// Fallback jika dieksekusi dari direktori backend/
-		data, err = os.ReadFile("backend/internal/store/RAZApps.json")
-		if err != nil {
-			return nil, err
+	candidatePaths := []string{
+		"/DATA/razos/src/backend/internal/store/RAZApps.json",
+		"/DATA/razos/store/RAZApps.json",
+		"backend/internal/store/RAZApps.json",
+		"internal/store/RAZApps.json",
+	}
+
+	var data []byte
+	for _, p := range candidatePaths {
+		if content, err := os.ReadFile(p); err == nil && len(content) > 0 {
+			data = content
+			break
 		}
+	}
+
+	if len(data) == 0 {
+		data = embeddedAppsJSON
 	}
 
 	var catalog []AppManifest

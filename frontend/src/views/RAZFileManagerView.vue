@@ -1143,10 +1143,10 @@ onMounted(async () => {
                   <component :is="dev.is_usb ? Usb : HardDrive" class="w-3.5 h-3.5 text-sky-400 shrink-0" />
                   <span class="text-[11px] font-medium text-slate-200 truncate">{{ dev.label }}</span>
                 </div>
-                <span class="text-[10px] text-slate-400 font-mono">{{ dev.percent.toFixed(0) }}%</span>
+                <span class="text-[10px] text-slate-400 font-mono">{{ (dev.percent ?? 0).toFixed(0) }}%</span>
               </div>
               <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
-                <div class="bg-sky-400 h-full" :style="{ width: `${dev.percent}%` }"></div>
+                <div class="bg-sky-400 h-full" :style="{ width: `${dev.percent ?? 0}%` }"></div>
               </div>
             </div>
           </div>
@@ -1178,10 +1178,10 @@ onMounted(async () => {
                   <Cloud class="w-3.5 h-3.5 text-sky-400 shrink-0" />
                   <span class="text-[11px] font-medium text-sky-200 truncate">{{ dev.label }}</span>
                 </div>
-                <span class="text-[10px] text-sky-300 font-mono">{{ dev.percent.toFixed(0) }}%</span>
+                <span class="text-[10px] text-sky-300 font-mono">{{ (dev.percent ?? 0).toFixed(0) }}%</span>
               </div>
               <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
-                <div class="bg-gradient-to-r from-sky-500 to-indigo-500 h-full" :style="{ width: `${dev.percent}%` }"></div>
+                <div class="bg-gradient-to-r from-sky-500 to-indigo-500 h-full" :style="{ width: `${dev.percent ?? 0}%` }"></div>
               </div>
             </div>
 

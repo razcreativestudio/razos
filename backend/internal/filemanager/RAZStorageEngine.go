@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -121,11 +122,23 @@ func GetStorageDevices() ([]StorageDevice, error) {
 
 // ListDirectory membaca isi direktori target dengan proteksi path sanitization
 func ListDirectory(targetPath string) ([]FileItem, error) {
+	// Normalisasi path jika frontend Windows dev mengirimkan C:/DATA atau C:\DATA saat backend berjalan di Linux
+	if runtime.GOOS != "windows" {
+		tpLower := strings.ToLower(filepath.ToSlash(targetPath))
+		if strings.HasPrefix(tpLower, "c:/data") {
+			targetPath = "/DATA" + targetPath[7:]
+		} else if strings.HasPrefix(tpLower, "c:/") {
+			targetPath = "/" + targetPath[3:]
+		} else if tpLower == "c:" {
+			targetPath = "/"
+		}
+	}
+
 	if targetPath == "" || targetPath == "." || targetPath == "/" || targetPath == "/DATA" {
-		if _, err := os.Stat("C:\\DATA"); err == nil {
-			targetPath = "C:\\DATA"
-		} else if _, err := os.Stat("/DATA"); err == nil {
+		if _, err := os.Stat("/DATA"); err == nil {
 			targetPath = "/DATA"
+		} else if _, err := os.Stat("C:\\DATA"); err == nil {
+			targetPath = "C:\\DATA"
 		} else {
 			targetPath = "."
 		}

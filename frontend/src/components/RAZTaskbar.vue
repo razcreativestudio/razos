@@ -862,19 +862,19 @@ function handleTaskbarContextMenu(e) {
       <!-- CPU Usage -->
       <div class="flex items-center gap-1 hidden md:flex" title="Penggunaan CPU">
         <Cpu class="w-3.5 h-3.5 text-sky-400" />
-        <span>{{ systemStore.metrics.cpu_percent.toFixed(0) }}%</span>
+        <span>{{ (systemStore.metrics?.cpu_percent ?? 0).toFixed(0) }}%</span>
       </div>
 
       <!-- RAM Usage -->
       <div class="flex items-center gap-1 hidden md:flex" title="Penggunaan RAM">
         <HardDrive class="w-3.5 h-3.5 text-emerald-400" />
-        <span>{{ systemStore.metrics.ram_percent.toFixed(0) }}%</span>
+        <span>{{ (systemStore.metrics?.ram_percent ?? 0).toFixed(0) }}%</span>
       </div>
 
       <!-- SOC Temp -->
       <div class="flex items-center gap-1 hidden sm:flex" title="Suhu SoC STB">
         <Thermometer class="w-3.5 h-3.5 text-amber-400" />
-        <span>{{ systemStore.metrics.cpu_temp.toFixed(0) }}°C</span>
+        <span>{{ (systemStore.metrics?.cpu_temp ?? 0).toFixed(0) }}°C</span>
       </div>
 
       <!-- Fullscreen Toggle -->

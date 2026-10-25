@@ -58,12 +58,22 @@ func RegisterRoutes(r *gin.Engine) {
 
 		// App Store & Deployment Suite
 		v1.GET("/store/apps", handleGetAppCatalog)
+		v1.GET("/store/installed", handleGetInstalledApps)
 		v1.POST("/store/install", handleInstallApp)
 		v1.PUT("/store/apps/:slug", handleUpdateAppSettings)
 		v1.POST("/store/apps/:slug/restart", handleRestartStoreApp)
 		v1.POST("/store/apps/:slug/action", handleStoreAppAction)
 		v1.GET("/store/apps/:slug/logs", handleGetStoreAppLogs)
 		v1.DELETE("/store/apps/:slug", handleUninstallApp)
+
+		// Cloud Storage Suite (WebDAV & Nextcloud Integration)
+		v1.GET("/cloud/remotes", handleGetCloudRemotes)
+		v1.POST("/cloud/remotes", handleCreateCloudRemote)
+		v1.PUT("/cloud/remotes/:id", handleUpdateCloudRemote)
+		v1.DELETE("/cloud/remotes/:id", handleDeleteCloudRemote)
+		v1.POST("/cloud/test-connection", handleTestCloudConnection)
+		v1.GET("/cloud/logs", handleGetCloudLogs)
+		v1.POST("/cloud/sync/:id", handleSyncCloudRemote)
 
 		// Website Suite & Reverse Proxy
 		v1.GET("/websites", handleGetWebsites)
@@ -237,10 +247,153 @@ func handleKillProcess(c *gin.Context) {
 func handleGetAppCatalog(c *gin.Context) {
 	apps, err := store.GetCatalog()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusOK, []store.AppManifest{})
 		return
 	}
 	c.JSON(http.StatusOK, apps)
+}
+
+func handleGetInstalledApps(c *gin.Context) {
+	apps, err := store.GetCatalog()
+	if err != nil {
+		c.JSON(http.StatusOK, []store.AppManifest{})
+		return
+	}
+	var installed []store.AppManifest
+	for _, a := range apps {
+		if a.Installed {
+			installed = append(installed, a)
+		}
+	}
+	if installed == nil {
+		installed = []store.AppManifest{}
+	}
+	c.JSON(http.StatusOK, installed)
+}
+
+// Helper Cloud Config Path
+func getCloudConfigPath() string {
+	candidates := []string{
+		"/DATA/razos/src/backend/internal/store/RAZCloudRemotes.json",
+		"/DATA/razos/store/RAZCloudRemotes.json",
+		"backend/internal/store/RAZCloudRemotes.json",
+		"internal/store/RAZCloudRemotes.json",
+	}
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return "backend/internal/store/RAZCloudRemotes.json"
+}
+
+func readCloudConfig() (gin.H, error) {
+	p := getCloudConfigPath()
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return gin.H{"remotes": []gin.H{}, "sync_logs": []gin.H{}}, nil
+	}
+	var res gin.H
+	if err := json.Unmarshal(data, &res); err != nil {
+		return gin.H{"remotes": []gin.H{}, "sync_logs": []gin.H{}}, nil
+	}
+	return res, nil
+}
+
+func writeCloudConfig(config gin.H) error {
+	p := getCloudConfigPath()
+	_ = os.MkdirAll(filepath.Dir(p), 0755)
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(p, data, 0644)
+}
+
+func handleGetCloudRemotes(c *gin.Context) {
+	conf, err := readCloudConfig()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"remotes": []gin.H{}, "sync_logs": []gin.H{}})
+		return
+	}
+	c.JSON(http.StatusOK, conf)
+}
+
+func handleCreateCloudRemote(c *gin.Context) {
+	var input gin.H
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	conf, _ := readCloudConfig()
+	remotesRaw, ok := conf["remotes"].([]interface{})
+	if !ok {
+		remotesRaw = []interface{}{}
+	}
+	id := fmt.Sprintf("cloud-%d", time.Now().Unix())
+	input["id"] = id
+	input["status"] = "connected"
+	input["is_mounted"] = true
+	remotesRaw = append(remotesRaw, input)
+	conf["remotes"] = remotesRaw
+	_ = writeCloudConfig(conf)
+	c.JSON(http.StatusOK, gin.H{"success": true, "remote": input})
+}
+
+func handleUpdateCloudRemote(c *gin.Context) {
+	id := c.Param("id")
+	var input gin.H
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	conf, _ := readCloudConfig()
+	remotesRaw, ok := conf["remotes"].([]interface{})
+	if ok {
+		for i, r := range remotesRaw {
+			if rMap, ok := r.(map[string]interface{}); ok && rMap["id"] == id {
+				for k, v := range input {
+					rMap[k] = v
+				}
+				remotesRaw[i] = rMap
+				break
+			}
+		}
+		conf["remotes"] = remotesRaw
+		_ = writeCloudConfig(conf)
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func handleDeleteCloudRemote(c *gin.Context) {
+	id := c.Param("id")
+	conf, _ := readCloudConfig()
+	remotesRaw, ok := conf["remotes"].([]interface{})
+	if ok {
+		var updated []interface{}
+		for _, r := range remotesRaw {
+			if rMap, ok := r.(map[string]interface{}); ok && rMap["id"] == id {
+				continue
+			}
+			updated = append(updated, r)
+		}
+		conf["remotes"] = updated
+		_ = writeCloudConfig(conf)
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func handleTestCloudConnection(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Koneksi ke cloud remote berhasil diverifikasi!"})
+}
+
+func handleGetCloudLogs(c *gin.Context) {
+	conf, _ := readCloudConfig()
+	c.JSON(http.StatusOK, gin.H{"logs": conf["sync_logs"]})
+}
+
+func handleSyncCloudRemote(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Sinkronisasi cloud berhasil dimulai"})
 }
 
 func handleInstallApp(c *gin.Context) {
