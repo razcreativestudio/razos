@@ -24,6 +24,7 @@ const systemStore = useSystemStore()
 const windowStore = useWindowStore()
 
 const site = computed(() => props.win.customData || {})
+const currentHostname = computed(() => window.location.hostname || 'localhost')
 const copiedField = ref(null)
 
 function copyToClipboard(text, fieldName) {
@@ -156,7 +157,7 @@ function openRootFolderInFiles() {
           <span>Edit Konfigurasi</span>
         </button>
         <a
-          :href="'http://' + (site.domain || 'localhost') + ':' + site.port"
+          :href="'http://' + (site.domain || currentHostname) + ':' + site.port"
           target="_blank"
           class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition shadow active:scale-95"
         >

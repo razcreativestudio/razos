@@ -138,6 +138,7 @@ async function openDatabaseManager(site) {
 }
 
 // Dialog konfirmasi hapus website
+const currentHostname = computed(() => window.location.hostname || 'localhost')
 function promptDeleteWebsite(site) {
   siteToDelete.value = site
   purgeRootFolder.value = false
@@ -323,12 +324,12 @@ onMounted(() => {
               <!-- Host Link & Runtime Tag -->
               <div class="flex items-center gap-2 mt-1">
                 <a
-                  :href="'http://' + (site.domain || 'localhost') + ':' + site.port"
+                  :href="'http://' + (site.domain || currentHostname) + ':' + site.port"
                   target="_blank"
                   class="inline-flex items-center gap-1 font-mono text-[11px] text-sky-400 hover:text-sky-300 hover:underline truncate max-w-[210px]"
-                  :title="'http://' + (site.domain || 'localhost') + ':' + site.port"
+                  :title="'http://' + (site.domain || currentHostname) + ':' + site.port"
                 >
-                  <span class="truncate">{{ site.domain || 'localhost' }}</span>
+                  <span class="truncate">{{ site.domain || (currentHostname + ':' + site.port) }}</span>
                   <ExternalLink class="w-3 h-3 shrink-0" />
                 </a>
 
@@ -482,7 +483,7 @@ onMounted(() => {
           <!-- Right Actions: Launch Web Button & Delete -->
           <div class="flex items-center gap-1.5">
             <a
-              :href="'http://' + (site.domain || 'localhost') + ':' + site.port"
+              :href="'http://' + (site.domain || currentHostname) + ':' + site.port"
               target="_blank"
               class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-slate-950 font-bold flex items-center gap-1.5 text-xs transition shadow-md shadow-sky-500/20 active:scale-95"
             >

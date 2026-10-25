@@ -12,8 +12,10 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -176,12 +178,16 @@ func DeployApp(req DeployRequest) error {
 	ctx := context.Background()
 
 	// Setup Port Binding
+	targetPort := req.Port
+	if targetPort <= 0 {
+		targetPort = defaultPort
+	}
 	natPort, _ := nat.NewPort("tcp", fmt.Sprintf("%d", defaultPort))
 
 	hostConfig := &container.HostConfig{
 		PortBindings: nat.PortMap{
 			natPort: []nat.PortBinding{
-				{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", req.Port)},
+				{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", targetPort)},
 			},
 		},
 		Binds: []string{
@@ -192,6 +198,17 @@ func DeployApp(req DeployRequest) error {
 		Resources: container.Resources{
 			Memory: 256 * 1024 * 1024, // Limit 256 MB per container
 		},
+	}
+
+	// Pastikan Image Docker sudah ada di local STB atau unduh (ImagePull)
+	_, _, err = cli.ImageInspectWithRaw(ctx, targetImage)
+	if err != nil {
+		out, pullErr := cli.ImagePull(ctx, targetImage, types.ImagePullOptions{})
+		if pullErr != nil {
+			return fmt.Errorf("gagal mengunduh docker image %s: %v", targetImage, pullErr)
+		}
+		defer out.Close()
+		_, _ = io.Copy(io.Discard, out)
 	}
 
 	// Hapus jika ada container lama dengan nama sama
@@ -225,6 +242,9 @@ func CleanUninstall(appSlug string, purgeData bool) error {
 		RemoveVolumes: true,
 		Force:         true,
 	})
+	if err != nil && (client.IsErrNotFound(err) || strings.Contains(strings.ToLower(err.Error()), "no such container")) {
+		err = nil
+	}
 
 	// Jika opsi purgeData aktif, musnahkan folder data di /DATA/apps/<slug>
 	if purgeData {

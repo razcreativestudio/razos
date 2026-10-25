@@ -13,6 +13,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -301,7 +303,12 @@ func CreateWebsite(req CreateWebsiteRequest) (*Website, error) {
 	}
 
 	// Coba deploy ke Docker engine jika daemon aktif
-	_ = deployDockerContainer(&newSite)
+	if err := deployDockerContainer(&newSite); err != nil {
+		log.Printf("[RAZWebsite] Gagal deploy container: %v", err)
+		newSite.Status = "stopped"
+	} else {
+		newSite.Status = "running"
+	}
 
 	// Daftarkan ke Reverse Proxy internal
 	if newSite.Domain != "" {
@@ -653,7 +660,7 @@ func deployDockerContainer(site *Website) error {
 	}
 	defer cli.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
 	// Tentukan Image & Target Port Container sesuai spesifikasi STB
@@ -688,6 +695,22 @@ func deployDockerContainer(site *Website) error {
 		mountDest = "/usr/share/nginx/html"
 		containerTargetPort = "80"
 	}
+
+	// Pastikan Docker Image sudah tersedia di STB atau unduh (ImagePull)
+	_, _, inspectErr := cli.ImageInspectWithRaw(ctx, imageName)
+	if inspectErr != nil {
+		log.Printf("[RAZWebsite] Mengunduh Docker image: %s ...", imageName)
+		out, pullErr := cli.ImagePull(ctx, imageName, types.ImagePullOptions{})
+		if pullErr != nil {
+			log.Printf("[RAZWebsite] Gagal mengunduh image %s: %v", imageName, pullErr)
+			return pullErr
+		}
+		defer out.Close()
+		_, _ = io.Copy(io.Discard, out)
+	}
+
+	// Hapus jika ada container lama dengan nama sama
+	_ = cli.ContainerRemove(ctx, site.ContainerName, types.ContainerRemoveOptions{Force: true})
 
 	natPort, _ := nat.NewPort("tcp", containerTargetPort)
 	hostBinding := nat.PortBinding{
