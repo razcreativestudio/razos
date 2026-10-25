@@ -35,3 +35,17 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 - **Kompilasi Standalone:** Menjalankan `go build -ldflags="-s -w" -o /DATA/razos/bin/razos ./cmd/server/RAZMainServer.go` dari root backend.
 - **Pembaruan `scripts/install.sh`:** Memperbarui alur fallback agar otomatis mengeksekusi `go mod tidy` di root modul backend sebelum memanggil `go build`.
 - **Kompatibilitas Go:** Menyesuaikan `backend/go.mod` ke `go 1.19`.
+
+
+---
+
+### Versi: 3.8.3-opentelemetry-dependency-pinning (OpenTelemetry & Docker SDK Compatibility Pinning)
+**Waktu Eksekusi:** 2026-10-25 12:38 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah yang Diperbaiki
+- Pada saat kompilasi dengan Go 1.22 di STB ARM64, dependensi transitif Docker SDK (`otelhttp`) secara otomatis mencoba menarik versi rilis bleeding-edge `v0.72.0` yang menuntut `go >= 1.26.0`, memicu error `toolchain upgrade needed` dan kegagalan kompilasi.
+
+#### 2. Solusi & Perubahan
+- Mengunci (*pinning*) versi OpenTelemetry (`otelhttp v0.49.0`, `otel v1.24.0`), Docker utilities (`go-connections`, `go-units`, `image-spec`), serta submodul `golang.org/x/net v0.22.0` dan `golang.org/x/sys v0.18.0` di dalam berkas `backend/go.mod`.
+- Memastikan seluruh rantai dependensi 100% cocok dan terverifikasi di atas Go 1.22 tanpa memerlukan upgrade toolchain tambahan.
