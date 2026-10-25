@@ -40,37 +40,67 @@ type FileItem struct {
 	Extension string    `json:"extension"`
 }
 
-// GetStorageDevices mendeteksi seluruh perangkat penyimpanan (eMMC, MicroSD, HDD eksternal, USB)
+// GetStorageDevices mendeteksi seluruh perangkat penyimpanan fisik yang valid (eMMC, MicroSD, HDD eksternal, USB)
 func GetStorageDevices() ([]StorageDevice, error) {
-	partitions, err := disk.Partitions(true)
+	// false = hanya ambil physical mounts, bukan virtual/overlay mounts
+	partitions, err := disk.Partitions(false)
 	if err != nil {
-		return nil, err
+		partitions, _ = disk.Partitions(true)
 	}
 
 	var devices []StorageDevice
+	seenMounts := make(map[string]bool)
+
 	for _, p := range partitions {
-		// Abaikan mountpoint loopback dan pseudofilesystems di Linux
-		if strings.HasPrefix(p.Mountpoint, "/sys") ||
-			strings.HasPrefix(p.Mountpoint, "/proc") ||
-			strings.HasPrefix(p.Mountpoint, "/dev") ||
-			strings.HasPrefix(p.Mountpoint, "/run") {
+		// 1. Abaikan pseudofilesystem dan virtual devices (loop, zram, tmpfs, overlay)
+		if strings.HasPrefix(p.Device, "/dev/loop") ||
+			strings.HasPrefix(p.Device, "/dev/zram") ||
+			strings.HasPrefix(p.Device, "overlay") ||
+			strings.HasPrefix(p.Device, "shm") ||
+			strings.HasPrefix(p.Device, "tmpfs") {
 			continue
 		}
 
+		// 2. Abaikan filesystem type virtual / container
+		fsLower := strings.ToLower(p.Fstype)
+		if fsLower == "squashfs" || fsLower == "overlay" || fsLower == "tmpfs" || fsLower == "devtmpfs" || fsLower == "iso9660" {
+			continue
+		}
+
+		// 3. Abaikan mountpoint internal sistem Linux, Docker, & boot
+		mp := filepath.Clean(p.Mountpoint)
+		if strings.HasPrefix(mp, "/sys") ||
+			strings.HasPrefix(mp, "/proc") ||
+			strings.HasPrefix(mp, "/dev") ||
+			strings.HasPrefix(mp, "/run") ||
+			strings.HasPrefix(mp, "/var/lib/docker") ||
+			strings.HasPrefix(mp, "/var/lib/containerd") ||
+			strings.HasPrefix(mp, "/snap") ||
+			strings.HasPrefix(mp, "/boot") {
+			continue
+		}
+
+		// Cegah duplikasi mountpoint
+		if seenMounts[mp] {
+			continue
+		}
+		seenMounts[mp] = true
+
 		usage, err := disk.Usage(p.Mountpoint)
-		if err != nil {
+		if err != nil || usage.Total == 0 {
 			continue
 		}
 
 		label := p.Mountpoint
 		isUSB := false
-		if strings.Contains(strings.ToLower(p.Mountpoint), "media") || strings.Contains(strings.ToLower(p.Mountpoint), "usb") || strings.Contains(strings.ToLower(p.Device), "sd") {
-			isUSB = true
-			label = "External Storage (" + p.Mountpoint + ")"
-		} else if p.Mountpoint == "/DATA" || p.Mountpoint == "C:\\DATA" {
-			label = "Primary Storage (/DATA)"
+
+		if p.Mountpoint == "/DATA" || p.Mountpoint == "C:\\DATA" {
+			label = "Primary Storage (/DATA - MicroSD)"
 		} else if p.Mountpoint == "/" || strings.HasPrefix(strings.ToUpper(p.Mountpoint), "C:") {
-			label = "System Root Disk (" + p.Mountpoint + ")"
+			label = "System Storage (/ - eMMC)"
+		} else if strings.Contains(strings.ToLower(p.Mountpoint), "media") || strings.Contains(strings.ToLower(p.Mountpoint), "usb") || strings.HasPrefix(p.Mountpoint, "/mnt") {
+			isUSB = true
+			label = "External Storage (" + filepath.Base(p.Mountpoint) + ")"
 		}
 
 		devices = append(devices, StorageDevice{
