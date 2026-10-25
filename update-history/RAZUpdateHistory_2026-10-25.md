@@ -106,3 +106,30 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 - **Fault-Tolerant Uninstaller (`RAZAppStoreEngine.go`):** Menangani error "No such container" secara elegan sehingga proses uninstall atau pembersihan kontainer yang gagal terpasang tidak lagi memicu error 500.
 - **Dynamic Hostname Binding (`RAZWebsitesView.vue` & `RAZWebsiteDetailView.vue`):** Mengganti referensi `localhost` dengan `window.location.hostname` dinamis sehingga tautan website langsung mengarah ke IP STB (`http://192.168.100.117:<port>`).
 - **Pembaruan Bundle JS:** Melakukan rebuild frontend Vite (`index-CXrjxw0e.js`) dan memastikan seluruh bundle terdaftar di Git.
+
+---
+
+### Versi: 3.8.7-filemanager-text-editor-sync-and-crud (Text File Loading, Path Normalization & Complete Storage CRUD)
+**Waktu Eksekusi:** 2026-10-25 15:15 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah yang Diperbaiki
+- Pengguna melaporkan: "buka file text tidak load pakai file manager" (membuka file teks dari File Manager tidak memuat isi file atau tetap kosong).
+- Penyebab utama:
+  1. `RAZStorageEngine.go` pada `ReadFileContent`, `SaveFileContent`, `CreateFolder`, `DeleteFileOrFolder`, `RenameFileOrFolder`, `handleGetRawFile`, dan `handleGetThumbnail` tidak melakukan normalisasi path lintas sistem operasi sehingga path Windows (`C:/DATA/...`) yang tersimpan di localStorage atau dikirim frontend langsung menyebabkan error `500 Internal Server Error (stat C:/DATA/...: no such file or directory)` di Linux STB ARM64.
+  2. Pada `RAZTextEditorView.vue`, saat `openFileInTab(fileItem)` dijalankan dan file sudah tercatat di `tabs.value` (misal dari sesi tab tersimpan yang gagal termuat atau kosong), fungsi langsung keluar (`return`) tanpa memuat ulang (`fetch`) isi file terbaru dari disk.
+  3. `navigateSidebarHome` dan `restoreSession` di editor teks memiliki fallback hardcode `'C:/DATA'` yang memicu galat 500 saat dijalankan di lingkungan Linux.
+  4. Endpoint API pembuatan file baru (`/api/v1/files/create-file`) dan unggah berkas mentah (`/api/v1/files/upload-raw`) belum terdaftar di `RAZApiController.go`.
+  5. Layout mobile (`RAZMobileLayout.vue`) belum mendaftarkan view `file-manager-editor` / `text-editor`.
+
+#### 2. Solusi & Perubahan
+- **Universal Storage Path Normalizer (`RAZStorageEngine.go`):** Mengimplementasikan fungsi tunggal `NormalizeStoragePath(targetPath)` yang secara otonom mendeteksi sistem operasi (Linux vs Windows), mengonversi backslash, memetakan `C:/DATA` ke `/DATA` dan `C:` ke `/` di Linux, serta memetakan `/DATA` ke `C:/DATA` di Windows.
+- **Penyelesaian Endpoint Storage (`RAZApiController.go`):**
+  - Mendaftarkan rute `POST /api/v1/files/create-file` (`handleCreateFile`) untuk membuat file baru dengan konten template instan.
+  - Mendaftarkan rute `POST /api/v1/files/upload-raw` (`handleUploadRaw`) untuk streaming upload berkas, struktur folder bertingkat, dan auto-extract file ZIP.
+  - Menerapkan `NormalizeStoragePath` pada seluruh handler berkas (`handleGetFileContent`, `handleSaveFileContent`, `handleGetRawFile`, `handleGetThumbnail`).
+- **Pemuatan Ulang Cerdas Tab Teks (`RAZTextEditorView.vue`):**
+  - Memperbarui `openFileInTab`: jika tab berkas sudah ada namun belum dimodifikasi (`!existingTab.isDirty`), editor secara proaktif memanggil `/api/v1/files/content` untuk memuat isi berkas terbaru dari disk.
+  - Memperbaiki fallback direktori home dan pemulihan sesi tab ke `/DATA` dinamis tanpa hardcode `C:/DATA`.
+- **Integrasi Editor Mobile (`RAZMobileLayout.vue`):** Menambahkan `RAZTextEditorView` pada pemetaan view mobile.
+- **Rebuild Bundle Frontend:** Melakukan kompilasi produksi Vite (`index-6xxbGSKe.js` & `index-DXBa-kC6.css`).

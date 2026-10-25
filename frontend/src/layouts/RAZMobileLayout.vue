@@ -18,12 +18,15 @@ import RAZWebsitesView from '../views/RAZWebsitesView.vue'
 import RAZDatabasesView from '../views/RAZDatabasesView.vue'
 import RAZSettingsView from '../views/RAZSettingsView.vue'
 import RAZFileManagerView from '../views/RAZFileManagerView.vue'
+import RAZTextEditorView from '../views/RAZTextEditorView.vue'
 
 const windowStore = useWindowStore()
 const systemStore = useSystemStore()
 
 const viewMap = {
   'file-manager': RAZFileManagerView,
+  'file-manager-editor': RAZTextEditorView,
+  'text-editor': RAZTextEditorView,
   'task-manager': RAZTaskManagerView,
   'terminal': RAZTerminalView,
   'app-store': RAZAppStoreView,

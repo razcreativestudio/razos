@@ -1,14 +1,16 @@
 /**
  * RAZOS Advanced Storage & File Manager Engine
- * Updated: 2026-10-08
+ * Updated: 2026-10-25 (v3.8.7 - Robust Cross-Platform Path Normalization & File CRUD Suite)
  * Deskripsi: Engine backend untuk membaca partisi disk/HDD/USB fisik (gopsutil/disk),
- * penjelajahan direktori, pembuatan berkas/folder, upload, download, rename, dan hapus berkas.
+ * penjelajahan direktori, pembacaan & penyimpanan berkas teks, upload, download, rename, dan hapus berkas.
  */
 
 package filemanager
 
 import (
+	"archive/zip"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -39,6 +41,59 @@ type FileItem struct {
 	Size      int64     `json:"size"`
 	ModTime   time.Time `json:"mod_time"`
 	Extension string    `json:"extension"`
+}
+
+// NormalizeStoragePath menstandarkan path berkas/direktori secara konsisten lintas sistem operasi (Linux vs Windows)
+func NormalizeStoragePath(targetPath string) string {
+	raw := strings.TrimSpace(targetPath)
+	if raw == "" || raw == "." {
+		if runtime.GOOS != "windows" {
+			if _, err := os.Stat("/DATA"); err == nil {
+				return "/DATA"
+			}
+			return "/"
+		}
+		if _, err := os.Stat("C:\\DATA"); err == nil {
+			return "C:\\DATA"
+		}
+		return "."
+	}
+
+	// Ubah seluruh backslash ke forward slash
+	clean := filepath.ToSlash(raw)
+
+	// Skenario runtime Linux tapi request frontend membawa format path Windows
+	if runtime.GOOS != "windows" {
+		tpLower := strings.ToLower(clean)
+		if strings.HasPrefix(tpLower, "c:/data") {
+			clean = "/DATA" + clean[7:]
+		} else if strings.HasPrefix(tpLower, "c:/") {
+			clean = "/" + clean[3:]
+		} else if tpLower == "c:" {
+			clean = "/"
+		}
+		if clean == "" {
+			clean = "/"
+		}
+	} else {
+		// Skenario runtime Windows dev tapi request frontend membawa format path Linux /DATA
+		tpLower := strings.ToLower(clean)
+		if strings.HasPrefix(tpLower, "/data") {
+			clean = "C:/DATA" + clean[5:]
+		} else if strings.HasPrefix(clean, "/") && len(clean) > 1 && clean[1] != ':' {
+			clean = "C:" + clean
+		}
+		if len(clean) == 2 && clean[1] == ':' {
+			clean += "/"
+		}
+	}
+
+	cleaned := filepath.Clean(filepath.FromSlash(clean))
+	// Resolusi Windows Junction dan symbolic links jika target ada di sistem berkas
+	if evalPath, evalErr := filepath.EvalSymlinks(cleaned); evalErr == nil {
+		cleaned = evalPath
+	}
+	return filepath.ToSlash(cleaned)
 }
 
 // GetStorageDevices mendeteksi seluruh perangkat penyimpanan fisik yang valid (eMMC, MicroSD, HDD eksternal, USB)
@@ -120,40 +175,11 @@ func GetStorageDevices() ([]StorageDevice, error) {
 	return devices, nil
 }
 
-// ListDirectory membaca isi direktori target dengan proteksi path sanitization
+// ListDirectory membaca isi direktori target dengan proteksi path sanitization dan resolusi lintas OS
 func ListDirectory(targetPath string) ([]FileItem, error) {
-	// Normalisasi path jika frontend Windows dev mengirimkan C:/DATA atau C:\DATA saat backend berjalan di Linux
-	if runtime.GOOS != "windows" {
-		tpLower := strings.ToLower(filepath.ToSlash(targetPath))
-		if strings.HasPrefix(tpLower, "c:/data") {
-			targetPath = "/DATA" + targetPath[7:]
-		} else if strings.HasPrefix(tpLower, "c:/") {
-			targetPath = "/" + targetPath[3:]
-		} else if tpLower == "c:" {
-			targetPath = "/"
-		}
-	}
+	normPath := NormalizeStoragePath(targetPath)
+	cleanPath := filepath.FromSlash(normPath)
 
-	if targetPath == "" || targetPath == "." || targetPath == "/" || targetPath == "/DATA" {
-		if _, err := os.Stat("/DATA"); err == nil {
-			targetPath = "/DATA"
-		} else if _, err := os.Stat("C:\\DATA"); err == nil {
-			targetPath = "C:\\DATA"
-		} else {
-			targetPath = "."
-		}
-	}
-
-	// Normalisasi Windows root drive letter misal "C:" menjadi "C:\"
-	if len(targetPath) == 2 && targetPath[1] == ':' {
-		targetPath += "\\"
-	}
-
-	cleanPath := filepath.Clean(targetPath)
-	// Resolusi Windows Junction dan symbolic links secara transparan
-	if evalPath, evalErr := filepath.EvalSymlinks(cleanPath); evalErr == nil {
-		cleanPath = evalPath
-	}
 	entries, err := os.ReadDir(cleanPath)
 	if err != nil {
 		return nil, err
@@ -196,25 +222,57 @@ func ListDirectory(targetPath string) ([]FileItem, error) {
 	return items, nil
 }
 
-// CreateFolder membuat folder baru
+// CreateFolder membuat folder baru dengan normalisasi path lintas OS
 func CreateFolder(parentPath, folderName string) error {
-	fullPath := filepath.Join(parentPath, folderName)
+	normParent := NormalizeStoragePath(parentPath)
+	fullPath := filepath.Join(filepath.FromSlash(normParent), folderName)
 	return os.MkdirAll(fullPath, 0755)
+}
+
+// CreateFile membuat berkas teks atau skrip baru di direktori tertentu
+func CreateFile(parentPath, fileName, content string) (FileItem, error) {
+	normParent := NormalizeStoragePath(parentPath)
+	cleanDir := filepath.FromSlash(normParent)
+	if err := os.MkdirAll(cleanDir, 0755); err != nil {
+		return FileItem{}, err
+	}
+	fullPath := filepath.Join(cleanDir, fileName)
+	if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+		return FileItem{}, err
+	}
+	stat, err := os.Stat(fullPath)
+	if err != nil {
+		return FileItem{}, err
+	}
+	return FileItem{
+		Name:      fileName,
+		Path:      filepath.ToSlash(fullPath),
+		IsDir:     false,
+		Size:      stat.Size(),
+		ModTime:   stat.ModTime(),
+		Extension: strings.ToLower(filepath.Ext(fileName)),
+	}, nil
 }
 
 // DeleteFileOrFolder menghapus berkas atau folder secara rekursif
 func DeleteFileOrFolder(targetPath string) error {
-	return os.RemoveAll(targetPath)
+	normPath := NormalizeStoragePath(targetPath)
+	return os.RemoveAll(filepath.FromSlash(normPath))
 }
 
 // RenameFileOrFolder mengubah nama atau memindahkan berkas
 func RenameFileOrFolder(oldPath, newPath string) error {
-	return os.Rename(oldPath, newPath)
+	normOld := NormalizeStoragePath(oldPath)
+	normNew := NormalizeStoragePath(newPath)
+	return os.Rename(filepath.FromSlash(normOld), filepath.FromSlash(normNew))
 }
 
-// ReadFileContent membaca konten berkas teks (misal: log, config, json, yaml, env)
+// ReadFileContent membaca konten berkas teks (misal: log, config, json, yaml, env, txt, code)
 func ReadFileContent(targetPath string) (string, error) {
-	stat, err := os.Stat(targetPath)
+	normPath := NormalizeStoragePath(targetPath)
+	cleanPath := filepath.FromSlash(normPath)
+
+	stat, err := os.Stat(cleanPath)
 	if err != nil {
 		return "", err
 	}
@@ -222,18 +280,66 @@ func ReadFileContent(targetPath string) (string, error) {
 		return "", fmt.Errorf("target adalah direktori, bukan berkas")
 	}
 
-	data, err := os.ReadFile(targetPath)
+	data, err := os.ReadFile(cleanPath)
 	if err != nil {
 		return "", err
 	}
-	// Batasi pembacaan maksimal 500 KB agar hemat RAM
+	// Batasi pembacaan maksimal 500 KB agar hemat RAM pada STB ARM64
 	if len(data) > 500*1024 {
 		return string(data[:500*1024]) + "\n... [Konten dipotong: berkas terlalu besar] ...", nil
 	}
 	return string(data), nil
 }
 
-// SaveFileContent menyimpan editan berkas teks
+// SaveFileContent menyimpan editan berkas teks ke disk
 func SaveFileContent(targetPath, content string) error {
-	return os.WriteFile(targetPath, []byte(content), 0644)
+	normPath := NormalizeStoragePath(targetPath)
+	cleanPath := filepath.FromSlash(normPath)
+	_ = os.MkdirAll(filepath.Dir(cleanPath), 0755)
+	return os.WriteFile(cleanPath, []byte(content), 0644)
+}
+
+// ExtractZip mengekstrak berkas arsip zip ke direktori tujuan secara aman (proteksi zip-slip)
+func ExtractZip(srcZip, destDir string) error {
+	r, err := zip.OpenReader(srcZip)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		fpath := filepath.Join(destDir, f.Name)
+		// Proteksi Zip Slip vulnerability
+		if !strings.HasPrefix(filepath.Clean(fpath), filepath.Clean(destDir)) {
+			continue
+		}
+
+		if f.FileInfo().IsDir() {
+			_ = os.MkdirAll(fpath, os.ModePerm)
+			continue
+		}
+
+		if err = os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
+			return err
+		}
+
+		outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+		if err != nil {
+			return err
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			outFile.Close()
+			return err
+		}
+
+		_, err = io.Copy(outFile, rc)
+		outFile.Close()
+		rc.Close()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

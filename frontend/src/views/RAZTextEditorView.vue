@@ -246,6 +246,23 @@ async function openFileInTab(fileItem) {
   if (existingTab) {
     activeTabId.value = existingTab.id
     loadSidebarDirectory(getDirectoryPath(targetPath))
+    // Jika konten existing tab belum ada atau tidak ada perubahan lokal, muat ulang konten terbaru dari disk
+    if (!existingTab.isDirty) {
+      existingTab.isLoading = true
+      try {
+        const res = await fetch(`/api/v1/files/content?path=${encodeURIComponent(targetPath)}`)
+        const data = await res.json()
+        if (res.ok) {
+          existingTab.content = data.content ?? ''
+          existingTab.originalContent = data.content ?? ''
+          existingTab.isLocked = !!data.isLocked
+        }
+      } catch (err) {
+        console.error('Gagal memuat ulang berkas:', err)
+      } finally {
+        existingTab.isLoading = false
+      }
+    }
     return
   }
 
@@ -526,7 +543,7 @@ function navigateSidebarBack() {
 
 // Navigasi langsung ke direktori penyimpanan utama (/DATA atau root)
 function navigateSidebarHome() {
-  const home = localStorage.getItem('razos_default_storage_path') || 'C:/DATA'
+  const home = localStorage.getItem('razos_default_storage_path') || '/DATA'
   loadSidebarDirectory(home)
 }
 
@@ -555,11 +572,12 @@ function saveSession() {
 // Pulihkan Sesi Tab Tersimpan dari localStorage
 async function restoreSession() {
   try {
+    const defaultDir = localStorage.getItem('razos_default_storage_path') || '/DATA'
     const rawDir = localStorage.getItem(STORAGE_KEY_DIR)
-    if (rawDir) {
+    if (rawDir && !rawDir.startsWith('C:/DATA')) {
       loadSidebarDirectory(rawDir)
     } else {
-      loadSidebarDirectory('C:/DATA')
+      loadSidebarDirectory(defaultDir)
     }
 
     const rawTabs = localStorage.getItem(STORAGE_KEY_TABS)

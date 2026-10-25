@@ -12,7 +12,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -109,12 +111,14 @@ func RegisterRoutes(r *gin.Engine) {
 		v1.GET("/storage/devices", handleGetStorageDevices)
 		v1.GET("/files/list", handleListFiles)
 		v1.POST("/files/folder", handleCreateFolder)
+		v1.POST("/files/create-file", handleCreateFile)
 		v1.DELETE("/files/item", handleDeleteFile)
 		v1.POST("/files/rename", handleRenameFile)
 		v1.GET("/files/content", handleGetFileContent)
 		v1.POST("/files/content", handleSaveFileContent)
 		v1.GET("/files/raw", handleGetRawFile)
 		v1.GET("/files/thumbnail", handleGetThumbnail)
+		v1.POST("/files/upload-raw", handleUploadRaw)
 
 		// Konfigurasi Desktop & Posisi Ikon Lintas Perangkat
 		v1.GET("/desktop/config", handleGetDesktopConfig)
@@ -1135,8 +1139,37 @@ func handleRenameFile(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "renamed"})
 }
 
+func handleCreateFile(c *gin.Context) {
+	var body struct {
+		ParentPath string `json:"parent_path"`
+		FileName   string `json:"file_name"`
+		Content    string `json:"content"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Format request tidak valid"})
+		return
+	}
+	if strings.TrimSpace(body.FileName) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Nama berkas tidak boleh kosong"})
+		return
+	}
+	item, err := filemanager.CreateFile(body.ParentPath, body.FileName, body.Content)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status": "created",
+		"item":   item,
+	})
+}
+
 func handleGetFileContent(c *gin.Context) {
-	targetPath := c.Query("path")
+	targetPath := strings.TrimSpace(c.Query("path"))
+	if targetPath == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Path berkas tidak boleh kosong"})
+		return
+	}
 	content, err := filemanager.ReadFileContent(targetPath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -1151,7 +1184,11 @@ func handleSaveFileContent(c *gin.Context) {
 		Content string `json:"content"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Format request tidak valid"})
+		return
+	}
+	if strings.TrimSpace(body.Path) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Path berkas tidak boleh kosong"})
 		return
 	}
 	if err := filemanager.SaveFileContent(body.Path, body.Content); err != nil {
@@ -1163,25 +1200,26 @@ func handleSaveFileContent(c *gin.Context) {
 
 // handleGetRawFile melayani binary stream untuk file gambar, audio, video, dan PDF
 func handleGetRawFile(c *gin.Context) {
-	targetPath := c.Query("path")
+	targetPath := strings.TrimSpace(c.Query("path"))
 	if targetPath == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Path file wajib disertakan"})
 		return
 	}
-	// Langsung stream file menggunakan File responder bawaan Gin
+	cleanPath := filepath.FromSlash(filemanager.NormalizeStoragePath(targetPath))
 	c.Header("Cache-Control", "public, max-age=86400")
-	c.File(targetPath)
+	c.File(cleanPath)
 }
 
 // handleGetThumbnail melayani thumbnail gambar dengan HTTP Caching teroptimasi agar browser tidak hang
 func handleGetThumbnail(c *gin.Context) {
-	targetPath := c.Query("path")
+	targetPath := strings.TrimSpace(c.Query("path"))
 	if targetPath == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Path file wajib disertakan"})
 		return
 	}
+	cleanPath := filepath.FromSlash(filemanager.NormalizeStoragePath(targetPath))
 
-	info, err := os.Stat(targetPath)
+	info, err := os.Stat(cleanPath)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Berkas tidak ditemukan"})
 		return
@@ -1198,7 +1236,59 @@ func handleGetThumbnail(c *gin.Context) {
 		return
 	}
 
-	c.File(targetPath)
+	c.File(cleanPath)
+}
+
+// handleUploadRaw memproses streaming upload berkas tunggal, folder, atau ZIP auto-extract
+func handleUploadRaw(c *gin.Context) {
+	destDir, _ := url.QueryUnescape(c.GetHeader("x-dest-dir"))
+	filename, _ := url.QueryUnescape(c.GetHeader("x-filename"))
+	relPath, _ := url.QueryUnescape(c.GetHeader("x-relative-path"))
+	autoExtract := c.GetHeader("x-auto-extract") == "true"
+
+	if destDir == "" {
+		destDir = "/DATA"
+	}
+	normDest := filemanager.NormalizeStoragePath(destDir)
+	cleanDest := filepath.FromSlash(normDest)
+
+	targetDir := cleanDest
+	if relPath != "" {
+		targetDir = filepath.Join(cleanDest, filepath.Dir(relPath))
+	}
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat folder tujuan: " + err.Error()})
+		return
+	}
+
+	finalFilename := filename
+	if finalFilename == "" && relPath != "" {
+		finalFilename = filepath.Base(relPath)
+	}
+	if finalFilename == "" {
+		finalFilename = fmt.Sprintf("upload_%d", time.Now().Unix())
+	}
+
+	targetFilePath := filepath.Join(targetDir, finalFilename)
+	out, err := os.Create(targetFilePath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat berkas tujuan: " + err.Error()})
+		return
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, c.Request.Body); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menulis stream berkas: " + err.Error()})
+		return
+	}
+	out.Close()
+
+	// Jika berkas adalah zip dan flag auto-extract aktif, ekstrak isi zip
+	if autoExtract && strings.HasSuffix(strings.ToLower(finalFilename), ".zip") {
+		_ = filemanager.ExtractZip(targetFilePath, targetDir)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "uploaded", "path": filepath.ToSlash(targetFilePath)})
 }
 
 // RAZDesktopConfig mendefinisikan skema data konfigurasi desktop lintas perangkat
