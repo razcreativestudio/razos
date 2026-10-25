@@ -80,8 +80,25 @@ func main() {
 		})
 	}
 
-	log.Println("[RAZOS] Server berjalan pada http://0.0.0.0:8080")
-	if err := r.Run(":8080"); err != nil {
-		log.Fatalf("[RAZOS] Gagal memulai server: %v", err)
+	// Jalankan listener port 8080 di goroutine (kompatibilitas backward)
+	go func() {
+		srv8080 := &http.Server{
+			Addr:    ":8080",
+			Handler: r,
+		}
+		log.Println("[RAZOS] Server sekunder listening pada port 8080 (http://0.0.0.0:8080)")
+		if err := srv8080.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("[RAZOS] Info port 8080: %v", err)
+		}
+	}()
+
+	// Jalankan listener port 80 utama (akses langsung IP tanpa memasukkan port di URL)
+	srv80 := &http.Server{
+		Addr:    ":80",
+		Handler: r,
+	}
+	log.Println("[RAZOS] Server utama listening pada port 80 (http://0.0.0.0 / Langsung IP)")
+	if err := srv80.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("[RAZOS] Gagal menjalankan server pada port 80: %v", err)
 	}
 }

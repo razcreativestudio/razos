@@ -121,7 +121,7 @@ if systemctl is-active --quiet razos; then
     IP_HOST=$(hostname -I | awk '{print $1}')
     echo "=========================================================="
     echo " [OK] Instalasi & Service RAZOS Berjalan Sempurna!"
-    echo " Dashboard Web siap diakses di: http://${IP_HOST}:8080"
+    echo " Dashboard Web siap diakses langsung di: http://${IP_HOST} (atau http://${IP_HOST}:8080)"
     echo "=========================================================="
 else
     echo "=========================================================="
