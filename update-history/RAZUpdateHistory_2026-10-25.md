@@ -68,3 +68,23 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 - Merefaktor template string Node.js pada `RAZWebsiteManager.go` menjadi string concatenation JavaScript standar tanpa karakter backtick.
 - Mengganti seluruh parameter penghentian/restart kontainer Docker menjadi `container.StopOptions{}`.
 - Membersihkan seluruh unused import dan mengunci `otlptracehttp v1.24.0` dan `sdk v1.24.0` pada `backend/go.mod`.
+
+
+---
+
+### Versi: 3.8.5-dual-port-listening-and-route-completion (Port 80 Direct Access & Full API Routes)
+**Waktu Eksekusi:** 2026-10-25 14:19 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah yang Diperbaiki
+- Pengguna ingin mengakses dashboard RAZOS langsung via IP tanpa harus mengetik port `:8080` (menggunakan default HTTP port 80).
+- Frontend mengalami 404 pada `/api/v1/store/installed` dan `/api/v1/cloud/remotes`.
+- Terjadi galat 500 pada pembacaan direktori `C:/DATA` di Linux ARM64 dan pembacaan katalog `RAZApps.json`.
+- Terdapat potensi `TypeError: Cannot read properties of undefined (reading 'toFixed')` saat metrik hardware/storage sedang dimuat.
+
+#### 2. Solusi & Perubahan
+- **Dual Port Listening (`RAZMainServer.go`):** Server Go sekarang secara bersamaan mendengarkan (*listen*) di port utama `80` (akses langsung IP `http://192.168.100.117`) dan port sekunder `8080` (kompatibilitas backward).
+- **Normalisasi Path Multi-OS (`RAZStorageEngine.go`):** Permintaan path diawali `C:/DATA` atau `C:` secara otomatis dinormalkan ke `/DATA` dan `/` pada sistem operasi Linux.
+- **Penyelesaian Rute API (`RAZApiController.go`):** Menambahkan handler lengkap untuk `/api/v1/store/installed` serta modul Cloud Storage Suite (`/api/v1/cloud/remotes`, `/logs`, `/test-connection`, `/sync`).
+- **Penyematan Katalog Mandiri (`RAZAppStoreEngine.go`):** Menggunakan `//go:embed RAZApps.json` sehingga data katalog selalu tersedia secara atomik tanpa ketergantungan path disk.
+- **Null-Safety Guard Frontend:** Mengamankan seluruh pemanggilan `.toFixed()` pada `RAZTaskbar.vue`, `RAZFileManagerView.vue`, dan `RAZMobileLayout.vue`.
