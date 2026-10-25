@@ -57,6 +57,12 @@ func main() {
 		r.Static("/assets", filepath.Join(activeDist, "assets"))
 		r.StaticFile("/favicon.ico", filepath.Join(activeDist, "favicon.ico"))
 		r.StaticFile("/manifest.json", filepath.Join(activeDist, "manifest.json"))
+		r.StaticFile("/index.html", filepath.Join(activeDist, "index.html"))
+
+		// Route utama: sajikan langsung index.html
+		r.GET("/", func(c *gin.Context) {
+			c.File(filepath.Join(activeDist, "index.html"))
+		})
 
 		// SPA Fallback: semua rute non-API dan non-WS diarahkan ke index.html
 		r.NoRoute(func(c *gin.Context) {
