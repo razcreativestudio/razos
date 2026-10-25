@@ -47,7 +47,7 @@ type UpdateStatus struct {
 // CheckUpdate memeriksa versi terbaru dari repositori GitHub resmi
 func CheckUpdate() (*UpdateStatus, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequest("GET", "https://api.github.com/repos/razcreative/razos/releases/latest", nil)
+	req, err := http.NewRequest("GET", "https://api.github.com/repos/razcreativestudio/razos/releases/latest", nil)
 	if err != nil {
 		return nil, err
 	}
