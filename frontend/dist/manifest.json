@@ -1,0 +1,21 @@
+{
+  "short_name": "RAZOS",
+  "name": "RAZOS - Cloud Server Operating System",
+  "icons": [
+    {
+      "src": "/assets/images/RAZLogo.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512"
+    },
+    {
+      "src": "/assets/images/RAZLogo.webp",
+      "type": "image/webp",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "display": "standalone",
+  "orientation": "any"
+}

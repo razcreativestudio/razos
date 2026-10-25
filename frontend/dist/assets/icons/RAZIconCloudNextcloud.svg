@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" fill="none">
+  <!-- Nextcloud 3 Circles Signature -->
+  <rect width="48" height="48" rx="12" fill="#0082c9" />
+  <circle cx="24" cy="24" r="8" fill="none" stroke="#ffffff" stroke-width="3" />
+  <circle cx="12" cy="24" r="4.5" fill="none" stroke="#ffffff" stroke-width="2.5" />
+  <circle cx="36" cy="24" r="4.5" fill="none" stroke="#ffffff" stroke-width="2.5" />
+</svg>
