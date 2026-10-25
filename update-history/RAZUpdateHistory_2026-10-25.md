@@ -88,3 +88,21 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 - **Penyelesaian Rute API (`RAZApiController.go`):** Menambahkan handler lengkap untuk `/api/v1/store/installed` serta modul Cloud Storage Suite (`/api/v1/cloud/remotes`, `/logs`, `/test-connection`, `/sync`).
 - **Penyematan Katalog Mandiri (`RAZAppStoreEngine.go`):** Menggunakan `//go:embed RAZApps.json` sehingga data katalog selalu tersedia secara atomik tanpa ketergantungan path disk.
 - **Null-Safety Guard Frontend:** Mengamankan seluruh pemanggilan `.toFixed()` pada `RAZTaskbar.vue`, `RAZFileManagerView.vue`, dan `RAZMobileLayout.vue`.
+
+
+---
+
+### Versi: 3.8.6-appstore-pull-and-website-ip-routing (App Store Docker Pull & IP-Based Website Routing)
+**Waktu Eksekusi:** 2026-10-25 14:52 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah yang Diperbaiki
+- Instalasi App Store (`/api/v1/store/install`) gagal dengan error 500 karena Docker Engine mencoba membuat kontainer sebelum image ditarik (`ImagePull`).
+- Uninstall aplikasi yang belum terpasang (`DELETE /api/v1/store/apps/:slug`) mengembalikan error 500 jika kontainer belum ada di Docker.
+- Pembuatan website di Website Manager tidak bisa diakses dari browser karena tautan diarahkan ke `http://localhost:<port>` alih-alih `http://<IP_STB>:<port>`.
+
+#### 2. Solusi & Perubahan
+- **Automated Image Pull (`RAZAppStoreEngine.go` & `RAZWebsiteManager.go`):** Memeriksa apakah image Docker sudah ada di cache lokal, dan jika belum ada otomatis melakukan `cli.ImagePull` dengan penanganan stream lengkap sebelum `ContainerCreate`.
+- **Fault-Tolerant Uninstaller (`RAZAppStoreEngine.go`):** Menangani error "No such container" secara elegan sehingga proses uninstall atau pembersihan kontainer yang gagal terpasang tidak lagi memicu error 500.
+- **Dynamic Hostname Binding (`RAZWebsitesView.vue` & `RAZWebsiteDetailView.vue`):** Mengganti referensi `localhost` dengan `window.location.hostname` dinamis sehingga tautan website langsung mengarah ke IP STB (`http://192.168.100.117:<port>`).
+- **Pembaruan Bundle JS:** Melakukan rebuild frontend Vite (`index-CXrjxw0e.js`) dan memastikan seluruh bundle terdaftar di Git.
