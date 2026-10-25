@@ -162,10 +162,6 @@ func DeployApp(req DeployRequest) error {
 	ctx := context.Background()
 
 	// Setup Port Binding
-	portStr := fmt.Sprintf("%d/tcp", req.Port)
-	if req.Port <= 0 {
-		portStr = fmt.Sprintf("%d/tcp", defaultPort)
-	}
 	natPort, _ := nat.NewPort("tcp", fmt.Sprintf("%d", defaultPort))
 
 	hostConfig := &container.HostConfig{
@@ -210,7 +206,7 @@ func CleanUninstall(appSlug string, purgeData bool) error {
 	ctx := context.Background()
 
 	// Stop dan remove container
-	_ = cli.ContainerStop(ctx, containerName, nil)
+	_ = cli.ContainerStop(ctx, containerName, container.StopOptions{})
 	err = cli.ContainerRemove(ctx, containerName, types.ContainerRemoveOptions{
 		RemoveVolumes: true,
 		Force:         true,

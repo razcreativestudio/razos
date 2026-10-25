@@ -49,3 +49,22 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 #### 2. Solusi & Perubahan
 - Mengunci (*pinning*) versi OpenTelemetry (`otelhttp v0.49.0`, `otel v1.24.0`), Docker utilities (`go-connections`, `go-units`, `image-spec`), serta submodul `golang.org/x/net v0.22.0` dan `golang.org/x/sys v0.18.0` di dalam berkas `backend/go.mod`.
 - Memastikan seluruh rantai dependensi 100% cocok dan terverifikasi di atas Go 1.22 tanpa memerlukan upgrade toolchain tambahan.
+
+
+---
+
+### Versi: 3.8.4-go-syntax-and-docker-sdk-cleanup (Go Syntax & Docker SDK Cleanup)
+**Waktu Eksekusi:** 2026-10-25 13:26 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah yang Diperbaiki
+- Pada saat kompilasi Go native di STB ARM64, Go compiler mendeteksi beberapa galat kode internal:
+  1. `RAZWebsiteManager.go`: Karakter backtick ter-escape (`\`\``) di dalam raw string literal Go merusak parsing compiler.
+  2. `RAZAppStoreEngine.go` & `RAZDockerManager.go`: Pemanggilan `cli.ContainerStop` dan `cli.ContainerRestart` menggunakan `nil` alih-alih `container.StopOptions{}` pada Docker SDK v25.
+  3. `RAZStorageEngine.go` & `RAZDatabaseSuite.go` & `RAZDockerManager.go`: Import tidak terpakai (`io`, `fmt`, `os/exec`).
+  4. Modul `otlptracehttp` mencoba menarik versi `v1.47.0` yang meminta `go >= 1.26.0`.
+
+#### 2. Solusi & Perubahan
+- Merefaktor template string Node.js pada `RAZWebsiteManager.go` menjadi string concatenation JavaScript standar tanpa karakter backtick.
+- Mengganti seluruh parameter penghentian/restart kontainer Docker menjadi `container.StopOptions{}`.
+- Membersihkan seluruh unused import dan mengunci `otlptracehttp v1.24.0` dan `sdk v1.24.0` pada `backend/go.mod`.

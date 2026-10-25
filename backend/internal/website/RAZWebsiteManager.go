@@ -444,29 +444,29 @@ $isSqlite = (strpos($dbName, '.sqlite') !== false || empty($dbHost) || $dbHost =
 const http = require('http');
 const port = process.env.PORT || 80;
 
+const htmlContent = '<!DOCTYPE html>' +
+'<html lang="id">' +
+'<head>' +
+'    <meta charset="UTF-8">' +
+'    <title>%s - RAZOS Node.js Web</title>' +
+'    <style>' +
+'        body { font-family: system-ui, sans-serif; background: #090d16; color: #f1f5f9; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }' +
+'        .card { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(51, 65, 85, 0.8); border-radius: 1.25rem; padding: 2.5rem; max-width: 500px; text-align: center; }' +
+'        .badge { background: rgba(34, 197, 94, 0.2); color: #4ade80; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: bold; }' +
+'    </style>' +
+'</head>' +
+'<body>' +
+'    <div class="card">' +
+'        <span class="badge">NODE.JS LIGHT RUNTIME • (70-120 MB RAM)</span>' +
+'        <h1>%s</h1>' +
+'        <p style="color: #94a3b8;">Node.js Express/Fastify service berjalan dengan lancar pada port ' + port + '.</p>' +
+'    </div>' +
+'</body>' +
+'</html>';
+
 const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(\`
-    <!DOCTYPE html>
-    <html lang="id">
-    <head>
-        <meta charset="UTF-8">
-        <title>%s - RAZOS Node.js Web</title>
-        <style>
-            body { font-family: system-ui, sans-serif; background: #090d16; color: #f1f5f9; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-            .card { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(51, 65, 85, 0.8); border-radius: 1.25rem; padding: 2.5rem; max-width: 500px; text-align: center; }
-            .badge { background: rgba(34, 197, 94, 0.2); color: #4ade80; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: bold; }
-        </style>
-    </head>
-    <body>
-        <div class="card">
-            <span class="badge">NODE.JS LIGHT RUNTIME • (70-120 MB RAM)</span>
-            <h1>%s</h1>
-            <p style="color: #94a3b8;">Node.js Express/Fastify service berjalan dengan lancar pada port \${port}.</p>
-        </div>
-    </body>
-    </html>
-    \`);
+    res.end(htmlContent);
 });
 
 server.listen(port, () => {

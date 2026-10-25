@@ -9,11 +9,11 @@ package docker
 
 import (
 	"context"
-	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/shirou/gopsutil/v3/process"
 )
@@ -88,7 +88,7 @@ func StopContainer(containerID string) error {
 	}
 	defer cli.Close()
 
-	return cli.ContainerStop(context.Background(), containerID, nil)
+	return cli.ContainerStop(context.Background(), containerID, container.StopOptions{})
 }
 
 // RestartContainer memulai ulang container Docker target
@@ -99,7 +99,7 @@ func RestartContainer(containerID string) error {
 	}
 	defer cli.Close()
 
-	return cli.ContainerRestart(context.Background(), containerID, nil)
+	return cli.ContainerRestart(context.Background(), containerID, container.StopOptions{})
 }
 
 // KillProcess membunuh proses host berdasarkan PID
