@@ -73,7 +73,11 @@ if [ "$DOWNLOAD_SUCCESS" = false ]; then
     rm -rf /DATA/razos/src
     git clone --depth 1 https://github.com/razcreativestudio/razos.git /DATA/razos/src
 
-    echo "[+] Menyiapkan dependensi modul Go (go mod tidy)..."
+    echo "[+] Menyiapkan dependensi modul Go (GOTOOLCHAIN=local, GOPATH di MicroSD)..."
+    export GOTOOLCHAIN=local
+    export GOPATH=/DATA/razos/gopath
+    export GOCACHE=/DATA/razos/gocache
+    mkdir -p "$GOPATH" "$GOCACHE"
     cd /DATA/razos/src/backend
     go mod tidy
 
