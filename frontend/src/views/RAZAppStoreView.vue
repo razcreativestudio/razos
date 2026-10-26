@@ -358,30 +358,17 @@ function openUninstallDialog(app, e) {
   showUninstallModal.value = true
 }
 
-// Konfirmasi Uninstall
-async function confirmUninstall() {
+// Konfirmasi Uninstall (Buka Jendela Terminal Uninstaller Mandiri)
+function confirmUninstall() {
   if (!activeAppToUninstall.value) return
-  isUninstalling.value = true
-  try {
-    const res = await fetch(`/api/v1/store/apps/${activeAppToUninstall.value.slug}?purge_data=${purgeDataChecked.value}`, {
-      method: 'DELETE'
-    })
-    if (res.ok) {
-      systemStore.showNotification('Sukses', `Aplikasi ${activeAppToUninstall.value.name} telah berhasil di-uninstall!`, 'success')
-      showUninstallModal.value = false
-      if (selectedApp.value && selectedApp.value.id === activeAppToUninstall.value.id) {
-        selectedApp.value.installed = false
-      }
-      await fetchApps()
-      await windowStore.fetchInstalledApps()
-    } else {
-      systemStore.showNotification('Gagal', 'Gagal meng-uninstall container', 'error')
-    }
-  } catch (e) {
-    systemStore.showNotification('Error', 'Gagal menghubungi server', 'error')
-  } finally {
-    isUninstalling.value = false
+  const target = { ...activeAppToUninstall.value }
+  const purge = purgeDataChecked.value
+  showUninstallModal.value = false
+  if (selectedApp.value && selectedApp.value.id === target.id) {
+    selectedApp.value.installed = false
   }
+  activeAppToUninstall.value = null
+  windowStore.openAppStoreUninstaller(target, purge)
 }
 
 // Submit Manual Custom Docker Container

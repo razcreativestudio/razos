@@ -40,6 +40,7 @@ import RAZFilePropertiesView from '../views/RAZFilePropertiesView.vue'
 import RAZDatabaseCreatorView from '../views/RAZDatabaseCreatorView.vue'
 import RAZAppStoreManualView from '../views/RAZAppStoreManualView.vue'
 import RAZAppStoreInstallView from '../views/RAZAppStoreInstallView.vue'
+import RAZAppStoreUninstallView from '../views/RAZAppStoreUninstallView.vue'
 import RAZAppEditView from '../views/RAZAppEditView.vue'
 import RAZAppLogsView from '../views/RAZAppLogsView.vue'
 import RAZStorageManagerView from '../views/RAZStorageManagerView.vue'
@@ -245,17 +246,13 @@ function openDesktopUninstall(app) {
   showUninstallModal.value = true
 }
 
-async function confirmDesktopUninstall() {
+function confirmDesktopUninstall() {
   if (!appToUninstall.value) return
-  const slug = appToUninstall.value.slug
-  const success = await windowStore.uninstallStoreApp(slug, purgeDataChecked.value)
-  if (success) {
-    systemStore.showNotification('Sukses', `Aplikasi ${appToUninstall.value.title} berhasil di-uninstall`, 'success')
-    showUninstallModal.value = false
-    appToUninstall.value = null
-  } else {
-    systemStore.showNotification('Gagal', 'Terjadi kesalahan saat menghapus aplikasi', 'error')
-  }
+  const target = { ...appToUninstall.value }
+  const purge = purgeDataChecked.value
+  showUninstallModal.value = false
+  appToUninstall.value = null
+  windowStore.openAppStoreUninstaller(target, purge)
 }
 
 // Context Menu Klik Kanan pada Ikon Shortcut Desktop (CasaOS Enterprise Menu System)
@@ -1367,6 +1364,9 @@ function handleDesktopDrop(e) {
 
             <!-- Standalone App Store Catalog Installer Window -->
             <RAZAppStoreInstallView v-else-if="win.id.startsWith('appstore-install-')" :win="win" />
+
+            <!-- Standalone App Store Uninstaller Window (Live Terminal Console) -->
+            <RAZAppStoreUninstallView v-else-if="win.id.startsWith('appstore-uninstall-')" :win="win" />
 
             <!-- Standalone App Store Settings Window (CasaOS Style) -->
             <RAZAppEditView v-else-if="win.id.startsWith('app-edit-')" :win="win" />

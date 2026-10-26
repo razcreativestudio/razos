@@ -233,5 +233,36 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
    - Menyediakan 5 tools MCP: `razos_status`, `razos_hot_reload`, `razos_exec`, `razos_sync_file`, dan `razos_logs`.
    - Mendaftarkan server ke `mcp_config.json` Antigravity secara permanen.
 
+---
+
+### Versi: 4.1.0-app-store-uninstaller-window-with-live-terminal (Standalone Uninstaller Window & Real-Time Terminal Log Execution)
+**Waktu Eksekusi:** 2026-10-26 13:28 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah / Kebutuhan Pengguna
+- Pengguna meminta agar ketika tombol "Uninstall Container" diklik, sistem tidak hanya sekadar menutup dialog atau memutar spinner tak tentu, melainkan membuka jendela baru seperti pada proses instalasi yang memiliki teks boks terminal untuk menampilkan aktivitas dan tahapan proses uninstall secara transparan (stop container, remove container & volume, storage purge, dsb).
+
+#### 2. Solusi & Rekayasa Kode
+1. **Pembaruan Backend Store Engine (`RAZAppStoreEngine.go`):**
+   - Memutakhirkan `CleanUninstall` agar menyalurkan log aktivitas instalasi/uninstalasi secara terstruktur ke `AddInstallLog`:
+     - `[STOP]`: docker stop -t 5 razos-<slug>
+     - `[REMOVE]`: docker rm -v -f razos-<slug>
+     - `[STORAGE]`: rm -rf /DATA/apps/<slug> (jika opsi purge data diaktifkan)
+     - `[DONE]`: Pelepasan memori dan resource host selesai 100%.
+2. **Pembuatan Komponen Mandiri (`RAZAppStoreUninstallView.vue`):**
+   - Jendela pelacak proses uninstall interaktif:
+     - Header jendela dengan ikon aplikasi, progres persentase, dan badge tahapan aktif.
+     - Progress bar dengan gradien Rose ke Red (`from-rose-500 via-red-500 to-amber-400`).
+     - Checklist 5 tahap: Validasi Container, Menghentikan Container, Menghapus Container & Volume, Pembersihan Direktori Storage, dan Pelepasan Resource Host.
+     - **Live Terminal Execution Box**: Wadah terminal monospaced dengan autoscroll, indikator `LIVE UNINSTALL` berkedip, counter baris log, dan tombol salin log ke clipboard.
+     - State sukses & gagal yang informatif dengan tombol penutup yang menyinkronkan daftar aplikasi terpasang di desktop.
+3. **Penyelarasan Store Jendela (`RAZWindowStore.js`):**
+   - Menambahkan fungsi `openAppStoreUninstaller(app, purgeData)` dengan dimensi proporsional `560x520 px`.
+4. **Integrasi UI Desktop & App Store (`RAZDesktopLayout.vue` & `RAZAppStoreView.vue`):**
+   - Mengalihkan aksi konfirmasi tombol "Uninstall Container" untuk memanggil `windowStore.openAppStoreUninstaller` sehingga proses uninstall langsung divisualisasikan di jendela terminal mandiri.
+5. **Kompilasi Ulang Frontend:**
+   - Melakukan build produksi Vite (`dist/assets/index-zAuGkjJo.js` & `dist/assets/index-C_VRwv9X.css`).
+
+
 
 

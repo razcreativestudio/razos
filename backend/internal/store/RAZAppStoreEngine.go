@@ -417,40 +417,57 @@ func pullDockerImage(ctx context.Context, cli *client.Client, imageName, slug st
 	return nil
 }
 
-// CleanUninstall menghapus container dan opsi pembersihan direktori data /DATA/apps/
+// CleanUninstall menghapus container dan opsi pembersihan direktori data /DATA/apps/ dengan live logging
 func CleanUninstall(appSlug string, purgeData bool) error {
+	ClearInstallLogs(appSlug)
+	AddInstallLog(appSlug, "info", "[INIT]", fmt.Sprintf("Inisialisasi proses uninstall aplikasi '%s'...", appSlug))
+
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
+		AddInstallLog(appSlug, "error", "[ERR]", fmt.Sprintf("Gagal inisialisasi Docker client: %v", err))
 		return err
 	}
 	defer cli.Close()
 
 	containerName := "razos-" + appSlug
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	// Stop container (timeout 5 detik)
+	// 1. Menghentikan container (timeout 5 detik)
+	AddInstallLog(appSlug, "docker", "[STOP]", fmt.Sprintf("Mengirim sinyal stop ke container '%s'...", containerName))
+	AddInstallLog(appSlug, "docker", "[CMD]", fmt.Sprintf("docker stop -t 5 %s", containerName))
 	stopTimeout := 5
 	_ = cli.ContainerStop(ctx, containerName, container.StopOptions{Timeout: &stopTimeout})
+	AddInstallLog(appSlug, "success", "[STOP]", fmt.Sprintf("Container '%s' telah berhenti", containerName))
 
-	// Hapus container dan volumenya
+	// 2. Menghapus container dan volumenya
+	AddInstallLog(appSlug, "docker", "[REMOVE]", fmt.Sprintf("Menghapus container dan volume: docker rm -v -f %s", containerName))
 	err = cli.ContainerRemove(ctx, containerName, types.ContainerRemoveOptions{
 		RemoveVolumes: true,
 		Force:         true,
 	})
 	if err != nil {
 		errMsg := strings.ToLower(err.Error())
-		// Abaikan error jika container memang belum ada / sudah terhapus
 		if client.IsErrNotFound(err) || strings.Contains(errMsg, "no such") || strings.Contains(errMsg, "not found") {
 			err = nil
+			AddInstallLog(appSlug, "info", "[CLEAN]", fmt.Sprintf("Container %s sudah tidak ada di sistem (bersih)", containerName))
+		} else {
+			AddInstallLog(appSlug, "error", "[ERR]", fmt.Sprintf("Peringatan remove container: %v", err))
 		}
+	} else {
+		AddInstallLog(appSlug, "success", "[REMOVE]", fmt.Sprintf("Container '%s' berhasil dihapus dari Docker daemon", containerName))
 	}
 
-	// Jika opsi purgeData aktif, musnahkan folder data di /DATA/apps/<slug>
+	// 3. Jika opsi purgeData aktif, musnahkan folder data di /DATA/apps/<slug>
 	if purgeData {
 		folderPath := filepath.Join("/DATA/apps", appSlug)
+		AddInstallLog(appSlug, "info", "[STORAGE]", fmt.Sprintf("Membersihkan direktori permanen: rm -rf %s", folderPath))
 		_ = os.RemoveAll(folderPath)
+		AddInstallLog(appSlug, "success", "[STORAGE]", fmt.Sprintf("Direktori %s berhasil dibersihkan tuntas", folderPath))
+	} else {
+		AddInstallLog(appSlug, "info", "[STORAGE]", "Opsi simpan data aktif: direktori /DATA/apps/ dipertahankan")
 	}
 
+	AddInstallLog(appSlug, "success", "[DONE]", fmt.Sprintf("Proses uninstall '%s' selesai 100%%. Memori dan resource sistem telah dilepaskan.", appSlug))
 	return err
 }

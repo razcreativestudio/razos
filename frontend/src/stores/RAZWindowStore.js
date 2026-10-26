@@ -520,6 +520,24 @@ export const useWindowStore = defineStore('window', () => {
     })
   }
 
+  // Standalone Window: Pelacak Progres Uninstall Aplikasi & Terminal Live Console
+  function openAppStoreUninstaller(app, purgeData = false) {
+    if (!app) return
+    const slug = app.slug || app.id
+    if (!slug) return
+    openCustomWindow({
+      id: `appstore-uninstall-${slug}`,
+      title: `Uninstall ${app.name || app.title || slug}`,
+      icon: app.icon || '/assets/icons/RAZIconAppStore.svg',
+      width: 560,
+      height: 520,
+      minWidth: 420,
+      minHeight: 380,
+      type: 'appstore-uninstall',
+      data: { ...app, slug, purgeData }
+    })
+  }
+
   // Standalone Window: Pengaturan Detail Aplikasi & Container (CasaOS Style Settings)
   function openAppEditor(app) {
     if (!app) return
@@ -800,6 +818,7 @@ export const useWindowStore = defineStore('window', () => {
     openCloudSync,
     openUsersManager,
     openAppStoreInstaller,
+    openAppStoreUninstaller,
     openAppEditor,
     openAppLogs,
     openDatabaseCreator,
