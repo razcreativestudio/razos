@@ -251,6 +251,13 @@ func DeployApp(req DeployRequest) error {
 	if targetPort <= 0 {
 		targetPort = defaultPort
 	}
+	// Cegah bentrok dengan port inti RAZOS (80 & 8080)
+	if targetPort == 80 || targetPort == 8080 {
+		targetPort = defaultPort
+		if targetPort == 80 || targetPort == 8080 {
+			targetPort = 8090
+		}
+	}
 	natPort, _ := nat.NewPort("tcp", fmt.Sprintf("%d", defaultPort))
 
 	mountTarget := defaultVol

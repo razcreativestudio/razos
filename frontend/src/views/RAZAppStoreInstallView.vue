@@ -30,7 +30,7 @@
           <div>
             <div class="flex items-center justify-between mb-1">
               <label class="block text-xs font-medium text-slate-300">Port Akses Host (WebUI)</label>
-              <span class="text-[10px] text-slate-500 font-mono">Default: {{ app.default_port || '8080' }}</span>
+              <span class="text-[10px] text-slate-500 font-mono">Default: {{ app.default_port || '8090' }}</span>
             </div>
             <div class="relative">
               <input
@@ -38,10 +38,10 @@
                 type="number"
                 required
                 class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-sky-400 transition"
-                placeholder="8080"
+                :placeholder="app.default_port ? String(app.default_port) : '8090'"
               />
             </div>
-            <span class="text-[11px] text-slate-500 mt-1 block">Port yang akan dibuka di browser lokal untuk mengakses aplikasi.</span>
+            <span class="text-[11px] text-slate-500 mt-1 block">Port yang akan dibuka di browser lokal untuk mengakses aplikasi (dilarang menggunakan port 80 atau 8080).</span>
           </div>
 
           <!-- Konfigurasi Volume / Storage Persisten -->
@@ -377,7 +377,7 @@
  * resource checking, pulling layer progress, volume allocation, port verification,
  * container healthcheck, dan automated deep clean rollback.
  */
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
 import { useWindowStore } from '../stores/RAZWindowStore'
 import {
@@ -424,12 +424,25 @@ const terminalLogs = ref([])
 const terminalScrollRef = ref(null)
 let pollTimer = null
 
-onMounted(() => {
-  if (app.value) {
-    customPort.value = app.value.default_port || '8080'
-    customVolume.value = app.value.default_volume || `/DATA/apps/${app.value.slug || 'app'}`
-  }
-})
+// Pantau data aplikasi dari window props secara reaktif
+watch(
+  () => props.win?.customData,
+  (newApp) => {
+    if (newApp && typeof newApp === 'object' && Object.keys(newApp).length > 0) {
+      if (newApp.default_port) {
+        customPort.value = String(newApp.default_port)
+      } else if (!customPort.value) {
+        customPort.value = '8090'
+      }
+      if (newApp.default_volume) {
+        customVolume.value = newApp.default_volume
+      } else if (!customVolume.value && newApp.slug) {
+        customVolume.value = `/DATA/apps/${newApp.slug}`
+      }
+    }
+  },
+  { immediate: true, deep: true }
+)
 
 onUnmounted(() => {
   if (pollTimer) {
@@ -528,6 +541,17 @@ function copyTerminalLogs() {
  */
 async function startInstallationProcess() {
   if (!app.value || !app.value.id) return
+
+  const portNum = parseInt(customPort.value)
+  if (portNum === 80 || portNum === 8080) {
+    systemStore.showNotification(
+      'Port Tidak Diizinkan',
+      `Port ${portNum} digunakan khusus oleh sistem inti RAZOS. Gunakan port bawaan aplikasi (${app.value.default_port || 8090}).`,
+      'error'
+    )
+    return
+  }
+
   installState.value = 'installing'
   installProgress.value = 5
   stepIndex.value = 1
