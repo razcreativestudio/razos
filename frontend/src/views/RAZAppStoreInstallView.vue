@@ -128,7 +128,7 @@
         </div>
 
         <!-- Step-by-Step Checklist Tracker -->
-        <div class="space-y-2 bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800/80 text-xs">
+        <div class="space-y-1.5 bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80 text-xs shrink-0">
           <!-- Step 1: Resource Check -->
           <div class="flex items-center gap-2.5" :class="stepIndex >= 1 ? 'text-slate-200' : 'text-slate-500'">
             <CheckCircle2 v-if="stepIndex > 1" class="w-4 h-4 text-emerald-400 shrink-0" />
@@ -170,9 +170,57 @@
           </div>
         </div>
 
-        <!-- Terminal Output Mini Log -->
-        <div class="mt-2 p-2.5 bg-black/70 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-400 truncate">
-          <span class="text-sky-400">$</span> {{ terminalLogLine }}
+        <!-- Terminal Output Live Console Box -->
+        <div class="mt-2 flex-1 min-h-[140px] flex flex-col rounded-xl bg-slate-950 border border-slate-800/90 overflow-hidden shadow-2xl">
+          <!-- Terminal Title Bar -->
+          <div class="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 border-b border-slate-800/80 select-none shrink-0">
+            <div class="flex items-center gap-2">
+              <div class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-rose-500/80"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-500/80"></span>
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500/80"></span>
+              </div>
+              <span class="text-[10px] font-mono text-slate-400 font-semibold tracking-wider flex items-center gap-1.5 ml-1">
+                <span>installer@razos:~# docker pull</span>
+                <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              </span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-sky-300 font-semibold">
+                {{ terminalLogs.length }} lines
+              </span>
+              <button 
+                type="button"
+                @click="copyTerminalLogs"
+                class="text-slate-400 hover:text-slate-200 transition px-1.5 py-0.5 rounded hover:bg-slate-800 flex items-center gap-1 text-[10px] font-mono"
+                title="Salin Seluruh Log Terminal"
+              >
+                <Copy class="w-3 h-3" />
+                <span>Salin</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Terminal Logs Body (Auto-scrolled) -->
+          <div 
+            ref="terminalScrollRef" 
+            class="p-2.5 font-mono text-[10.5px] leading-relaxed overflow-y-auto flex-1 space-y-1 select-text scrollbar-thin scrollbar-thumb-slate-800"
+          >
+            <div v-for="(log, idx) in terminalLogs" :key="idx" class="break-all flex items-start gap-1.5">
+              <span class="text-slate-500 text-[10px] shrink-0 font-mono select-none">[{{ log.time }}]</span>
+              <span :class="getLogLevelClass(log.type)" class="shrink-0 font-bold font-mono text-[10px] select-none">
+                {{ log.tag || '$' }}
+              </span>
+              <span :class="getLogTextClass(log.type)" class="flex-1 font-mono">
+                {{ log.text }}
+              </span>
+            </div>
+            <!-- Live Blinking Prompt -->
+            <div v-if="installState === 'installing'" class="flex items-center gap-1 text-slate-500 text-[10px] pt-0.5">
+              <span class="text-emerald-400 font-bold">$</span>
+              <span class="inline-block w-2 h-3.5 bg-emerald-400/90 animate-pulse"></span>
+            </div>
+          </div>
         </div>
       </div>
     </template>
@@ -267,6 +315,27 @@
               <strong>Deep Clean Otomatis:</strong> Seluruh temporary container, layer parsial yang korup, dan folder di {{ customVolume }} dapat langsung dibersihkan agar memori STB tetap lega.
             </div>
           </div>
+
+          <!-- Terminal Logs on Error -->
+          <div v-if="terminalLogs.length > 0" class="w-full max-w-sm rounded-xl bg-slate-950 border border-rose-500/30 overflow-hidden text-left shadow-lg">
+            <div class="flex items-center justify-between px-3 py-1 bg-slate-900 border-b border-slate-800 text-[10px] font-mono text-slate-400">
+              <span class="text-rose-400 font-semibold flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                <span>Terminal Execution Log</span>
+              </span>
+              <button @click="copyTerminalLogs" class="hover:text-white transition flex items-center gap-1">
+                <Copy class="w-3 h-3" />
+                <span>Salin</span>
+              </button>
+            </div>
+            <div class="p-2.5 font-mono text-[10px] leading-relaxed max-h-28 overflow-y-auto space-y-1">
+              <div v-for="(log, idx) in terminalLogs.slice(-10)" :key="idx" class="break-all flex items-start gap-1.5">
+                <span class="text-slate-500 text-[9px] shrink-0 font-mono">[{{ log.time }}]</span>
+                <span :class="getLogLevelClass(log.type)" class="shrink-0 font-bold text-[9px]">{{ log.tag }}</span>
+                <span :class="getLogTextClass(log.type)">{{ log.text }}</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
@@ -304,10 +373,11 @@
 <script setup>
 /**
  * Logika RAZAppStoreInstallView
- * Menangani alur bertahap instalasi Docker: resource checking, pulling progress, volume allocation,
- * port verification, container healthcheck, dan automated deep clean rollback.
+ * Menangani alur bertahap instalasi Docker dengan Live Terminal Output Logger:
+ * resource checking, pulling layer progress, volume allocation, port verification,
+ * container healthcheck, dan automated deep clean rollback.
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
 import { useWindowStore } from '../stores/RAZWindowStore'
 import {
@@ -346,9 +416,13 @@ const stepIndex = ref(1)
 const currentStageLabel = ref('Memeriksa ketersediaan sistem...')
 const currentStepDetail = ref('Menghubungi host...')
 const currentSpeed = ref('0 KB/s')
-const terminalLogLine = ref('docker-init: allocating resources')
 const errorMessage = ref('')
 const isCleaning = ref(false)
+
+// State Live Terminal Logs
+const terminalLogs = ref([])
+const terminalScrollRef = ref(null)
+let pollTimer = null
 
 onMounted(() => {
   if (app.value) {
@@ -357,10 +431,100 @@ onMounted(() => {
   }
 })
 
+onUnmounted(() => {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+})
+
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
+// Menambahkan baris log lokal secara instan
+function appendLocalLog(type, tag, text) {
+  const now = new Date()
+  const timeStr = now.toTimeString().split(' ')[0]
+  terminalLogs.value.push({ time: timeStr, type, tag, text })
+  scrollToBottom()
+}
+
+// Auto-scroll ke bagian terbawah terminal
+function scrollToBottom() {
+  nextTick(() => {
+    if (terminalScrollRef.value) {
+      terminalScrollRef.value.scrollTop = terminalScrollRef.value.scrollHeight
+    }
+  })
+}
+
+// Polling log aktivitas instalasi dari backend Go
+async function fetchBackendLogs() {
+  const slug = app.value?.slug
+  if (!slug) return
+  try {
+    const res = await fetch(`/api/v1/store/install/logs/${slug}`)
+    if (res.ok) {
+      const data = await res.json()
+      if (Array.isArray(data.logs) && data.logs.length > 0) {
+        terminalLogs.value = data.logs
+        scrollToBottom()
+
+        // Perbarui ringkasan proses dari log terakhir
+        const lastLog = data.logs[data.logs.length - 1]
+        if (lastLog && lastLog.text) {
+          if (lastLog.text.includes('Downloading') || lastLog.text.includes('Extracting')) {
+            currentStepDetail.value = lastLog.text
+            currentSpeed.value = 'Docker Layer'
+          } else if (lastLog.tag === '[ONLINE]') {
+            currentStepDetail.value = 'Container online dan siap!'
+            currentSpeed.value = '100%'
+          } else if (lastLog.tag === '[STORAGE]') {
+            currentStepDetail.value = lastLog.text
+          } else if (lastLog.tag === '[SYS]') {
+            currentStepDetail.value = lastLog.text
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // Abaikan error polling
+  }
+}
+
+// Helper Pewarnaan Tag dan Teks Log Terminal
+function getLogLevelClass(type) {
+  switch (type) {
+    case 'info': return 'text-sky-400'
+    case 'docker': return 'text-amber-400'
+    case 'pull': return 'text-indigo-300'
+    case 'success': return 'text-emerald-400'
+    case 'error': return 'text-rose-400'
+    default: return 'text-slate-400'
+  }
+}
+
+function getLogTextClass(type) {
+  switch (type) {
+    case 'error': return 'text-rose-300'
+    case 'success': return 'text-emerald-300 font-semibold'
+    case 'docker': return 'text-amber-200'
+    case 'pull': return 'text-slate-300'
+    default: return 'text-slate-400'
+  }
+}
+
+// Salin seluruh isi log terminal ke clipboard
+function copyTerminalLogs() {
+  if (terminalLogs.value.length === 0) return
+  const text = terminalLogs.value.map(l => `[${l.time}] ${l.tag || '$'} ${l.text}`).join('\n')
+  try {
+    navigator.clipboard?.writeText(text)
+    systemStore.showNotification('Log Disalin', 'Seluruh log terminal berhasil disalin ke clipboard', 'info')
+  } catch (e) {}
+}
+
 /**
- * Memulai alur instalasi multi-tahap
+ * Memulai alur instalasi multi-tahap dengan live terminal logging
  */
 async function startInstallationProcess() {
   if (!app.value || !app.value.id) return
@@ -368,58 +532,53 @@ async function startInstallationProcess() {
   installProgress.value = 5
   stepIndex.value = 1
   errorMessage.value = ''
+  terminalLogs.value = []
+
+  appendLocalLog('info', '[INIT]', `Memulai instalasi ${app.value.name} (${app.value.slug})...`)
 
   try {
     // TAHAP 1: Validasi Sumber Daya (RAM & Storage STB)
     currentStageLabel.value = 'Tahap 1: Validasi Sumber Daya Host'
     currentStepDetail.value = 'Mengecek ketersediaan RAM & Partisi /DATA...'
-    terminalLogLine.value = `host: verifying memory headroom (RAM free: ${((systemStore.metrics.ram_total - systemStore.metrics.ram_used)/1024/1024).toFixed(0)} MB)`
-    await sleep(700)
+    const freeRAM = ((systemStore.metrics.ram_total - systemStore.metrics.ram_used)/1024/1024).toFixed(0)
+    appendLocalLog('info', '[SYS]', `Verifikasi memori RAM bebas: ${freeRAM} MB (Ambang batas minimum: 150 MB)`)
+    await sleep(400)
     installProgress.value = 15
 
     // TAHAP 2: Mengunduh Image Docker (Docker Pull Layers)
     stepIndex.value = 2
-    currentStageLabel.value = 'Tahap 2: Mengunduh Docker Image & Layers'
+    currentStageLabel.value = 'Tahap 2: Persiapan Image & Layer Docker'
     const imageName = app.value.image || `${app.value.slug}:latest`
-    
-    terminalLogLine.value = `docker pull ${imageName}: pulling fs layer [a8c1f32]`
-    currentSpeed.value = '2.4 MB/s'
+    appendLocalLog('docker', '[IMAGE]', `Target Docker Image: ${imageName}`)
     installProgress.value = 25
-    await sleep(600)
-
-    terminalLogLine.value = `docker pull: downloading layer [b9d2e41] (45.2 MB / 138 MB)`
-    currentSpeed.value = '3.8 MB/s'
-    installProgress.value = 45
-    await sleep(700)
-
-    terminalLogLine.value = `docker pull: extracting layer and verifying checksum`
-    currentSpeed.value = '4.1 MB/s'
-    installProgress.value = 65
-    await sleep(600)
+    await sleep(300)
 
     // TAHAP 3: Menyiapkan Storage Persisten & Izin
     stepIndex.value = 3
     currentStageLabel.value = 'Tahap 3: Menyiapkan Direktori /DATA'
-    terminalLogLine.value = `mkdir -p ${customVolume.value} && chmod 755 ${customVolume.value}`
+    appendLocalLog('info', '[STORAGE]', `Membuat folder storage persisten: ${customVolume.value}`)
     currentStepDetail.value = `Membuat alokasi volume di ${customVolume.value}...`
     currentSpeed.value = 'Storage I/O'
-    installProgress.value = 80
-    await sleep(500)
+    installProgress.value = 40
+    await sleep(300)
 
     // TAHAP 4: Validasi Port & Environment
     stepIndex.value = 4
     currentStageLabel.value = 'Tahap 4: Konfigurasi Port & Network'
-    terminalLogLine.value = `net: binding TCP port :${customPort.value} -> container:${app.value.default_port || customPort.value}`
+    appendLocalLog('info', '[NET]', `Memetakan port host 0.0.0.0:${customPort.value} -> container:${app.value.default_port || customPort.value}`)
     currentStepDetail.value = `Mengalokasikan port :${customPort.value}...`
-    installProgress.value = 90
-    await sleep(400)
+    installProgress.value = 50
+    await sleep(200)
 
     // TAHAP 5: Menjalankan Container & Hubungi API Backend
     stepIndex.value = 5
     currentStageLabel.value = 'Tahap 5: Mengunduh Image & Menjalankan Container'
-    terminalLogLine.value = `docker pull ${imageName} && docker run -d --name razos-${app.value.slug} -p ${customPort.value}:${app.value.default_port || customPort.value} -v ${customVolume.value}:/data ${imageName}`
+    appendLocalLog('docker', '[PULL]', `docker pull ${imageName}`)
     currentStepDetail.value = 'Mengunduh layer image dan menginisialisasi proses container...'
-    installProgress.value = 95
+    installProgress.value = 60
+
+    // Mulai polling aktif ke backend untuk membaca stream log dari daemon Docker
+    pollTimer = setInterval(fetchBackendLogs, 500)
 
     const payload = {
       app_id: app.value.id,
@@ -433,15 +592,25 @@ async function startInstallationProcess() {
       body: JSON.stringify(payload)
     })
 
+    // Hentikan timer dan ambil log sinkron terakhir
+    if (pollTimer) {
+      clearInterval(pollTimer)
+      pollTimer = null
+    }
+    await fetchBackendLogs()
+
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}))
-      throw new Error(errData.error || `Gagal menjalankan container pada port ${customPort.value}`)
+      const msg = errData.error || `Gagal menjalankan container pada port ${customPort.value}`
+      appendLocalLog('error', '[ERR]', msg)
+      throw new Error(msg)
     }
 
     // TAHAP 6: Sukses Terpasang
+    appendLocalLog('success', '[ONLINE]', `Container ${app.value.name} telah aktif dan siap diakses di port :${customPort.value}`)
     installProgress.value = 100
     stepIndex.value = 6
-    await sleep(300)
+    await sleep(400)
     installState.value = 'success'
 
     // Sinkronisasi sistem & desktop
@@ -450,8 +619,13 @@ async function startInstallationProcess() {
     systemStore.showNotification('Instalasi Selesai', `Aplikasi ${app.value.name} siap digunakan pada port :${customPort.value}`, 'success')
 
   } catch (err) {
+    if (pollTimer) {
+      clearInterval(pollTimer)
+      pollTimer = null
+    }
     installState.value = 'error'
     errorMessage.value = err.message || 'Proses instalasi container mengalami kendala.'
+    appendLocalLog('error', '[FATAL]', errorMessage.value)
   }
 }
 
@@ -461,11 +635,13 @@ async function startInstallationProcess() {
 async function executeDeepCleanRollback() {
   isCleaning.value = true
   try {
+    appendLocalLog('info', '[CLEAN]', `Memulai pembersihan sampah instalasi dan folder ${customVolume.value}...`)
     // Panggil endpoint penghapusan untuk membersihkan artefak yang gagal
     await fetch(`/api/v1/store/apps/${app.value.slug}?purge_data=true`, {
       method: 'DELETE'
     })
     await sleep(600)
+    appendLocalLog('success', '[CLEAN]', 'Pembersihan berhasil diselesaikan!')
     systemStore.showNotification('Deep Clean Selesai', `Seluruh sampah instalasi dan folder ${customVolume.value} berhasil dibersihkan`, 'info')
     installState.value = 'idle'
   } catch (e) {
@@ -492,6 +668,10 @@ function openInstalledApp() {
 }
 
 function handleCancel() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
   windowStore.closeWindow(props.win?.id || `appstore-install-${app.value?.slug}`)
 }
 </script>

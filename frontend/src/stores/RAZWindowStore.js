@@ -511,10 +511,10 @@ export const useWindowStore = defineStore('window', () => {
       id: `appstore-install-${app.slug}`,
       title: `Pasang ${app.name}`,
       icon: app.icon || '/assets/icons/RAZIconAppStore.svg',
-      width: 500,
-      height: 420,
-      minWidth: 380,
-      minHeight: 300,
+      width: 560,
+      height: 520,
+      minWidth: 420,
+      minHeight: 380,
       type: 'appstore-install',
       data: app
     })

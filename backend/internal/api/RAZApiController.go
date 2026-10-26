@@ -62,6 +62,7 @@ func RegisterRoutes(r *gin.Engine) {
 		v1.GET("/store/apps", handleGetAppCatalog)
 		v1.GET("/store/installed", handleGetInstalledApps)
 		v1.POST("/store/install", handleInstallApp)
+		v1.GET("/store/install/logs/:slug", handleGetStoreInstallLogs)
 		v1.PUT("/store/apps/:slug", handleUpdateAppSettings)
 		v1.POST("/store/apps/:slug/restart", handleRestartStoreApp)
 		v1.POST("/store/apps/:slug/action", handleStoreAppAction)
@@ -411,6 +412,16 @@ func handleInstallApp(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "installed", "app_id": req.AppID})
+}
+
+// handleGetStoreInstallLogs mengembalikan riwayat log proses instalasi container secara real-time
+func handleGetStoreInstallLogs(c *gin.Context) {
+	slug := c.Param("slug")
+	logs := store.GetInstallLogs(slug)
+	c.JSON(http.StatusOK, gin.H{
+		"slug": slug,
+		"logs": logs,
+	})
 }
 
 func handleUninstallApp(c *gin.Context) {

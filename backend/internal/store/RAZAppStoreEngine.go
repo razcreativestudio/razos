@@ -1,14 +1,15 @@
 /**
  * RAZOS App Store Engine
- * Updated: 2026-10-26 (v3.9.0)
+ * Updated: 2026-10-26 (v3.9.4)
  * Deskripsi: Engine deploy dan uninstall container Docker ke partisi /DATA/apps/
  * dengan validasi memori RAM minimum (> 150 MB free), multi-layer Docker CLI + Go SDK
- * pull engine dengan error streaming decoder, serta robust container port exposure & clean uninstall.
+ * pull engine dengan real-time terminal stdout scanner logging, robust container port exposure & clean uninstall.
  */
 
 package store
 
 import (
+	"bufio"
 	"context"
 	_ "embed"
 	"encoding/json"
@@ -19,6 +20,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -27,6 +29,56 @@ import (
 	"github.com/docker/go-connections/nat"
 	"github.com/shirou/gopsutil/v3/mem"
 )
+
+// LogItem struktur satu baris catatan aktivitas instalasi di terminal
+type LogItem struct {
+	Time string `json:"time"`
+	Type string `json:"type"` // "info" | "docker" | "pull" | "success" | "error"
+	Tag  string `json:"tag"`  // "[INFO]", "[DOCKER]", "[PULL]", etc.
+	Text string `json:"text"`
+}
+
+var (
+	installLogsMu sync.RWMutex
+	installLogs   = make(map[string][]LogItem) // slug -> logs
+)
+
+// AddInstallLog mencatat satu baris aktivitas instalasi secara thread-safe
+func AddInstallLog(slug, logType, tag, text string) {
+	installLogsMu.Lock()
+	defer installLogsMu.Unlock()
+	item := LogItem{
+		Time: time.Now().Format("15:04:05"),
+		Type: logType,
+		Tag:  tag,
+		Text: text,
+	}
+	installLogs[slug] = append(installLogs[slug], item)
+	// Batasi maksimal 250 baris per slug agar hemat RAM STB
+	if len(installLogs[slug]) > 250 {
+		installLogs[slug] = installLogs[slug][len(installLogs[slug])-250:]
+	}
+}
+
+// GetInstallLogs mengambil riwayat log instalasi aplikasi tertentu
+func GetInstallLogs(slug string) []LogItem {
+	installLogsMu.RLock()
+	defer installLogsMu.RUnlock()
+	items, exists := installLogs[slug]
+	if !exists {
+		return []LogItem{}
+	}
+	copied := make([]LogItem, len(items))
+	copy(copied, items)
+	return copied
+}
+
+// ClearInstallLogs membersihkan riwayat log untuk melegakan memori
+func ClearInstallLogs(slug string) {
+	installLogsMu.Lock()
+	defer installLogsMu.Unlock()
+	delete(installLogs, slug)
+}
 
 //go:embed RAZApps.json
 var embeddedAppsJSON []byte
@@ -105,14 +157,8 @@ func GetCatalog() ([]AppManifest, error) {
 	return catalog, nil
 }
 
-// DeployApp melakukan pull image dan menjalankan container ke /DATA/apps/
+// DeployApp melakukan pull image dan menjalankan container ke /DATA/apps/ dengan live terminal logging
 func DeployApp(req DeployRequest) error {
-	// 1. Validasi Keamanan Hardware STB: Cek kapasitas RAM bebas minimal 150 MB
-	vMem, err := mem.VirtualMemory()
-	if err == nil && vMem.Available < 150*1024*1024 {
-		return fmt.Errorf("sumber daya tidak mencukupi: RAM bebas tersisa kurang dari 150 MB")
-	}
-
 	var targetImage string
 	var containerName string
 	var defaultVol string
@@ -166,31 +212,53 @@ func DeployApp(req DeployRequest) error {
 		envs = append(targetApp.Env, req.ExtraEnvs...)
 	}
 
-	// Tentukan folder data di /DATA/apps/
+	// Inisialisasi terminal log untuk slug ini
+	ClearInstallLogs(slug)
+	AddInstallLog(slug, "info", "[INIT]", fmt.Sprintf("Memulai instalasi %s (%s)...", slug, targetImage))
+
+	// 1. Validasi Keamanan Hardware STB: Cek kapasitas RAM bebas minimal 150 MB
+	vMem, err := mem.VirtualMemory()
+	if err == nil {
+		freeMB := vMem.Available / 1024 / 1024
+		AddInstallLog(slug, "info", "[SYS]", fmt.Sprintf("Verifikasi RAM: %d MB bebas tersedia (Batas aman: 150 MB)", freeMB))
+		if vMem.Available < 150*1024*1024 {
+			AddInstallLog(slug, "error", "[ERR]", fmt.Sprintf("RAM bebas tidak mencukupi: hanya tersisa %d MB", freeMB))
+			return fmt.Errorf("sumber daya tidak mencukupi: RAM bebas tersisa kurang dari 150 MB")
+		}
+	}
+
+	// 2. Tentukan dan siapkan folder data di /DATA/apps/
 	dataPath := req.DataPath
 	if dataPath == "" {
 		dataPath = filepath.Join("/DATA/apps", slug)
 	}
-	_ = os.MkdirAll(dataPath, 0755)
+	AddInstallLog(slug, "info", "[STORAGE]", fmt.Sprintf("Menyiapkan volume penyimpanan di %s...", dataPath))
+	if mkErr := os.MkdirAll(dataPath, 0755); mkErr != nil {
+		AddInstallLog(slug, "error", "[ERR]", fmt.Sprintf("Gagal membuat direktori %s: %v", dataPath, mkErr))
+		return mkErr
+	}
+	AddInstallLog(slug, "success", "[STORAGE]", fmt.Sprintf("Direktori %s siap (izin 0755)", dataPath))
 
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
+		AddInstallLog(slug, "error", "[ERR]", fmt.Sprintf("Koneksi Docker socket gagal: %v", err))
 		return err
 	}
 	defer cli.Close()
 
-	// Setup Port Binding
+	// 3. Setup Port Binding & Volume Mount Target
 	targetPort := req.Port
 	if targetPort <= 0 {
 		targetPort = defaultPort
 	}
 	natPort, _ := nat.NewPort("tcp", fmt.Sprintf("%d", defaultPort))
 
-	// Pastikan mount target volume di dalam container valid (/data jika format bawaan adalah path host /DATA/...)
 	mountTarget := defaultVol
 	if mountTarget == "" || strings.HasPrefix(mountTarget, "/DATA/") || strings.HasPrefix(mountTarget, "/data/") {
 		mountTarget = "/data"
 	}
+	AddInstallLog(slug, "info", "[NET]", fmt.Sprintf("Alokasi Port Host :%d -> Container :%d", targetPort, defaultPort))
+	AddInstallLog(slug, "info", "[MOUNT]", fmt.Sprintf("Binding Volume %s -> %s", dataPath, mountTarget))
 
 	hostConfig := &container.HostConfig{
 		PortBindings: nat.PortMap{
@@ -208,68 +276,94 @@ func DeployApp(req DeployRequest) error {
 		},
 	}
 
-	// Unduh Docker image ke host secara tangguh (dengan timeout 10 menit untuk image besar)
+	// 4. Unduh Docker image ke host secara tangguh (dengan timeout 10 menit untuk image besar)
 	pullCtx, pullCancel := context.WithTimeout(context.Background(), 600*time.Second)
 	defer pullCancel()
 
-	if err := pullDockerImage(pullCtx, cli, targetImage); err != nil {
+	if err := pullDockerImage(pullCtx, cli, targetImage, slug); err != nil {
+		AddInstallLog(slug, "error", "[ERR]", fmt.Sprintf("Gagal mengunduh image: %v", err))
 		return err
 	}
 
-	// Hapus jika ada container lama dengan nama sama
+	// 5. Hapus jika ada container lama dengan nama sama
+	AddInstallLog(slug, "docker", "[CLEAN]", fmt.Sprintf("Memeriksa & membersihkan container lama '%s'...", containerName))
 	_ = cli.ContainerRemove(context.Background(), containerName, types.ContainerRemoveOptions{Force: true})
 
-	// Buat container baru dengan ExposedPorts agar binding port aktif sempurna
+	// 6. Buat container baru dengan ExposedPorts agar binding port aktif sempurna
+	AddInstallLog(slug, "docker", "[CREATE]", fmt.Sprintf("Membuat container '%s' dari image %s...", containerName, targetImage))
 	resp, err := cli.ContainerCreate(context.Background(), &container.Config{
 		Image:        targetImage,
 		Env:          envs,
 		ExposedPorts: nat.PortSet{natPort: struct{}{}},
 	}, hostConfig, nil, nil, containerName)
 	if err != nil {
+		AddInstallLog(slug, "error", "[ERR]", fmt.Sprintf("Gagal membuat container: %v", err))
 		return fmt.Errorf("gagal membuat container %s: %v", containerName, err)
 	}
 
+	// 7. Jalankan container
+	AddInstallLog(slug, "docker", "[START]", fmt.Sprintf("Menjalankan container (ID: %s)...", resp.ID[:12]))
 	if err := cli.ContainerStart(context.Background(), resp.ID, types.ContainerStartOptions{}); err != nil {
+		AddInstallLog(slug, "error", "[ERR]", fmt.Sprintf("Gagal start container: %v", err))
 		return fmt.Errorf("gagal menjalankan container %s: %v", containerName, err)
 	}
 
+	AddInstallLog(slug, "success", "[ONLINE]", fmt.Sprintf("Container '%s' aktif dan siap diakses di port :%d!", containerName, targetPort))
 	return nil
 }
 
-// pullDockerImage mengunduh Docker image ke host dengan prioritas Docker CLI dan fallback Go SDK
-func pullDockerImage(ctx context.Context, cli *client.Client, imageName string) error {
+// pullDockerImage mengunduh Docker image ke host dengan live terminal line scanner
+func pullDockerImage(ctx context.Context, cli *client.Client, imageName, slug string) error {
 	// 1. Cek apakah image sudah tersedia secara lokal di host
 	_, _, err := cli.ImageInspectWithRaw(ctx, imageName)
 	if err == nil {
+		AddInstallLog(slug, "success", "[CACHE]", fmt.Sprintf("Image %s sudah tersedia di lokal host (skip download)", imageName))
 		return nil
 	}
 
 	log.Printf("[RAZAppStore] Mengunduh Docker image: %s ...", imageName)
+	AddInstallLog(slug, "docker", "[PULL]", fmt.Sprintf("docker pull %s", imageName))
 
-	// 2. Prioritas 1: Gunakan Docker CLI bawaan sistem (/usr/bin/docker pull)
-	// Docker CLI memiliki penanganan layer, DNS, arsitektur CPU (ARM64), dan kredensial paling stabil di Linux
+	// 2. Prioritas 1: Gunakan Docker CLI bawaan sistem (/usr/bin/docker pull) dengan pipe scanner
 	cmd := exec.CommandContext(ctx, "docker", "pull", imageName)
-	outBytes, cmdErr := cmd.CombinedOutput()
-	if cmdErr == nil {
-		log.Printf("[RAZAppStore] Sukses mengunduh image via Docker CLI: %s", imageName)
-		return nil
+	stdout, outErr := cmd.StdoutPipe()
+	stderr, errPipeErr := cmd.StderrPipe()
+
+	if outErr == nil && errPipeErr == nil {
+		multiReader := io.MultiReader(stdout, stderr)
+		if startErr := cmd.Start(); startErr == nil {
+			scanner := bufio.NewScanner(multiReader)
+			for scanner.Scan() {
+				line := strings.TrimSpace(scanner.Text())
+				if line != "" {
+					AddInstallLog(slug, "pull", "[PULL]", line)
+				}
+			}
+			if waitErr := cmd.Wait(); waitErr == nil {
+				AddInstallLog(slug, "success", "[PULL]", fmt.Sprintf("Selesai mengunduh seluruh layer %s", imageName))
+				return nil
+			}
+		}
 	}
 
-	log.Printf("[RAZAppStore] Docker CLI pull gagal (%v: %s), mencoba via Docker Go SDK...", cmdErr, strings.TrimSpace(string(outBytes)))
+	AddInstallLog(slug, "docker", "[FALLBACK]", "Mencoba fallback unduh via Docker Go SDK...")
 
 	// 3. Fallback: Gunakan Docker Go SDK jika CLI gagal atau terkendala
 	out, sdkErr := cli.ImagePull(ctx, imageName, types.ImagePullOptions{})
 	if sdkErr != nil {
-		if len(outBytes) > 0 {
-			return fmt.Errorf("gagal mengunduh docker image %s: %s", imageName, strings.TrimSpace(string(outBytes)))
-		}
+		AddInstallLog(slug, "error", "[ERR]", fmt.Sprintf("SDK ImagePull gagal: %v", sdkErr))
 		return fmt.Errorf("gagal mengunduh docker image %s: %v", imageName, sdkErr)
 	}
 	defer out.Close()
 
-	// Parse JSON event stream dari Docker daemon untuk menangkap pesan error asli
+	// Parse JSON event stream dari Docker daemon untuk menangkap status & progress layer
 	type pullEvent struct {
-		Status      string `json:"status"`
+		Status         string `json:"status"`
+		Progress       string `json:"progress"`
+		ProgressDetail struct {
+			Current int64 `json:"current"`
+			Total   int64 `json:"total"`
+		} `json:"progressDetail"`
 		Error       string `json:"error"`
 		ErrorDetail struct {
 			Message string `json:"message"`
@@ -286,10 +380,19 @@ func pullDockerImage(ctx context.Context, cli *client.Client, imageName string) 
 			}
 			break
 		}
+		if ev.Status != "" {
+			msg := ev.Status
+			if ev.Progress != "" {
+				msg += " " + ev.Progress
+			}
+			AddInstallLog(slug, "pull", "[PULL]", msg)
+		}
 		if ev.Error != "" {
 			streamErr = ev.Error
+			AddInstallLog(slug, "error", "[ERR]", ev.Error)
 		} else if ev.ErrorDetail.Message != "" {
 			streamErr = ev.ErrorDetail.Message
+			AddInstallLog(slug, "error", "[ERR]", ev.ErrorDetail.Message)
 		}
 	}
 
@@ -300,11 +403,12 @@ func pullDockerImage(ctx context.Context, cli *client.Client, imageName string) 
 	// 4. Verifikasi final bahwa image benar-benar terdaftar di daemon
 	_, _, verifyErr := cli.ImageInspectWithRaw(ctx, imageName)
 	if verifyErr != nil {
-		if len(outBytes) > 0 {
-			return fmt.Errorf("gagal mengunduh docker image %s: %s", imageName, strings.TrimSpace(string(outBytes)))
-		}
 		return fmt.Errorf("image %s tidak ditemukan di daemon setelah proses pull selesai", imageName)
 	}
+
+	AddInstallLog(slug, "success", "[PULL]", fmt.Sprintf("Verifikasi image %s di daemon Docker berhasil!", imageName))
+	return nil
+}
 
 	return nil
 }

@@ -178,3 +178,33 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
    - `Invoke-WebRequest -Uri "http://192.168.100.117:8100"`: Berhasil mengembalikan `HTTP/1.1 200 OK` dengan landing page RAZ Creative Studio (`/DATA/www/webraz/index.html`).
    - Website kini 100% online dan dapat diakses dari browser jaringan lokal.
 
+---
+
+### Versi: 3.9.4-app-store-live-terminal-box-and-scanner (App Store Real-Time Terminal Execution Box & Docker Pipe Scanner)
+**Waktu Eksekusi:** 2026-10-26 12:38 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah / Kebutuhan Pengguna
+- Saat pengguna memasang aplikasi di App Store (misal Immich), progres di Tahap 5 tampak tertahan pada teks statis `$ docker pull ...` tanpa informasi detail apa yang sedang dikerjakan terminal di belakang layar (apakah mengunduh layer, mengekstrak, menyiapkan storage, atau membuat kontainer).
+- Pengguna meminta agar dibuatkan teks boks terminal di jendela modal instalasi untuk menampilkan aktivitas terminal secara riil dan mengetahui proses instalasi sudah sampai mana.
+
+#### 2. Solusi & Rekayasa Kode
+1. **Pembaruan Backend Store Engine (`RAZAppStoreEngine.go`):**
+   - Mengembangkan sistem logging instalasi thread-safe (`LogItem`, `AddInstallLog`, `GetInstallLogs`, `ClearInstallLogs`).
+   - Mengintegrasikan pembacaan output stream riil dari perintah `docker pull` menggunakan `cmd.StdoutPipe()` & `cmd.StderrPipe()` via `bufio.Scanner` sehingga setiap layer download (`Pulling fs layer`, `Downloading [===> ]`, `Extracting`, `Pull complete`) langsung tercatat baris demi baris.
+   - Mencatat setiap fase instalasi: Validasi RAM STB (`[SYS]`), Inisialisasi Storage `/DATA/apps/<slug>` (`[STORAGE]`), Pemetaan Port Host (`[NET]`), Eksekusi Docker Pull (`[PULL]`), Pembuatan Kontainer (`[CREATE]`), dan Container Start (`[ONLINE]`).
+2. **Pembaruan REST API Controller (`RAZApiController.go`):**
+   - Menambahkan endpoint REST `GET /api/v1/store/install/logs/:slug` (`handleGetStoreInstallLogs`) agar UI frontend dapat menarik log aktivitas terminal secara real-time.
+3. **Pembaruan UI Terminal Box (`RAZAppStoreInstallView.vue`):**
+   - Mengganti teks statis 1 baris dengan komponen **Live Terminal Output Console Box**:
+     - Header jendela terminal dengan 3 dot macOS/Linux style, teks status `installer@razos:~# docker pull`, indikator pulsing `LIVE`, counter jumlah baris log, dan tombol cepat "Salin" log ke clipboard.
+     - Wadah log monospaced hitam transparan (`bg-slate-950 border border-slate-800/90`) dengan autoscroll otomatis ke baris paling baru (`nextTick` scrollTop).
+     - Pewarnaan tag dinamis: Sky-blue untuk `[INFO]`/`[SYS]`, Amber untuk `[DOCKER]`, Indigo untuk `[PULL]`, Emerald untuk `[ONLINE]`/`[SUCCESS]`, dan Rose untuk `[ERR]`.
+     - Kursor prompt berkedip (`animate-pulse`) yang menandakan proses terminal aktif.
+     - Menampilkan terminal log riil pada state error bila proses terhenti agar penyebab kegagalan langsung transparan.
+4. **Penyelarasan Dimensi Jendela (`RAZWindowStore.js`):**
+   - Menyesuaikan ukuran default jendela instalasi menjadi `width: 560, height: 520` (min: `420x380`) agar checklist dan boks terminal muat proporsional tanpa desak-desakan.
+5. **Kompilasi Ulang Frontend:**
+   - Melakukan build produksi Vite (`dist/assets/index-9Nk6Q-7G.js` & `dist/assets/index-8as4WQE_.css`).
+
+
