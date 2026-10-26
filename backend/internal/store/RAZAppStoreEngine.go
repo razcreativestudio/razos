@@ -92,6 +92,7 @@ type AppManifest struct {
 	Description   string   `json:"description"`
 	Image         string   `json:"image"`
 	DefaultPort   int      `json:"default_port"`
+	Port          int      `json:"port,omitempty"`
 	DefaultVolume string   `json:"default_volume"`
 	Env           []string `json:"env"`
 	Installed     bool     `json:"installed"`
@@ -104,6 +105,7 @@ type AppManifest struct {
 type DeployRequest struct {
 	AppID         string   `json:"app_id"`
 	Name          string   `json:"name"`
+	Image         string   `json:"image,omitempty"`
 	CustomImage   string   `json:"custom_image"`
 	ContainerName string   `json:"container_name"`
 	Port          int      `json:"port"`
@@ -147,9 +149,26 @@ func GetCatalog() ([]AppManifest, error) {
 				for _, name := range c.Names {
 					if name == "/razos-"+catalog[i].Slug {
 						catalog[i].Installed = true
+						// Ekstraksi port publik yang sedang dipetakan oleh container Docker
+						for _, p := range c.Ports {
+							if p.PublicPort > 0 {
+								catalog[i].Port = int(p.PublicPort)
+								break
+							}
+						}
 						break
 					}
 				}
+			}
+			// Jika port belum terisi atau 0, gunakan DefaultPort sebagai fallback dinamis
+			if catalog[i].Port == 0 {
+				catalog[i].Port = catalog[i].DefaultPort
+			}
+		}
+	} else {
+		for i := range catalog {
+			if catalog[i].Port == 0 {
+				catalog[i].Port = catalog[i].DefaultPort
 			}
 		}
 	}
@@ -165,6 +184,11 @@ func DeployApp(req DeployRequest) error {
 	var defaultPort int
 	var envs []string
 	var slug string
+
+	// Fallback jika req.CustomImage kosong tetapi req.Image diberikan
+	if req.CustomImage == "" && req.Image != "" {
+		req.CustomImage = req.Image
+	}
 
 	// Jika instalasi manual kustom (Custom Docker Image ala CasaOS)
 	if req.CustomImage != "" {

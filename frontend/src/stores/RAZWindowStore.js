@@ -541,17 +541,18 @@ export const useWindowStore = defineStore('window', () => {
   // Standalone Window: Pengaturan Detail Aplikasi & Container (CasaOS Style Settings)
   function openAppEditor(app) {
     if (!app) return
-    const slug = app.slug || app.id
+    const raw = app.storeData ? { ...app.storeData, ...app } : { ...app }
+    const slug = raw.slug || raw.id
     openCustomWindow({
       id: `app-edit-${slug}`,
-      title: `${app.name || app.title || slug} Settings`,
-      icon: app.icon || '/assets/icons/RAZIconAppStore.svg',
+      title: `${raw.name || raw.title || slug} Settings`,
+      icon: raw.icon || '/assets/icons/RAZIconAppStore.svg',
       width: 720,
       height: 600,
       minWidth: 480,
       minHeight: 420,
       type: 'app-edit',
-      data: app
+      data: raw
     })
   }
 
@@ -728,7 +729,8 @@ export const useWindowStore = defineStore('window', () => {
   // Luncurkan Web UI Aplikasi Store
   function launchStoreApp(app) {
     if (!app) return
-    const port = app.port || app.storeData?.port || 8080
+    const fallbackPort = (app.slug === 'immich') ? 2283 : (app.default_port || app.storeData?.default_port || 8090)
+    const port = app.port || app.default_port || app.storeData?.port || app.storeData?.default_port || fallbackPort
     const url = `http://${window.location.hostname}:${port}`
     window.open(url, '_blank')
   }
@@ -759,13 +761,16 @@ export const useWindowStore = defineStore('window', () => {
 
     // Tambahkan Container Terpasang dari App Store
     installedStoreApps.value.forEach(inst => {
+      const livePort = inst.port || inst.default_port || (inst.slug === 'immich' ? 2283 : 8090)
       list.push({
+        ...inst,
         id: `store-${inst.slug || inst.id}`,
         title: inst.name,
         icon: inst.icon || 'https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/docker.png',
         isStoreApp: true,
         storeData: inst,
-        port: inst.port,
+        port: livePort,
+        default_port: inst.default_port || livePort,
         slug: inst.slug || inst.id
       })
     })

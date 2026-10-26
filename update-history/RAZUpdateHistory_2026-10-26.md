@@ -263,6 +263,41 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 5. **Kompilasi Ulang Frontend:**
    - Melakukan build produksi Vite (`dist/assets/index-zAuGkjJo.js` & `dist/assets/index-C_VRwv9X.css`).
 
+---
+
+### Versi: 4.1.1-app-store-edit-port-reactivity-and-conflict-fix (Perbaikan Port Reaktif Pengaturan Container & Pencegahan Bentrok Port 8080)
+**Waktu Eksekusi:** 2026-10-26 13:38 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah / Kebutuhan Pengguna
+- Pengguna melaporkan bahwa saat membuka pengaturan container (seperti Immich) melalui jendela edit aplikasi (`RAZAppEditView.vue`), nilai port yang muncul pada form host dan container berubah menjadi `8080 : 8080` padahal di App Store katalog Immich memiliki port `2283`, sehingga aplikasi tidak dapat dibuka dan memicu kebingungan konfigurasi.
+
+#### 2. Investigasi & Akar Masalah (Root Cause Analysis)
+1. **Fallback Hardcode 8080 Tanpa Watcher Reaktif:**
+   - Pada `frontend/src/views/RAZAppEditView.vue`, `populateForm()` hanya dijalankan satu kali saat `onMounted`. Karena data props jendela (`props.win?.customData`) bisa dimuat secara asinkron atau membawa struktur pembungkus `storeData`, `app.value.port` bernilai `undefined`, yang kemudian jatuh ke default fallback statis `8080`.
+2. **Kehilangan Properti Port pada Objek Desktop Icon:**
+   - Pada `frontend/src/stores/RAZWindowStore.js`, saat menyusun `allDesktopApps`, objek instansi hanya menyalin sebagian field dan `port` diisi dari `inst.port`. Backend endpoint `/api/v1/store/installed` sebelumnya mengembalikan `default_port` dan bukan `port`, sehingga nilai `port` menjadi kosong dan jatuh ke `undefined`.
+3. **Pemberian Fallback Port pada Peluncur Aplikasi (`launchStoreApp`):**
+   - Fungsi `launchStoreApp(app)` di `RAZWindowStore.js` langsung mengarahkan ke port `8080` bila `app.port` kosong, tanpa mengecek `app.default_port` atau katalog spesifik aplikasi (seperti Immich port `2283`).
+
+#### 3. Solusi & Rekayasa Kode
+1. **Pembaruan Backend Store Engine (`backend/internal/store/RAZAppStoreEngine.go`):**
+   - Menambahkan field `Port int` pada struct `AppManifest` (`json:"port,omitempty"`).
+   - Memutakhirkan `GetCatalog()` agar saat mendeteksi container terpasang (`/razos-<slug>`), Docker inspect membaca `PublicPort` riil dari daftar port container yang aktif. Jika belum terpetakan, mengisi otomatis dengan `DefaultPort` dari manifes.
+   - Menambahkan fallback `req.CustomImage = req.Image` pada `DeployApp()` untuk memastikan kestabilan saat menerima payload dari form edit.
+2. **Pembaruan Jendela Pengaturan Container (`frontend/src/views/RAZAppEditView.vue`):**
+   - Mengimpor `watch` dari Vue dan menambahkan watcher mendalam (`immediate: true, deep: true`) pada `props.win?.customData` agar form langsung terisi otomatis saat data aplikasi masuk.
+   - Mengganti fallback hardcode `8080` menjadi port dinamis sesuai katalog container (`a.default_port || (a.slug === 'immich' ? 2283 : 8090)`).
+   - Menambahkan unpacking pintar pada computed `app` (`d.storeData ? { ...d.storeData, ...d } : d`).
+   - Menambahkan validasi keamanan port: Menolak penyimpanan jika pengguna memasukkan port `80` atau `8080` (port antarmuka inti RAZOS) dengan modal notifikasi peringatan.
+3. **Penyelarasan Store Jendela (`frontend/src/stores/RAZWindowStore.js`):**
+   - Pada `allDesktopApps`, meratakan seluruh properti `inst` (`...inst`) serta menyertakan `port: livePort` dan `default_port: inst.default_port`.
+   - Pada `openAppEditor(app)`, melakukan unpacking `storeData` sebelum membuka jendela kustom.
+   - Pada `launchStoreApp(app)`, menyertakan resolusi port dinamis dengan fallback `default_port` dan spesifik slug Immich (`2283`).
+4. **Kompilasi Ulang Frontend:**
+   - Membangun bundle produksi Vite terbaru (`dist/assets/index-C2_ptWDS.js` & `dist/assets/index-C_VRwv9X.css`).
+
+
 
 
 

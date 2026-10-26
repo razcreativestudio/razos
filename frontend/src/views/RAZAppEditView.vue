@@ -2,11 +2,12 @@
 /**
  * RAZOS App Store Settings & Container Reconfiguration View (CasaOS Enterprise Style)
  * Created: 2026-10-14 (v3.0.0 - Full App Lifecycle Management)
+ * Updated: 2026-10-26 (v3.1.2 - Reaktif Form Port Binding & Pencegahan Konflik Port 8080)
  * Deskripsi: Form pengaturan detail aplikasi Docker terpasang (Image & Tag, Title, Icon,
  * Web UI Port, Network, Volume Mounts, Environment Variables, RAM/CPU Limits, dan Restart Policy).
  * Menyimpan konfigurasi dan memicu reboot container otomatis dengan parameter terbaru.
  */
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
 import { useWindowStore } from '../stores/RAZWindowStore'
 import {
@@ -36,8 +37,11 @@ const props = defineProps({
 const systemStore = useSystemStore()
 const windowStore = useWindowStore()
 
-// Data aplikasi yang sedang diedit
-const app = computed(() => props.win?.customData || {})
+// Data aplikasi yang sedang diedit (dukung unpacking storeData)
+const app = computed(() => {
+  const d = props.win?.customData || {}
+  return d.storeData ? { ...d.storeData, ...d } : d
+})
 const hostIp = ref(window.location.hostname || '127.0.0.1')
 
 // State Form Pengaturan
@@ -46,8 +50,8 @@ const editImage = ref('')
 const editTag = ref('latest')
 const editIcon = ref('')
 const editProtocol = ref('http://')
-const editPort = ref(8080)
-const editContainerPort = ref(8080)
+const editPort = ref(0)
+const editContainerPort = ref(0)
 const editWebPath = ref('/')
 const editNetwork = ref('bridge')
 const editVolumeHost = ref('')
@@ -70,7 +74,7 @@ const memoryPresets = [
 
 function populateForm() {
   const a = app.value
-  if (!a) return
+  if (!a || (!a.slug && !a.id && !a.name && !a.title)) return
 
   editTitle.value = a.name || a.title || 'Aplikasi Terpasang'
   
@@ -86,9 +90,13 @@ function populateForm() {
   }
 
   editIcon.value = a.icon || 'https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/docker.png'
-  editPort.value = a.port || a.default_port || 8080
-  editContainerPort.value = a.default_port || a.port || 8080
-  editVolumeHost.value = a.data_path || a.installed_volume || `/DATA/apps/${a.slug || 'app'}`
+
+  // Tentukan default port dinamis sesuai katalog container (hindari fallback 8080)
+  const defaultAppPort = a.default_port || (a.slug === 'immich' ? 2283 : 8090)
+  editPort.value = a.port || a.default_port || defaultAppPort
+  editContainerPort.value = a.default_port || a.container_port || a.port || defaultAppPort
+
+  editVolumeHost.value = a.data_path || a.default_volume || a.installed_volume || `/DATA/apps/${a.slug || 'app'}`
   editNetwork.value = a.network || 'bridge'
   editMemLimit.value = a.mem_limit || '256M'
   editCpuShares.value = a.cpu_shares || 512
@@ -104,23 +112,47 @@ function populateForm() {
   }
 }
 
+// Pantau perubahan props.win.customData secara reaktif agar port dan data langsung terisi
+watch(
+  () => props.win?.customData,
+  (val) => {
+    if (val && Object.keys(val).length > 0) {
+      populateForm()
+    }
+  },
+  { immediate: true, deep: true }
+)
+
 async function handleSaveSettings() {
   if (!editTitle.value.trim() || !editImage.value.trim()) {
     systemStore.showNotification('Peringatan', 'Judul dan Docker Image wajib diisi!', 'warning')
     return
   }
 
+  const portNum = Number(editPort.value)
+  if (portNum === 80 || portNum === 8080) {
+    systemStore.showNotification(
+      'Port Konflik',
+      'Port 80 dan 8080 digunakan oleh antarmuka sistem RAZOS. Harap pilih port lain (contoh: 2283 atau 8090)!',
+      'warning'
+    )
+    return
+  }
+
   isSaving.value = true
   const slug = app.value.slug || app.value.id
+  const defaultAppPort = app.value.default_port || (slug === 'immich' ? 2283 : 8090)
 
   const payload = {
+    app_id: slug,
     title: editTitle.value.trim(),
     name: editTitle.value.trim(),
     image: `${editImage.value.trim()}:${editTag.value.trim() || 'latest'}`,
+    custom_image: `${editImage.value.trim()}:${editTag.value.trim() || 'latest'}`,
     tag: editTag.value.trim() || 'latest',
     icon: editIcon.value.trim(),
-    port: Number(editPort.value) || 8080,
-    container_port: Number(editContainerPort.value) || 8080,
+    port: portNum || defaultAppPort,
+    container_port: Number(editContainerPort.value) || defaultAppPort,
     data_path: editVolumeHost.value.trim(),
     network: editNetwork.value,
     mem_limit: editMemLimit.value,
