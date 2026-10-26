@@ -324,14 +324,22 @@ onMounted(() => {
               <!-- Host Link & Runtime Tag -->
               <div class="flex items-center gap-2 mt-1">
                 <a
-                  :href="'http://' + (site.domain || currentHostname) + ':' + site.port"
+                  :href="'http://' + currentHostname + ':' + site.port"
                   target="_blank"
                   class="inline-flex items-center gap-1 font-mono text-[11px] text-sky-400 hover:text-sky-300 hover:underline truncate max-w-[210px]"
-                  :title="'http://' + (site.domain || currentHostname) + ':' + site.port"
+                  :title="'Buka http://' + currentHostname + ':' + site.port"
                 >
-                  <span class="truncate">{{ site.domain || (currentHostname + ':' + site.port) }}</span>
+                  <span class="truncate">{{ currentHostname }}:{{ site.port }}</span>
                   <ExternalLink class="w-3 h-3 shrink-0" />
                 </a>
+
+                <span
+                  v-if="site.domain"
+                  class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-700/60 font-mono truncate max-w-[110px]"
+                  :title="'Domain reverse proxy: ' + site.domain"
+                >
+                  {{ site.domain }}
+                </span>
 
                 <span
                   class="text-[10px] px-2 py-0.5 rounded-md border font-medium truncate"
@@ -483,9 +491,10 @@ onMounted(() => {
           <!-- Right Actions: Launch Web Button & Delete -->
           <div class="flex items-center gap-1.5">
             <a
-              :href="'http://' + (site.domain || currentHostname) + ':' + site.port"
+              :href="'http://' + currentHostname + ':' + site.port"
               target="_blank"
               class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-500 hover:from-sky-400 hover:to-indigo-400 text-slate-950 font-bold flex items-center gap-1.5 text-xs transition shadow-md shadow-sky-500/20 active:scale-95"
+              :title="'Buka website di http://' + currentHostname + ':' + site.port"
             >
               <span>Buka</span>
               <ExternalLink class="w-3.5 h-3.5 stroke-[2.5]" />

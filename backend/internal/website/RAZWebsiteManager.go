@@ -133,11 +133,40 @@ func Slugify(input string) string {
 	return slug
 }
 
-// GetWebsites mengambil daftar seluruh situs web terdaftar
+// GetWebsites mengambil daftar seluruh situs web terdaftar dan menyinkronkan status kontainer
 func GetWebsites() []Website {
 	siteMu.Lock()
 	defer siteMu.Unlock()
 	loadSitesFromDisk()
+
+	// Sinkronkan status realtime jika Docker aktif
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err == nil {
+		defer cli.Close()
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		changed := false
+		for i := range sites {
+			inspect, inspectErr := cli.ContainerInspect(ctx, sites[i].ContainerName)
+			if inspectErr == nil && inspect.State != nil {
+				if inspect.State.Running {
+					if sites[i].Status != "running" {
+						sites[i].Status = "running"
+						changed = true
+					}
+				} else {
+					if sites[i].Status != "stopped" {
+						sites[i].Status = "stopped"
+						changed = true
+					}
+				}
+			}
+		}
+		if changed {
+			saveSitesToDisk()
+		}
+	}
+
 	return sites
 }
 
@@ -712,7 +741,10 @@ func deployDockerContainer(site *Website) error {
 	// Hapus jika ada container lama dengan nama sama
 	_ = cli.ContainerRemove(ctx, site.ContainerName, types.ContainerRemoveOptions{Force: true})
 
-	natPort, _ := nat.NewPort("tcp", containerTargetPort)
+	natPort, err := nat.NewPort("tcp", containerTargetPort)
+	if err != nil {
+		natPort = nat.Port(containerTargetPort + "/tcp")
+	}
 	hostBinding := nat.PortBinding{
 		HostIP:   "0.0.0.0",
 		HostPort: fmt.Sprintf("%d", site.HostPort),
@@ -739,20 +771,38 @@ func deployDockerContainer(site *Website) error {
 		)
 	}
 
-	// Command custom jika ada
+	// Command custom jika ada, atau default command sesuai runtime agar container tetap running
 	var cmd []string
 	if site.Command != "" {
 		cmd = strings.Fields(site.Command)
+	} else {
+		switch site.Runtime {
+		case "golang":
+			cmd = []string{"go", "run", "main.go"}
+		case "nodejs":
+			cmd = []string{"node", "server.js"}
+		case "python":
+			cmd = []string{"python", "app.py"}
+		}
 	}
 
-	// Buat container
+	// Pastikan direktori root dan starter file sudah dibuat
+	_ = os.MkdirAll(site.RootFolder, 0755)
+	createStarterFiles(site.RootFolder, site.Name, site.Runtime, site.DbName, site.DbHost, site.DbPort, site.DbUser)
+
+	// Format mount path yang aman
+	bindMount := fmt.Sprintf("%s:%s:rw", filepath.ToSlash(site.RootFolder), mountDest)
+
+	// Buat container dengan ExposedPorts dan WorkingDir
 	resp, err := cli.ContainerCreate(ctx, &container.Config{
-		Image: imageName,
-		Env:   envList,
-		Cmd:   cmd,
+		Image:        imageName,
+		Env:          envList,
+		Cmd:          cmd,
+		WorkingDir:   mountDest,
+		ExposedPorts: nat.PortSet{natPort: struct{}{}},
 	}, &container.HostConfig{
 		Binds: []string{
-			fmt.Sprintf("%s:%s", site.RootFolder, mountDest),
+			bindMount,
 		},
 		PortBindings: nat.PortMap{
 			natPort: []nat.PortBinding{hostBinding},
@@ -771,7 +821,7 @@ func deployDockerContainer(site *Website) error {
 	return cli.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{})
 }
 
-// ToggleWebsiteStatus mengubah status aktif/berhenti container website
+// ToggleWebsiteStatus mengubah status aktif/berhenti container website dengan self-healing redeploy
 func ToggleWebsiteStatus(id int, action string) (*Website, error) {
 	siteMu.Lock()
 	defer siteMu.Unlock()
@@ -791,14 +841,34 @@ func ToggleWebsiteStatus(id int, action string) (*Website, error) {
 
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err == nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		defer cli.Close()
 
 		switch action {
 		case "start":
-			_ = cli.ContainerStart(ctx, target.ContainerName, types.ContainerStartOptions{})
-			target.Status = "running"
+			inspect, inspectErr := cli.ContainerInspect(ctx, target.ContainerName)
+			if inspectErr != nil {
+				// Kontainer belum ada atau terhapus, lakukan redeploy otomatis
+				if deployErr := deployDockerContainer(target); deployErr != nil {
+					target.Status = "stopped"
+					saveSitesToDisk()
+					return target, deployErr
+				}
+				target.Status = "running"
+			} else {
+				if !inspect.State.Running {
+					if startErr := cli.ContainerStart(ctx, target.ContainerName, types.ContainerStartOptions{}); startErr != nil {
+						// Jika start gagal karena miskonfigurasi port/image lama, redeploy ulang
+						if deployErr := deployDockerContainer(target); deployErr != nil {
+							target.Status = "stopped"
+							saveSitesToDisk()
+							return target, startErr
+						}
+					}
+				}
+				target.Status = "running"
+			}
 		case "stop":
 			stopTimeout := 5
 			_ = cli.ContainerStop(ctx, target.ContainerName, container.StopOptions{Timeout: &stopTimeout})
@@ -806,6 +876,10 @@ func ToggleWebsiteStatus(id int, action string) (*Website, error) {
 		case "restart":
 			stopTimeout := 5
 			_ = cli.ContainerRestart(ctx, target.ContainerName, container.StopOptions{Timeout: &stopTimeout})
+			inspect, inspectErr := cli.ContainerInspect(ctx, target.ContainerName)
+			if inspectErr != nil || (inspect.State != nil && !inspect.State.Running) {
+				_ = deployDockerContainer(target)
+			}
 			target.Status = "running"
 		}
 	} else {
@@ -976,6 +1050,9 @@ func UpdateWebsite(id int, req UpdateWebsiteRequest) (*Website, error) {
 	}
 
 	saveSitesToDisk()
+	if target.Status == "running" {
+		_ = deployDockerContainer(target)
+	}
 	return target, nil
 }
 
@@ -1155,6 +1232,9 @@ func UpdateGitConfig(siteID int, repo, branch, token string) (*Website, error) {
 	target.GitToken = strings.TrimSpace(token)
 
 	saveSitesToDisk()
+	if target.Status == "running" {
+		_ = deployDockerContainer(target)
+	}
 	return target, nil
 }
 

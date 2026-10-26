@@ -157,9 +157,10 @@ function openRootFolderInFiles() {
           <span>Edit Konfigurasi</span>
         </button>
         <a
-          :href="'http://' + (site.domain || currentHostname) + ':' + site.port"
+          :href="'http://' + currentHostname + ':' + site.port"
           target="_blank"
           class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition shadow active:scale-95"
+          :title="'Buka http://' + currentHostname + ':' + site.port"
         >
           <span>Buka Website</span>
           <ExternalLink class="w-3.5 h-3.5" />

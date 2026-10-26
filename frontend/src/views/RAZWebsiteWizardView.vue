@@ -271,12 +271,12 @@ onMounted(() => {
           </div>
 
           <div>
-            <label class="block font-medium text-slate-300 mb-1">Domain Lokal / Hostname</label>
+            <label class="block font-medium text-slate-300 mb-1">Domain Reverse Proxy (Opsional)</label>
             <input
               v-model="formDomain"
               type="text"
               class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-xs outline-none focus:border-sky-400"
-              placeholder="myproject.local"
+              placeholder="myproject.local / domain.com"
             />
           </div>
         </div>
