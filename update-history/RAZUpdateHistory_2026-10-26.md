@@ -297,6 +297,45 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 4. **Kompilasi Ulang Frontend:**
    - Membangun bundle produksi Vite terbaru (`dist/assets/index-C2_ptWDS.js` & `dist/assets/index-C_VRwv9X.css`).
 
+---
+
+### Versi: 4.1.2-immich-companion-microservices-stack (Deployment Service Pendamping PostgreSQL 16 pgvector & Redis untuk Immich)
+**Waktu Eksekusi:** 2026-10-26 14:15 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah / Kebutuhan Pengguna
+- Immich tidak dapat diakses setelah instalasi karena container Immich resmi (`immich-server:release`) mewajibkan adanya service pendamping PostgreSQL (dengan ekstensi `pgvector`) dan Redis. Tanpa kedua service tersebut, Node.js di dalam container mengalami `getaddrinfo ENOTFOUND database` dan mati dalam hitungan detik (crash-loop).
+
+#### 2. Investigasi & Akar Masalah
+- Immich v3.x membutuhkan ekstensi `vector` (pgvector) pada database PostgreSQL untuk pencarian embedding foto dan metadata.
+- Komponen worker microservices Immich juga memerlukan alokasi heap Node.js yang memadai agar tidak terhenti oleh `ERR_WORKER_OUT_OF_MEMORY`.
+
+#### 3. Solusi & Rekayasa Sistem di STB
+1. **Penyediaan Network Terisolasi (`razos-apps-net`):**
+   - Membuat docker network bridge khusus agar antar container dapat saling berkomunikasi via DNS alias (`database` dan `redis`).
+2. **Pemasangan Service Redis (`razos-redis`):**
+   - Menggunakan image ringan `redis:alpine` dengan limit memori hemat STB (64 MB) dan alias `redis`.
+3. **Pemasangan Service Database PostgreSQL 16 dengan pgvector (`razos-postgres`):**
+   - Menggunakan image resmi `pgvector/pgvector:pg16` arsitektur ARM64 dengan limit memori 256 MB dan volume persisten di `/DATA/apps/immich/database`.
+   - Mengaktifkan ekstensi `vector` v0.8.7 pada database `immich`.
+4. **Rekonfigurasi & Booting Immich Server (`razos-immich`):**
+   - Menghubungkan container ke `razos-apps-net` dengan port binding `2283:2283`.
+   - Mengonfigurasi variabel lingkungan:
+     - `DB_HOSTNAME=database`
+     - `DB_USERNAME=postgres`
+     - `DB_PASSWORD=postgres`
+     - `DB_DATABASE_NAME=immich`
+     - `REDIS_HOSTNAME=redis`
+     - `IMMICH_MACHINE_LEARNING_ENABLED=false` (menghemat CPU/RAM STB)
+     - `NODE_OPTIONS="--max-old-space-size=512"`
+   - Volume upload foto diarahkan persisten ke `/DATA/apps/immich/upload`.
+5. **Verifikasi Operasional:**
+   - Container status: `Up (healthy)`.
+   - HTTP Health Check: `HTTP/1.1 200 OK` pada `http://127.0.0.1:2283`.
+   - API Server Version: `{"major":3,"minor":3,"patch":5,"prerelease":null}`.
+   - Sisa RAM Bebas STB: `1.40 GB` (sangat lega).
+
+
 
 
 
