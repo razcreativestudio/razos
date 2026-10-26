@@ -410,9 +410,6 @@ func pullDockerImage(ctx context.Context, cli *client.Client, imageName, slug st
 	return nil
 }
 
-	return nil
-}
-
 // CleanUninstall menghapus container dan opsi pembersihan direktori data /DATA/apps/
 func CleanUninstall(appSlug string, purgeData bool) error {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
