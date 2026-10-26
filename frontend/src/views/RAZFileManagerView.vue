@@ -23,7 +23,7 @@ import {
   Grid, List, Search, Star, Download, Info, CheckCircle2, Clock, Upload,
   Share2, MoreVertical, LayoutGrid, Server, Image, Film, Music, FileCheck, Play,
   Copy, Check, BookOpen, FilePlus, FolderPlus, FileUp, FolderUp, Archive, UploadCloud,
-  ChevronDown, Sparkles, Loader2, Code2, Cloud, CloudUpload, ShieldAlert, Lock
+  ChevronDown, Sparkles, Loader2, Code2, Cloud, CloudUpload, ShieldAlert, Lock, ArrowUpDown
 } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
@@ -53,6 +53,29 @@ function isItemSelected(item) {
 const showDeleteConfirmModal = ref(false)
 const itemsToDelete = ref([])
 const isDeletingFiles = ref(false)
+
+// State Sort By & Urutan Tampilan (Windows 11 Sorting Engine)
+const sortBy = ref('name') // 'name' | 'date' | 'type' | 'size'
+const sortOrder = ref('asc') // 'asc' | 'desc'
+const showSortDropdown = ref(false)
+const showViewDropdown = ref(false)
+
+function setSort(by) {
+  sortBy.value = by
+  showSortDropdown.value = false
+}
+
+function setOrder(order) {
+  sortOrder.value = order
+  showSortDropdown.value = false
+}
+
+// Tutup seluruh dropdown ribbon bar
+function closeRibbonDropdowns() {
+  showSortDropdown.value = false
+  showViewDropdown.value = false
+  showRibbonNewMenu.value = false
+}
 
 // State Starred / Favorit Persisten (Tersimpan Permanen di localStorage)
 const starredItems = ref([])
@@ -174,6 +197,7 @@ const showRibbonNewMenu = ref(false)
 function closeAllNewMenus() {
   showNewMenu.value = false
   showRibbonNewMenu.value = false
+  showSortDropdown.value = false
 }
 
 // State Modal Folder & Rename
@@ -371,11 +395,11 @@ function isDocFile(ext) {
   return ['.txt', '.log', '.env', '.conf', '.ini'].includes(ext)
 }
 
-// Filtered & Searched Files
+// Filtered, Searched & Sorted Files (Windows 11 Sorting Engine)
 const filteredFiles = computed(() => {
   // Jika tab Berbintang aktif, gunakan koleksi global starredItems, jika tidak gunakan files folder aktif
   const sourceList = activeSidebarSection.value === 'starred' ? starredItems.value : files.value
-  return sourceList.filter(item => {
+  let list = sourceList.filter(item => {
     const matchSearch = item.name.toLowerCase().includes(searchQuery.value.toLowerCase())
     if (!matchSearch) return false
 
@@ -388,6 +412,37 @@ const filteredFiles = computed(() => {
 
     return true
   })
+
+  // SORTING ENGINE WINDOWS 11 EXPLORER
+  list.sort((a, b) => {
+    // 1. Folder selalu berada di atas berkas
+    if (a.is_dir && !b.is_dir) return -1
+    if (!a.is_dir && b.is_dir) return 1
+
+    let comp = 0
+    if (sortBy.value === 'name') {
+      comp = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+    } else if (sortBy.value === 'date') {
+      const timeA = new Date(a.mod_time).getTime() || 0
+      const timeB = new Date(b.mod_time).getTime() || 0
+      comp = timeA - timeB
+    } else if (sortBy.value === 'type') {
+      const extA = (a.extension || (a.is_dir ? 'folder' : '')).toLowerCase()
+      const extB = (b.extension || (b.is_dir ? 'folder' : '')).toLowerCase()
+      comp = extA.localeCompare(extB)
+      if (comp === 0) {
+        comp = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+      }
+    } else if (sortBy.value === 'size') {
+      const sizeA = Number(a.size) || 0
+      const sizeB = Number(b.size) || 0
+      comp = sizeA - sizeB
+    }
+
+    return sortOrder.value === 'asc' ? comp : -comp
+  })
+
+  return list
 })
 
 // Progressive Virtual Display Rendering (Anti-Hang saat folder memuat ribuan berkas)
@@ -1029,17 +1084,91 @@ function handleFileItemContextMenu(e, item) {
     return
   }
 
-  // SKENARIO 2: JIKA HANYA 1 BERKAS TUNGGAL YANG DIPILIH
+  // SKENARIO 2: JIKA BERKAS ATAU FOLDER TUNGGAL
   selectedItem.value = item
 
-  const extraOptions = [
-    {
-      label: 'Info & Properti',
+  // ==============================================================
+  // A. CONTEXT MENU KHUSUS FOLDER (DIREKTORI)
+  // ==============================================================
+  if (item.is_dir) {
+    const folderMenu = [
+      {
+        label: 'Buka Folder',
+        icon: Folder,
+        action: () => handleItemDoubleClick(item)
+      },
+      {
+        label: 'Salin Path Direktori',
+        icon: Copy,
+        action: () => copyItemPath(item)
+      },
+      {
+        label: isItemStarred(item.path) ? 'Hapus dari Bintang' : 'Beri Bintang',
+        icon: Star,
+        action: () => toggleStar(item)
+      }
+    ]
+
+    // Ubah nama folder (RBAC Guarded)
+    if (authStore.canWriteStorage()) {
+      folderMenu.push({
+        label: 'Ubah Nama Folder',
+        icon: Edit3,
+        action: () => openRenameDialog(item)
+      })
+    }
+
+    folderMenu.push({
+      label: 'Info & Properti Folder',
       icon: Info,
       action: () => openInfoModal(item)
+    })
+
+    // Hapus folder (RBAC Guarded)
+    if (authStore.canDeleteStorage()) {
+      folderMenu.push(
+        { separator: true },
+        {
+          label: 'Hapus Folder...',
+          icon: Trash2,
+          danger: true,
+          action: () => openDeleteConfirm(item)
+        }
+      )
+    }
+
+    contextMenuStore.show(e, folderMenu, `Folder: ${item.name}`)
+    return
+  }
+
+  // ==============================================================
+  // B. CONTEXT MENU KHUSUS BERKAS (FILE)
+  // ==============================================================
+  const fileMenu = [
+    {
+      label: 'Buka Berkas',
+      icon: isVideoFile(item.extension) || isAudioFile(item.extension) ? Play : Eye,
+      action: () => handleItemDoubleClick(item)
+    }
+  ]
+
+  // Jika berupa berkas teks, kode, config, atau markdown, tambahkan opsi buka di Editor Teks
+  if (isCodeFile(item.extension) || isDocFile(item.extension) || isMarkdownFile(item.extension) || !item.extension) {
+    fileMenu.push({
+      label: 'Edit di Editor Teks (Code)',
+      icon: Code2,
+      action: () => openInTextEditor(item)
+    })
+  }
+
+  fileMenu.push(
+    {
+      label: 'Unduh Berkas (Download)',
+      icon: Download,
+      action: () => downloadFile(item)
     },
     {
-      label: 'Salin Path Direktori',
+      label: 'Salin Path Berkas',
       icon: Copy,
       action: () => copyItemPath(item)
     },
@@ -1048,51 +1177,26 @@ function handleFileItemContextMenu(e, item) {
       icon: Star,
       action: () => toggleStar(item)
     }
-  ]
+  )
 
-  if (!item.is_dir) {
-    extraOptions.push({
-      label: 'Unduh Berkas',
-      icon: Download,
-      action: () => downloadFile(item)
-    })
-  }
-
-  const menuList = [
-    {
-      label: item.is_dir ? 'Masuk Folder' : 'Buka Berkas',
-      icon: item.is_dir ? Folder : Eye,
-      action: () => handleItemDoubleClick(item)
-    }
-  ]
-
-  // Jika berupa berkas (bukan folder), berikan opsi Edit di Teks Editor
-  if (!item.is_dir) {
-    menuList.push({
-      label: 'Edit Berkas (Editor Teks)',
-      icon: FileCode,
-      action: () => openInTextEditor(item)
-    })
-  }
-
-  // Hanya izinkan Ubah Nama jika punya hak tulis
+  // Ubah nama berkas (RBAC Guarded)
   if (authStore.canWriteStorage()) {
-    menuList.push({
-      label: 'Ubah Nama',
+    fileMenu.push({
+      label: 'Ubah Nama Berkas',
       icon: Edit3,
       action: () => openRenameDialog(item)
     })
   }
 
-  menuList.push({
-    label: 'Opsi & Properti',
-    icon: Sliders,
-    children: extraOptions
+  fileMenu.push({
+    label: 'Info & Properti Berkas',
+    icon: Info,
+    action: () => openInfoModal(item)
   })
 
-  // Hanya izinkan Hapus jika punya hak hapus (RBAC Guarded)
+  // Hapus berkas (RBAC Guarded)
   if (authStore.canDeleteStorage()) {
-    menuList.push(
+    fileMenu.push(
       { separator: true },
       {
         label: 'Hapus Berkas...',
@@ -1103,12 +1207,72 @@ function handleFileItemContextMenu(e, item) {
     )
   }
 
-  contextMenuStore.show(e, menuList, item.name)
+  contextMenuStore.show(e, fileMenu, item.name)
 }
 
-// Context Menu Klik Kanan pada Area Kosong Explorer (Hierarki Submenu & RBAC Guarded)
+// Context Menu Klik Kanan pada Area Kosong Explorer (Hierarki Submenu ala Windows 11)
 function handleCanvasContextMenu(e) {
   const canvasMenu = []
+
+  // 1. Menu Sort by (Urutkan Berkas ala Windows 11 Explorer)
+  canvasMenu.push(
+    {
+      label: 'Urutkan (Sort by)',
+      icon: ArrowUpDown,
+      children: [
+        {
+          label: 'Nama (Name)',
+          checked: sortBy.value === 'name',
+          action: () => setSort('name')
+        },
+        {
+          label: 'Tanggal Diubah (Date modified)',
+          checked: sortBy.value === 'date',
+          action: () => setSort('date')
+        },
+        {
+          label: 'Format (Type)',
+          checked: sortBy.value === 'type',
+          action: () => setSort('type')
+        },
+        {
+          label: 'Ukuran (Size)',
+          checked: sortBy.value === 'size',
+          action: () => setSort('size')
+        },
+        { separator: true },
+        {
+          label: 'Naik (Ascending)',
+          checked: sortOrder.value === 'asc',
+          action: () => setOrder('asc')
+        },
+        {
+          label: 'Turun (Descending)',
+          checked: sortOrder.value === 'desc',
+          action: () => setOrder('desc')
+        }
+      ]
+    },
+    {
+      label: 'Tampilan (View)',
+      icon: LayoutGrid,
+      children: [
+        {
+          label: 'Ikon Besar (Grid)',
+          icon: LayoutGrid,
+          checked: viewMode.value === 'grid',
+          action: () => { viewMode.value = 'grid' }
+        },
+        {
+          label: 'Rincian (List)',
+          icon: List,
+          checked: viewMode.value === 'list',
+          action: () => { viewMode.value = 'list' }
+        }
+      ]
+    },
+    { separator: true }
+  )
 
   // Tambahkan opsi Folder, File, dan Upload hanya jika akun memiliki izin tulis
   if (authStore.canWriteStorage()) {
@@ -1181,30 +1345,10 @@ function handleCanvasContextMenu(e) {
   canvasMenu.push(
     { separator: true },
     {
-      label: 'Tampilan (View)',
-      icon: LayoutGrid,
-      children: [
-        {
-          label: 'Tampilan Grid',
-          icon: LayoutGrid,
-          checked: viewMode.value === 'grid',
-          action: () => { viewMode.value = 'grid' }
-        },
-        {
-          label: 'Tampilan List',
-          icon: List,
-          checked: viewMode.value === 'list',
-          action: () => { viewMode.value = 'list' }
-        }
-      ]
-    },
-    { separator: true },
-    {
       label: 'Sinkronisasi Cloud',
       icon: Cloud,
       action: () => windowStore.openCloudSync()
     },
-    { separator: true },
     {
       label: 'Muat Ulang (Refresh)',
       icon: RefreshCw,
@@ -1692,8 +1836,8 @@ onMounted(async () => {
           </button>
         </div>
 
-        <!-- Right Side: Cloud Sync Shortcut, Item Count & Grid/List View Mode -->
-        <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+        <!-- Right Side: Cloud Sync Shortcut, Sort Dropdown & Grid/List View Mode -->
+        <div class="flex items-center gap-2 sm:gap-2.5 shrink-0">
           <!-- Tombol Cloud Sync Cepat -->
           <button
             @click="windowStore.openCloudSync()"
@@ -1703,6 +1847,77 @@ onMounted(async () => {
             <Cloud class="w-3.5 h-3.5" />
             <span class="hidden sm:inline">Cloud Sync</span>
           </button>
+
+          <!-- Tombol Dropdown Sort by (Windows 11 Explorer Standard) -->
+          <div class="relative shrink-0">
+            <button
+              @click.stop="() => { showSortDropdown = !showSortDropdown; }"
+              class="px-2 py-1 rounded-lg bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800/80 flex items-center gap-1.5 transition text-[11px] font-sans font-medium active:scale-95 shadow-sm"
+              title="Urutkan berkas (Sort by)"
+            >
+              <ArrowUpDown class="w-3.5 h-3.5 text-sky-400" />
+              <span>Sort</span>
+              <ChevronDown class="w-3 h-3 text-slate-500" />
+            </button>
+
+            <!-- Dropdown Menu Sort by (Solid Dark Windows 11) -->
+            <div
+              v-if="showSortDropdown"
+              class="absolute top-9 right-0 w-48 bg-[#201f27] border border-white/10 rounded-xl shadow-2xl shadow-black/80 z-50 p-1.5 flex flex-col gap-0.5 text-xs font-sans text-slate-200 animate-in fade-in zoom-in-95"
+            >
+              <button
+                @click="setSort('name')"
+                class="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 flex items-center justify-between transition text-left"
+                :class="sortBy === 'name' ? 'bg-white/10 text-white font-medium' : 'text-slate-300'"
+              >
+                <span>Name</span>
+                <div v-if="sortBy === 'name'" class="w-2 h-2 rounded-full bg-sky-400"></div>
+              </button>
+              <button
+                @click="setSort('date')"
+                class="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 flex items-center justify-between transition text-left"
+                :class="sortBy === 'date' ? 'bg-white/10 text-white font-medium' : 'text-slate-300'"
+              >
+                <span>Date modified</span>
+                <div v-if="sortBy === 'date'" class="w-2 h-2 rounded-full bg-sky-400"></div>
+              </button>
+              <button
+                @click="setSort('type')"
+                class="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 flex items-center justify-between transition text-left"
+                :class="sortBy === 'type' ? 'bg-white/10 text-white font-medium' : 'text-slate-300'"
+              >
+                <span>Type</span>
+                <div v-if="sortBy === 'type'" class="w-2 h-2 rounded-full bg-sky-400"></div>
+              </button>
+              <button
+                @click="setSort('size')"
+                class="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 flex items-center justify-between transition text-left"
+                :class="sortBy === 'size' ? 'bg-white/10 text-white font-medium' : 'text-slate-300'"
+              >
+                <span>Size</span>
+                <div v-if="sortBy === 'size'" class="w-2 h-2 rounded-full bg-sky-400"></div>
+              </button>
+
+              <div class="h-[1px] bg-white/10 my-1 mx-1"></div>
+
+              <button
+                @click="setOrder('asc')"
+                class="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 flex items-center justify-between transition text-left"
+                :class="sortOrder === 'asc' ? 'bg-white/10 text-white font-medium' : 'text-slate-300'"
+              >
+                <span>Ascending</span>
+                <div v-if="sortOrder === 'asc'" class="w-2 h-2 rounded-full bg-sky-400"></div>
+              </button>
+              <button
+                @click="setOrder('desc')"
+                class="w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 flex items-center justify-between transition text-left"
+                :class="sortOrder === 'desc' ? 'bg-white/10 text-white font-medium' : 'text-slate-300'"
+              >
+                <span>Descending</span>
+                <div v-if="sortOrder === 'desc'" class="w-2 h-2 rounded-full bg-sky-400"></div>
+              </button>
+            </div>
+          </div>
 
           <span class="text-[11px] text-slate-500 hidden sm:inline">
             {{ filteredFiles.length }} item

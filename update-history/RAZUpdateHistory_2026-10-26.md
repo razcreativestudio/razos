@@ -454,6 +454,32 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 3. **Kompilasi Ulang Frontend:**
    - Menjalankan build produksi Vite (`dist/assets/index-BBp8hl-M.js` & `dist/assets/index-pQlwp5ri.css`) sukses 100%.
 
+---
+
+### Versi: 4.3.0-windows-11-sort-and-dedicated-context-menus (Windows 11 Sort Suite, Dedicated Folder/File Context Menus, and Solid Submenu Architecture)
+**Waktu Eksekusi:** 2026-10-26 21:26 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah / Kebutuhan Pengguna
+- Pengguna meminta penambahan fitur pengurutan berkas (**Sort by**) persis seperti Windows 11 File Explorer, baik pada tombol toolbar maupun di context menu kanvas.
+- Submenu anak (**children context menu**) diminta agar memiliki desain solid, warna, sudut rounded, dan padding yang identik dengan menu induk (parent), tanpa efek transparansi tipis yang mengganggu keterbacaan.
+- Dibutuhkan **Context Menu Khusus** yang membedakan secara tegas antara klik kanan pada **Folder** vs pada **Berkas/File** di File Manager.
+
+#### 2. Solusi & Rekayasa Kode
+1. **Windows 11 Dark Solid Context Menu Suite (`frontend/src/components/RAZContextMenu.vue`):**
+   - Mengubah background parent dan children context menu menjadi solid matte `#201f27` dengan `border border-white/10` dan `shadow-2xl shadow-black/80`. Menghilangkan transparansi berlebihan agar kontras teks tajam dan nyaman dibaca.
+   - Menyelaraskan seluruh styling submenu anak (children) sehingga 100% identik dengan menu induk (padding, radius `rounded-xl`, hover effect, dan border).
+   - Menambahkan radio bullet dot biru (`bg-sky-400`) untuk item yang aktif/terpilih (Sort by dan View mode) persis Windows 11.
+2. **Context Menu Khusus Folder vs File (`frontend/src/views/RAZFileManagerView.vue`):**
+   - **Context Menu Khusus FOLDER:** Masuk Folder, Salin Path Direktori, Beri Bintang / Favorit, Ubah Nama Folder, Info & Properti Folder, dan Hapus Folder... (Menghilangkan opsi yang tidak relevan seperti download/edit teks).
+   - **Context Menu Khusus BERKAS (FILE):** Buka Berkas (Player/Viewer), Edit di Editor Teks (khusus format kode/dokumen), Unduh Berkas, Salin Path Berkas, Beri Bintang / Favorit, Ubah Nama Berkas, Info & Properti Berkas, dan Hapus Berkas...
+   - **Context Menu Area Kanvas Kosong (Canvas):** Submenu `Urutkan (Sort by) >` (Name, Date modified, Type, Size, Ascending, Descending), Submenu `Tampilan (View) >` (Grid, List), Folder Baru, File Baru, Submenu Upload, Pilih Semua, Refresh, dan Salin Path.
+3. **Tombol Ribbon `⇅ Sort ⌵` ala Windows 11:**
+   - Menambahkan tombol dropdown `⇅ Sort ⌵` di ribbon bar kanan File Manager yang memungkinkan pengguna mengubah urutan berkas secara instan (Name, Date modified, Type, Size, Ascending, Descending) dengan dot indicator aktif.
+   - Folder selalu dipertahankan di posisi atas berkas sesuai standar Windows Explorer.
+4. **Kompilasi Ulang Frontend:**
+   - Menjalankan build produksi Vite (`dist/assets/index-Bbbis4ue.js` & `dist/assets/index-UmHbq5EH.css`) terverifikasi sukses tanpa error.
+
 
 
 

@@ -1,12 +1,11 @@
 <script setup>
 /**
  * RAZOS Universal Context Menu Component
- * Updated: 2026-10-15 (v3.4.0 - Advanced Parent-Child Submenu System)
- * Deskripsi: Komponen visual Custom Context Menu berdesain Glassmorphism Slate-900.
- * Menampilkan item aksi klik kanan yang responsif, rapi, dengan dukungan:
- *   1. Hierarki Parent & Children (Submenu) bertingkat dengan Smart Boundary Viewport Awareness.
- *   2. Ikon Lucide dinamis, keyboard shortcut hint, status terpilih (checkmark).
- *   3. Separator garis pembatas, status bahaya (merah), dan quick action bar (CasaOS grid).
+ * Updated: 2026-10-26 21:20:00 (v4.3.0 - Windows 11 Dark Solid Styling & Identical Parent-Child Submenu Theme)
+ * Deskripsi: Komponen visual Custom Context Menu berdesain Windows 11 Dark (#201f27).
+ * - Solid Non-Transparent Surface: Warna latar pekat tidak tembus pandang berlebihan sesuai standar Windows 11.
+ * - Identical Child Architecture: Submenu anak memiliki dimensi, radius, border, dan warna yang 100% konsisten dengan menu induk.
+ * - Windows 11 Radio Dot & Check Indicators: Mendukung status terpilih untuk grup Sort by dan View mode.
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
@@ -119,7 +118,7 @@ onUnmounted(() => {
       <div
         id="raz-custom-context-menu"
         v-if="contextMenuStore.isOpen"
-        class="fixed z-[99999] min-w-[210px] max-w-xs rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 p-1.5 shadow-2xl text-xs select-none font-sans"
+        class="fixed z-[99999] min-w-[210px] max-w-xs rounded-xl bg-[#201f27] border border-white/10 p-1.5 shadow-2xl shadow-black/80 text-xs select-none font-sans text-slate-100"
         :style="{ left: `${contextMenuStore.x}px`, top: `${contextMenuStore.y}px` }"
         @click.stop
         @contextmenu.prevent.stop
@@ -127,7 +126,7 @@ onUnmounted(() => {
         <!-- Header Judul Menu (Opsional) -->
         <div
           v-if="contextMenuStore.title"
-          class="px-3 py-1.5 border-b border-slate-800/80 mb-1 text-[11px] font-semibold text-slate-400 tracking-wider uppercase truncate"
+          class="px-3 py-1.5 border-b border-white/10 mb-1 text-[11px] font-semibold text-slate-400 tracking-wider uppercase truncate"
         >
           {{ contextMenuStore.title }}
         </div>
@@ -138,7 +137,7 @@ onUnmounted(() => {
             <!-- Separator Garis Pembatas -->
             <div
               v-if="item.separator"
-              class="h-[1px] bg-slate-800/80 my-1 mx-1.5"
+              class="h-[1px] bg-white/10 my-1 mx-1.5"
             ></div>
 
             <!-- Quick Action Bar (CasaOS Style: 2 Column Bottom Buttons for Restart & Power) -->
@@ -230,6 +229,7 @@ onUnmounted(() => {
 
               <!-- ============================================== -->
               <!-- SUBMENU POPUP (CHILDREN MENU)                  -->
+              <!-- Identik 100% dengan parent, solid non-transparent Windows 11 Dark -->
               <!-- ============================================== -->
               <transition
                 enter-active-class="transition duration-120 ease-out"
@@ -242,7 +242,7 @@ onUnmounted(() => {
                 <div
                   v-if="item.children && item.children.length > 0 && activeSubmenuIndex === idx"
                   @mouseenter="keepSubmenuOpen"
-                  class="absolute top-0 z-[100000] min-w-[190px] max-w-xs rounded-2xl bg-slate-900/98 backdrop-blur-2xl border border-slate-700/90 p-1.5 shadow-2xl text-xs"
+                  class="absolute top-0 z-[100000] min-w-[210px] max-w-xs rounded-xl bg-[#201f27] border border-white/10 p-1.5 shadow-2xl shadow-black/80 text-xs text-slate-100 font-sans"
                   :class="[
                     shouldOpenSubmenuLeft
                       ? 'right-full mr-1.5'
@@ -254,7 +254,7 @@ onUnmounted(() => {
                       <!-- Separator di dalam Submenu -->
                       <div
                         v-if="child.separator"
-                        class="h-[1px] bg-slate-800/80 my-1 mx-1.5"
+                        class="h-[1px] bg-white/10 my-1 mx-1.5"
                       ></div>
 
                       <!-- Tombol Child Item -->
@@ -263,19 +263,26 @@ onUnmounted(() => {
                         type="button"
                         @click="handleItemClick(child)"
                         :disabled="child.disabled"
-                        class="w-full px-2.5 py-1.5 rounded-xl flex items-center justify-between gap-3 text-left transition-all duration-150 group active:scale-[0.98]"
+                        class="w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between gap-3 text-left transition-all duration-150 group active:scale-[0.98]"
                         :class="[
                           child.disabled
                             ? 'opacity-40 cursor-not-allowed text-slate-500'
                             : child.danger
                             ? 'text-rose-400 hover:bg-rose-500/15 hover:text-rose-300'
-                            : 'text-slate-200 hover:bg-sky-500/15 hover:text-sky-300'
+                            : child.checked
+                            ? 'bg-white/10 text-white font-medium'
+                            : 'text-slate-200 hover:bg-white/10 hover:text-white'
                         ]"
                       >
                         <div class="flex items-center gap-2.5 min-w-0">
+                          <!-- Radio Bullet Dot atau Ikon Child -->
+                          <div
+                            v-if="child.checked && !child.icon"
+                            class="w-2 h-2 rounded-full bg-sky-400 shrink-0"
+                          ></div>
                           <component
                             :is="child.icon"
-                            v-if="child.icon"
+                            v-else-if="child.icon"
                             class="w-4 h-4 shrink-0 transition-transform duration-150 group-hover:scale-110"
                             :class="[
                               child.danger
@@ -295,7 +302,7 @@ onUnmounted(() => {
                             {{ child.shortcut }}
                           </span>
                           <Check
-                            v-if="child.checked"
+                            v-if="child.checked && child.icon"
                             class="w-3.5 h-3.5 text-sky-400 shrink-0"
                           />
                         </div>
