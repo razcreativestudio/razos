@@ -158,3 +158,23 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 2. **Penyambungan ke PTY WebSocket Handler (`RAZTerminalHandler.go`):**
    - Mengganti pencetakan banner statis Armbian dengan pemanggilan `GenerateRAZOSBanner()`.
    - Mengarahkan direktori awal shell interaktif ke home user (`/root`).
+
+---
+
+### Versi: 3.9.3-website-hosting-verification-and-port-binding (Website Hosting Container Port Re-Creation & Live Verification)
+**Waktu Eksekusi:** 2026-10-26 12:26 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah / Temuan
+- Website `webraz` yang telah dibuat sebelumnya pada port 8100 masih tidak dapat dijangkau (`TcpTestSucceeded: False` / Connection Refused).
+- Hal ini terjadi karena kontainer `raz-web-webraz` dibuat sebelum perbaikan `ExposedPorts` & `PortBindings` diterapkan ke backend, dan Docker tidak dapat mengubah port binding pada kontainer yang sudah terbentuk hanya dengan restart biasa.
+
+#### 2. Solusi & Verifikasi
+1. **Trigger Self-Healing Redeploy:**
+   - Melakukan re-deploy kontainer secara bersih melalui endpoint `POST /api/v1/websites/1/action` (`restart`).
+   - Backend Go secara otomatis menghapus kontainer lama yang cacat port, mengunduh image `nginx:alpine`, lalu membangun kontainer baru dengan mapping port `0.0.0.0:8100 -> 80/tcp`.
+2. **Verifikasi Status Live (Verified Result):**
+   - `Test-NetConnection -ComputerName 192.168.100.117 -Port 8100`: Berhasil (`TcpTestSucceeded : True`).
+   - `Invoke-WebRequest -Uri "http://192.168.100.117:8100"`: Berhasil mengembalikan `HTTP/1.1 200 OK` dengan landing page RAZ Creative Studio (`/DATA/www/webraz/index.html`).
+   - Website kini 100% online dan dapat diakses dari browser jaringan lokal.
+
