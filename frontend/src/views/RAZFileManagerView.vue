@@ -1,16 +1,14 @@
 <script setup>
 /**
  * RAZOS Google Drive-Style Storage & Windows File Explorer Hybrid File Manager
- * Updated: 2026-10-15 (v3.6.0 - Advanced File Creation, Multi-Mode Upload, and RAZ Studio Code Integration)
+ * Updated: 2026-10-26 20:50:00 (v3.7.0 - Windows Multi-Selection, Dedicated Context Menu, and Custom Delete Confirmation Modal)
  * Deskripsi: Antarmuka File Manager tingkat lanjut memadukan arsitektur Windows File Explorer dan Google Drive:
- * - New Action Suite (+ Baru Dropdown): Pembuatan folder baru, pembuatan file baru (teks/kode dengan quick template),
- *   upload multi-file, upload folder rekursif (webkitdirectory), dan upload ZIP dengan auto-extract seketika.
- * - Deep RAZ Studio Code Integration: Membuka berkas kode/teks langsung di Sublime/Notepad++ complex editor,
- *   baik via double-click, tombol context menu "Buka di Teks Editor", maupun tombol aksi cepat.
- * - Direct Zero-Click Initial Load: Otomatis memuat dan menampilkan berkas/folder default (/DATA atau C:/DATA) saat pertama kali dibuka.
- * - Windows Explorer Interactive Address Bar: Bilah alamat dwi-fungsi (Breadcrumbs interaktif & Editable Text Input).
- * - History Navigation Trio: Tombol Back, Forward, dan Up dengan history stack tracking yang presisi.
- * - Standalone Content Viewers & File Properties: Jendela mandiri terpisah via RAZWindowStore tanpa mengunci File Manager.
+ * - Windows Multi-Selection Engine: Pemilihan multi-berkas dengan Ctrl/Cmd+Click (toggle) dan Shift+Click (range selection).
+ * - Keyboard Shortcuts: Ctrl+A (Select All), Escape (Clear Selection), Delete (Hapus Terpilih dengan Konfirmasi).
+ * - Dedicated Context Menu: Menu konteks kontekstual untuk berkas tunggal, multi-berkas terpilih (batch actions), dan kanvas area kosong.
+ * - Custom Modal Konfirmasi Hapus: Konfirmasi hapus berdesain Glassmorphism Slate-900 (Zero Native Browser Confirm/Alert).
+ * - New Action Suite (+ Baru Dropdown): Pembuatan folder baru, file baru, upload file/folder/ZIP auto-extract.
+ * - Deep RAZ Studio Code Integration: Membuka berkas kode/teks langsung di Sublime/Notepad++ complex editor.
  * - Fluid Responsive Grid & List View: Auto-fill layout yang tidak pernah gepeng dengan status bar lengkap.
  */
 import { ref, onMounted, computed, nextTick, watch } from 'vue'
@@ -41,7 +39,20 @@ const storageDevices = ref([])
 const currentPath = ref('/DATA')
 const files = ref([])
 const isLoading = ref(false)
-const selectedItem = ref(null)
+const selectedItem = ref(null) // Item aktif terakhir
+const selectedItems = ref([]) // Array berkas terpilih (multi-select ala Windows)
+const lastSelectedIndex = ref(-1) // Index anchor untuk Shift+Click range
+
+// Cek apakah item sedang dipilih
+function isItemSelected(item) {
+  if (!item || !item.path) return false
+  return selectedItems.value.some(it => it.path === item.path)
+}
+
+// State Modal Konfirmasi Hapus Kustom (Zero Browser Native Alerts / Confirms)
+const showDeleteConfirmModal = ref(false)
+const itemsToDelete = ref([])
+const isDeletingFiles = ref(false)
 
 // State Starred / Favorit Persisten (Tersimpan Permanen di localStorage)
 const starredItems = ref([])
@@ -476,8 +487,93 @@ function navigateUp() {
   fetchFiles(norm.substring(0, lastSlash))
 }
 
-function handleItemClick(item) {
+/**
+ * Menangani pemilihan berkas ala Windows File Explorer:
+ * - Klik biasa: Pilih satu berkas saja
+ * - Ctrl + Klik / Cmd + Klik: Toggle status pilihan berkas tanpa mengganggu pilihan lainnya
+ * - Shift + Klik: Pemilihan rentang berkas (Range Selection) dari item terakhir ke item yang diklik
+ */
+function handleItemClick(item, event) {
+  if (!item) return
+
+  const currentIndex = visibleFiles.value.findIndex(f => f.path === item.path)
+
+  // 1. Kasus Ctrl / Cmd Key: Toggle Seleksi
+  if (event && (event.ctrlKey || event.metaKey)) {
+    const existingIndex = selectedItems.value.findIndex(f => f.path === item.path)
+    if (existingIndex >= 0) {
+      selectedItems.value.splice(existingIndex, 1)
+      selectedItem.value = selectedItems.value[selectedItems.value.length - 1] || null
+    } else {
+      selectedItems.value.push(item)
+      selectedItem.value = item
+    }
+    lastSelectedIndex.value = currentIndex
+    return
+  }
+
+  // 2. Kasus Shift Key: Range Selection (Rentang Berkas ala Windows Explorer)
+  if (event && event.shiftKey && lastSelectedIndex.value >= 0 && currentIndex >= 0) {
+    const start = Math.min(lastSelectedIndex.value, currentIndex)
+    const end = Math.max(lastSelectedIndex.value, currentIndex)
+    const range = visibleFiles.value.slice(start, end + 1)
+    selectedItems.value = [...range]
+    selectedItem.value = item
+    return
+  }
+
+  // 3. Kasus Klik Biasa: Pilih hanya berkas ini
+  selectedItems.value = [item]
   selectedItem.value = item
+  lastSelectedIndex.value = currentIndex
+}
+
+/**
+ * Pilih semua berkas di direktori aktif (Ctrl + A)
+ */
+function selectAllFiles() {
+  selectedItems.value = [...visibleFiles.value]
+  if (selectedItems.value.length > 0) {
+    selectedItem.value = selectedItems.value[0]
+    lastSelectedIndex.value = 0
+  }
+}
+
+/**
+ * Bersihkan seluruh pilihan berkas (Escape / Klik area kosong)
+ */
+function clearSelection() {
+  selectedItems.value = []
+  selectedItem.value = null
+  lastSelectedIndex.value = -1
+}
+
+/**
+ * Handler shortcut keyboard global File Manager
+ */
+function handleGlobalKeydown(e) {
+  // Cegah interupsi jika pengguna sedang mengetik di input form atau dialog
+  if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return
+
+  // Ctrl + A / Cmd + A: Pilih Semua Berkas
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+    e.preventDefault()
+    selectAllFiles()
+    return
+  }
+
+  // Escape: Batalkan Seleksi
+  if (e.key === 'Escape') {
+    clearSelection()
+    return
+  }
+
+  // Delete: Buka modal konfirmasi hapus untuk item yang dipilih
+  if (e.key === 'Delete' && selectedItems.value.length > 0 && authStore.canDeleteStorage()) {
+    e.preventDefault()
+    openDeleteConfirm(selectedItems.value)
+    return
+  }
 }
 
 // Buka Berkas di Window Mandiri (Standalone Window Viewers & RAZ Studio Code)
@@ -758,19 +854,61 @@ async function handleZipUploadChange(e) {
   }
 }
 
-// Hapus Berkas/Folder (RBAC Guarded)
-async function deleteItem(item) {
+// Buka Modal Konfirmasi Hapus (Single atau Multi-Item)
+function openDeleteConfirm(target) {
   if (!authStore.canDeleteStorage()) {
     systemStore.showNotification('Akses Dibatasi', 'Peran akun Anda tidak memiliki izin untuk menghapus berkas atau folder.', 'warning')
     return
   }
-  try {
-    const res = await fetch(`/api/v1/files/item?path=${encodeURIComponent(item.path)}`, { method: 'DELETE' })
-    if (res.ok) {
-      systemStore.showNotification('Sukses', `${item.name} berhasil dihapus`, 'success')
-      fetchFiles()
+  if (!target) return
+  itemsToDelete.value = Array.isArray(target) ? [...target] : [target]
+  if (itemsToDelete.value.length === 0) return
+  showDeleteConfirmModal.value = true
+}
+
+// Kompatibilitas mundur: mengarahkan deleteItem langsung ke modal konfirmasi custom
+function deleteItem(item) {
+  openDeleteConfirm(item)
+}
+
+// Eksekusi Hapus yang Telah Dikonfirmasi Pengguna (RBAC Guarded & Batch Aware)
+async function executeDeleteConfirmed() {
+  if (!authStore.canDeleteStorage()) {
+    systemStore.showNotification('Akses Dibatasi', 'Peran akun Anda tidak memiliki izin untuk menghapus berkas atau folder.', 'warning')
+    showDeleteConfirmModal.value = false
+    return
+  }
+
+  isDeletingFiles.value = true
+  let successCount = 0
+  let failCount = 0
+
+  for (const item of itemsToDelete.value) {
+    try {
+      const res = await fetch(`/api/v1/files/item?path=${encodeURIComponent(item.path)}`, { method: 'DELETE' })
+      if (res.ok) {
+        successCount++
+      } else {
+        failCount++
+      }
+    } catch (e) {
+      failCount++
     }
-  } catch (e) {}
+  }
+
+  isDeletingFiles.value = false
+  showDeleteConfirmModal.value = false
+  itemsToDelete.value = []
+  clearSelection()
+  await fetchFiles(currentPath.value)
+
+  if (successCount > 0 && failCount === 0) {
+    systemStore.showNotification('Hapus Sukses', `${successCount} berkas/folder berhasil dihapus secara permanen`, 'success')
+  } else if (successCount > 0 && failCount > 0) {
+    systemStore.showNotification('Hapus Sebagian', `${successCount} berhasil dihapus, ${failCount} gagal dihapus`, 'warning')
+  } else {
+    systemStore.showNotification('Gagal', 'Terjadi kendala saat menghapus berkas terpilih', 'error')
+  }
 }
 
 // Rename Berkas (RBAC Guarded)
@@ -828,8 +966,67 @@ async function copyItemPath(item) {
   }
 }
 
-// Context Menu Klik Kanan pada Berkas atau Folder (Hierarki Submenu)
+// Context Menu Klik Kanan pada Berkas atau Folder (Mendukung Seleksi Tunggal & Multi-Berkas)
 function handleFileItemContextMenu(e, item) {
+  // Jika item yang diklik kanan belum termasuk di dalam pilihan yang sedang aktif,
+  // maka set pilihan hanya menjadi item ini (seperti Windows Explorer)
+  if (!isItemSelected(item)) {
+    selectedItems.value = [item]
+    selectedItem.value = item
+    lastSelectedIndex.value = visibleFiles.value.findIndex(f => f.path === item.path)
+  }
+
+  // SKENARIO 1: JIKA MULTI-BERKAS DIPILIH (Lebih dari 1 item)
+  if (selectedItems.value.length > 1) {
+    const multiMenu = [
+      {
+        label: `Buka ${selectedItems.value.length} Berkas`,
+        icon: Eye,
+        action: () => {
+          selectedItems.value.filter(it => !it.is_dir).slice(0, 5).forEach(it => handleItemDoubleClick(it))
+        }
+      },
+      {
+        label: `Salin Seluruh Path (${selectedItems.value.length} Item)`,
+        icon: Copy,
+        action: async () => {
+          const allPaths = selectedItems.value.map(it => it.path).join('\n')
+          try {
+            await navigator.clipboard.writeText(allPaths)
+            systemStore.showNotification('Tersalin', `${selectedItems.value.length} path berkas disalin ke clipboard`, 'success')
+          } catch (err) {}
+        }
+      },
+      {
+        label: 'Beri Bintang Semua',
+        icon: Star,
+        action: () => {
+          selectedItems.value.forEach(it => {
+            if (!isItemStarred(it.path)) toggleStar(it)
+          })
+          systemStore.showNotification('Favorit', `${selectedItems.value.length} berkas ditambahkan ke favorit`, 'success')
+        }
+      }
+    ]
+
+    // Menu Hapus Multi-Item (RBAC Guarded)
+    if (authStore.canDeleteStorage()) {
+      multiMenu.push(
+        { separator: true },
+        {
+          label: `Hapus ${selectedItems.value.length} Berkas Terpilih...`,
+          icon: Trash2,
+          danger: true,
+          action: () => openDeleteConfirm(selectedItems.value)
+        }
+      )
+    }
+
+    contextMenuStore.show(e, multiMenu, `${selectedItems.value.length} Item Dipilih`)
+    return
+  }
+
+  // SKENARIO 2: JIKA HANYA 1 BERKAS TUNGGAL YANG DIPILIH
   selectedItem.value = item
 
   const extraOptions = [
@@ -890,15 +1087,15 @@ function handleFileItemContextMenu(e, item) {
     children: extraOptions
   })
 
-  // Hanya izinkan Hapus jika punya hak hapus (RBAC)
+  // Hanya izinkan Hapus jika punya hak hapus (RBAC Guarded)
   if (authStore.canDeleteStorage()) {
     menuList.push(
       { separator: true },
       {
-        label: 'Hapus',
+        label: 'Hapus Berkas...',
         icon: Trash2,
         danger: true,
-        action: () => deleteItem(item)
+        action: () => openDeleteConfirm(item)
       }
     )
   }
@@ -949,7 +1146,37 @@ function handleCanvasContextMenu(e) {
     )
   }
 
+  // Pintasan Seleksi Berkas
   canvasMenu.push(
+    {
+      label: 'Pilih Semua Berkas (Ctrl+A)',
+      icon: CheckCircle2,
+      action: () => selectAllFiles()
+    }
+  )
+
+  if (selectedItems.value.length > 0) {
+    canvasMenu.push(
+      {
+        label: `Batalkan Pilihan (${selectedItems.value.length})`,
+        icon: X,
+        action: () => clearSelection()
+      }
+    )
+    if (authStore.canDeleteStorage()) {
+      canvasMenu.push(
+        {
+          label: `Hapus ${selectedItems.value.length} Berkas Terpilih...`,
+          icon: Trash2,
+          danger: true,
+          action: () => openDeleteConfirm(selectedItems.value)
+        }
+      )
+    }
+  }
+
+  canvasMenu.push(
+    { separator: true },
     {
       label: 'Tampilan (View)',
       icon: LayoutGrid,
@@ -1003,7 +1230,12 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="h-full flex overflow-hidden text-xs sm:text-sm select-none bg-slate-950 text-slate-100 rounded-xl" @click="closeAllNewMenus">
+  <div
+    class="h-full flex overflow-hidden text-xs sm:text-sm select-none bg-slate-950 text-slate-100 rounded-xl outline-none"
+    @click="closeAllNewMenus"
+    tabindex="0"
+    @keydown="handleGlobalKeydown"
+  >
     <!-- LEFT SIDEBAR (Google Drive Style) -->
     <div class="w-56 border-r border-slate-800/80 bg-slate-900/60 p-3 flex flex-col justify-between hidden md:flex shrink-0">
       <div class="flex flex-col gap-4">
@@ -1502,12 +1734,12 @@ onMounted(async () => {
             <div
               v-for="(item, idx) in visibleFiles"
               :key="item.path || idx"
-              @click="handleItemClick(item)"
+              @click="handleItemClick(item, $event)"
               @dblclick="handleItemDoubleClick(item)"
               @contextmenu.prevent.stop="handleFileItemContextMenu($event, item)"
               class="p-3 rounded-2xl border transition-all duration-200 cursor-pointer flex flex-col justify-between group relative select-none min-h-[140px]"
-              :class="selectedItem?.path === item.path
-                ? 'bg-sky-500/20 border-sky-400 ring-2 ring-sky-400/40 shadow-lg'
+              :class="isItemSelected(item)
+                ? 'bg-sky-500/25 border-sky-400 ring-2 ring-sky-400/50 shadow-lg text-sky-100'
                 : 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900/90 hover:shadow-md'"
             >
               <!-- Card Top: Icon & Action Controls (Info & Star) -->
@@ -1588,11 +1820,11 @@ onMounted(async () => {
                 <tr
                   v-for="(item, idx) in visibleFiles"
                   :key="item.path || idx"
-                  @click="handleItemClick(item)"
+                  @click="handleItemClick(item, $event)"
                   @dblclick="handleItemDoubleClick(item)"
                   @contextmenu.prevent.stop="handleFileItemContextMenu($event, item)"
-                  class="hover:bg-slate-800/60 cursor-pointer transition"
-                  :class="selectedItem?.path === item.path ? 'bg-sky-500/10 text-sky-300' : ''"
+                  class="hover:bg-slate-800/60 cursor-pointer transition select-none"
+                  :class="isItemSelected(item) ? 'bg-sky-500/20 text-sky-200 font-medium' : ''"
                 >
                   <td class="py-2.5 px-3 font-medium flex items-center gap-2.5">
                     <button @click.stop="(e) => toggleStar(item, e)" class="text-slate-500 hover:text-amber-400">
@@ -1627,7 +1859,7 @@ onMounted(async () => {
                       <button @click="openRenameDialog(item)" class="p-1 rounded hover:bg-slate-700 text-slate-300" title="Ubah Nama">
                         <Edit3 class="w-3.5 h-3.5" />
                       </button>
-                      <button @click="deleteItem(item)" class="p-1 rounded hover:bg-rose-500/20 text-rose-400" title="Hapus">
+                      <button @click="openDeleteConfirm(item)" class="p-1 rounded hover:bg-rose-500/20 text-rose-400" title="Hapus Berkas">
                         <Trash2 class="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -1672,7 +1904,17 @@ onMounted(async () => {
           <div class="flex items-center gap-3 truncate text-slate-400">
             <span class="font-mono text-[11px] text-slate-400">{{ filteredFiles.length }} item</span>
             <span class="text-slate-700">|</span>
-            <template v-if="selectedItem">
+            <template v-if="selectedItems.length > 1">
+              <div class="flex items-center gap-2 truncate">
+                <span class="px-2 py-0.5 rounded-lg bg-sky-500/20 text-sky-300 font-bold font-mono text-[11px] border border-sky-500/30">
+                  {{ selectedItems.length }} berkas terpilih
+                </span>
+                <button @click="clearSelection" class="text-[11px] text-slate-400 hover:text-slate-200 underline">
+                  Batal
+                </button>
+              </div>
+            </template>
+            <template v-else-if="selectedItem">
               <div class="flex items-center gap-2 truncate">
                 <span class="text-sky-400 font-semibold truncate max-w-[260px] sm:max-w-md">{{ selectedItem.name }}</span>
                 <span class="text-slate-400 font-mono text-[11px]">({{ selectedItem.is_dir ? 'Folder' : formatBytes(selectedItem.size) }})</span>
@@ -1680,12 +1922,33 @@ onMounted(async () => {
               </div>
             </template>
             <template v-else>
-              <span class="text-[11px] text-slate-400">Klik item untuk melihat info ringkas</span>
+              <span class="text-[11px] text-slate-400">Klik item untuk melihat info, Ctrl/Shift untuk multi-pilihan</span>
             </template>
           </div>
 
           <!-- Kanan: Aksi Cepat Item Terpilih -->
-          <div v-if="selectedItem" class="flex items-center gap-1.5 shrink-0">
+          <!-- Multi-Item Action Buttons -->
+          <div v-if="selectedItems.length > 1" class="flex items-center gap-1.5 shrink-0">
+            <button
+              @click="selectAllFiles"
+              class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-medium transition"
+              title="Pilih Seluruh Berkas (Ctrl+A)"
+            >
+              Semua (Ctrl+A)
+            </button>
+            <button
+              v-if="authStore.canDeleteStorage()"
+              @click="openDeleteConfirm(selectedItems)"
+              class="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-[11px] font-semibold flex items-center gap-1.5 transition active:scale-95"
+              title="Hapus Seluruh Berkas Terpilih"
+            >
+              <Trash2 class="w-3.5 h-3.5" />
+              <span>Hapus ({{ selectedItems.length }})</span>
+            </button>
+          </div>
+
+          <!-- Single Item Action Buttons -->
+          <div v-else-if="selectedItem" class="flex items-center gap-1.5 shrink-0">
             <button
               @click="openInfoModal(selectedItem)"
               class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-medium flex items-center gap-1 transition"
@@ -1720,7 +1983,7 @@ onMounted(async () => {
               <Edit3 class="w-3.5 h-3.5" />
             </button>
             <button
-              @click="deleteItem(selectedItem)"
+              @click="openDeleteConfirm(selectedItem)"
               class="p-1 rounded-lg hover:bg-rose-500/20 text-rose-400 transition"
               title="Hapus"
             >
@@ -1939,6 +2202,83 @@ onMounted(async () => {
               <span>Selesai</span>
             </span>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CUSTOM MODAL: Konfirmasi Hapus Berkas / Folder (Glassmorphism Slate-900) -->
+    <div
+      v-if="showDeleteConfirmModal"
+      class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in"
+    >
+      <div class="w-full max-w-md bg-slate-900 border border-rose-500/40 shadow-2xl shadow-black ring-1 ring-rose-500/20 rounded-2xl flex flex-col overflow-hidden text-slate-100">
+        <!-- Modal Titlebar -->
+        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-5 py-3 select-none">
+          <div class="flex items-center gap-2.5 text-rose-400">
+            <div class="w-7 h-7 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
+              <Trash2 class="w-4 h-4" />
+            </div>
+            <h3 class="font-bold text-sm">
+              {{ itemsToDelete.length > 1 ? `Hapus ${itemsToDelete.length} Berkas Terpilih` : 'Hapus Berkas / Folder' }}
+            </h3>
+          </div>
+          <button
+            @click="showDeleteConfirmModal = false"
+            :disabled="isDeletingFiles"
+            class="w-7 h-7 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95 disabled:opacity-50"
+            title="Batal & Tutup"
+          >
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+
+        <!-- Modal Body Content -->
+        <div class="p-5 space-y-4">
+          <div class="flex items-start gap-3 p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-200 text-xs leading-relaxed">
+            <AlertTriangle class="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            <div>
+              <span class="font-bold block mb-0.5 text-rose-300">Peringatan Penghapusan Permanen</span>
+              <span>Tindakan ini tidak dapat dibatalkan. Berkas atau direktori berikut akan dihapus secara langsung dari disk host:</span>
+            </div>
+          </div>
+
+          <!-- Preview Berkas yang Akan Dihapus -->
+          <div class="max-h-48 overflow-y-auto rounded-xl bg-slate-950 border border-slate-800/80 divide-y divide-slate-800/50 text-xs font-mono">
+            <div
+              v-for="target in itemsToDelete"
+              :key="target.path"
+              class="px-3 py-2 flex items-center justify-between gap-2"
+            >
+              <div class="flex items-center gap-2 truncate text-slate-200">
+                <Folder v-if="target.is_dir" class="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                <File v-else class="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span class="truncate" :title="target.name">{{ target.name }}</span>
+              </div>
+              <span class="text-[10px] text-slate-500 shrink-0">
+                {{ target.is_dir ? 'Folder' : formatBytes(target.size) }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal Footer Actions -->
+        <div class="flex items-center justify-end gap-2 bg-slate-950/80 border-t border-slate-800 px-5 py-3 select-none">
+          <button
+            @click="showDeleteConfirmModal = false"
+            :disabled="isDeletingFiles"
+            class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition active:scale-95 disabled:opacity-50"
+          >
+            Batal
+          </button>
+          <button
+            @click="executeDeleteConfirmed"
+            :disabled="isDeletingFiles"
+            class="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition flex items-center gap-2 shadow-lg shadow-rose-950/50 active:scale-95 disabled:opacity-50"
+          >
+            <RefreshCw v-if="isDeletingFiles" class="w-3.5 h-3.5 animate-spin" />
+            <Trash2 v-else class="w-3.5 h-3.5" />
+            <span>{{ isDeletingFiles ? 'Menghapus...' : 'Ya, Hapus Permanen' }}</span>
+          </button>
         </div>
       </div>
     </div>

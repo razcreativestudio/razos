@@ -355,6 +355,53 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 - Jika laptop berada di luar rumah (kafe, kantor, tethering HP), MCP otomatis menggunakan jalur Cloudflare Tunnel tanpa perlu konfigurasi manual.
 - Menyimpan cache endpoint aktif yang berhasil merespons agar request berikutnya tetap cepat.
 
+---
+
+### Versi: 4.1.4-task-manager-fix-and-file-manager-windows-suite (Perbaikan Jendela Kosong Task Manager & Fitur Lengkap File Manager: Multi-Selection, Dedicated Context Menu, Custom Delete Modal)
+**Waktu Eksekusi:** 2026-10-26 20:50 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah / Kebutuhan Pengguna
+1. **Task Manager Blank Window:** Jendela Task Manager terbuka namun layarnya kosong/hitam total tanpa menampilkan tab, metrik, maupun daftar proses.
+2. **Context Menu Khusus File Manager:** Membutuhkan context menu kontekstual khusus untuk berkas tunggal, multi-berkas (batch actions), dan kanvas area kosong.
+3. **Multi-Selection File ala Windows Explorer:** Pemilihan banyak berkas sekaligus menggunakan tombol `Ctrl` (toggle pilihan) dan `Shift` (pemilihan rentang berkas / range selection), serta pintasan keyboard `Ctrl+A` (Pilih Semua) dan `Escape` (Batalkan Seleksi).
+4. **Modal Konfirmasi Hapus Berkas Kustom:** Modal konfirmasi sebelum menghapus berkas/folder dengan desain Glassmorphism Slate-900 terintegrasi tema RAZOS tanpa dialog `alert()` / `confirm()` bawaan browser.
+
+#### 2. Investigasi & Akar Masalah (Root Cause Analysis)
+1. **Penyebab Blank Window Task Manager (`RAZTaskManagerView.vue`):**
+   - Pada baris template daftar proses, komponen memanggil `proc.memoryMb.toFixed(1)`. Sementara endpoint Go backend `/api/v1/processes` mengembalikan field JSON `memory` (float64 percent), bukan `memoryMb`. Hal ini memicu `TypeError: Cannot read properties of undefined (reading 'toFixed')` di dalam render loop Vue 3 yang mengakibatkan seluruh komponen gagal me-render dan menjadi layar kosong.
+   - Panggilan langsung `.toFixed()` pada `metrics.cpu_percent`, `metrics.ram_percent`, dan `metrics.cpu_temp` rentan melempar error saat metrik belum selesai dimuat atau bernilai null.
+2. **Keterbatasan Seleksi & Hapus File Manager (`RAZFileManagerView.vue`):**
+   - Sebelumnya `selectedItem` hanya menyimpan objek tunggal sehingga tidak mendukung multi-selection.
+   - Fungsi `deleteItem` sebelumnya langsung mengirim request `DELETE` ke API backend tanpa menampilkan konfirmasi peringatan kepada pengguna.
+
+#### 3. Solusi & Rekayasa Kode
+1. **Pembaruan Task Manager (`frontend/src/views/RAZTaskManagerView.vue`):**
+   - Mengembangkan helper `safeFixed(val, digits, fallback)` yang kebal crash terhadap nilai `undefined`, `null`, maupun `string` tidak valid.
+   - Memutakhirkan `filteredProcesses` agar memetakan field `cpu`, `memory`, dan `memoryMb` dengan fallback aman.
+   - Mengganti seluruh pemanggilan `.toFixed` di seluruh tab (Processes, Performance, Containers, Services) dengan `safeFixed`.
+2. **Pembaruan File Manager Multi-Selection (`frontend/src/views/RAZFileManagerView.vue`):**
+   - Menambahkan state `selectedItems` (array objek berkas) dan `lastSelectedIndex` (anchor index untuk rentang Shift-Click).
+   - Mengembangkan logika `handleItemClick(item, event)`:
+     - **Ctrl / Cmd + Click**: Toggle status pilihan item tanpa membatalkan pilihan item lainnya.
+     - **Shift + Click**: Pemilihan rentang berkas (Range Selection) dari berkas yang terakhir dipilih hingga berkas saat ini.
+     - **Klik Biasa**: Memilih satu berkas saja dan mereset pilihan lainnya.
+   - Menambahkan fungsi `selectAllFiles()` (`Ctrl+A`) dan `clearSelection()` (`Escape`).
+   - Menambahkan event listener keyboard global `@keydown="handleGlobalKeydown"` pada root explorer.
+3. **Dedicated Context Menu File Manager:**
+   - **Mode Multi-Berkas (>1 item terpilih):** Menampilkan menu aksi massal: `Buka X Berkas`, `Salin Seluruh Path (X Item)`, `Beri Bintang Semua`, dan `Hapus X Berkas Terpilih...` (Danger).
+   - **Mode Berkas Tunggal:** Menampilkan menu lengkap: Buka, Edit Berkas (Editor Teks), Ubah Nama, Unduh Berkas, Salin Path, Bintang, Info & Properti, serta Hapus.
+   - **Mode Area Kanvas Kosong:** Menampilkan menu: Folder Baru, File Baru (Teks/Kode), Menu Upload (File, Folder, ZIP), Pilih Semua (Ctrl+A), Bersihkan Pilihan, Segarkan, dan Salin Path Direktori.
+4. **Bottom Status Bar Dinamis:**
+   - Menampilkan badge jumlah berkas terpilih (`X berkas terpilih`) beserta tombol batal seleksi, shortcut Pilih Semua, dan tombol cepat `Hapus (X Berkas)`.
+5. **Custom Modal Konfirmasi Hapus Berkas (`showDeleteConfirmModal`):**
+   - Didesain mengikuti standar UI Glassmorphism Slate-900 dengan ring merah `border-rose-500/40`.
+   - Menampilkan daftar nama berkas/folder yang akan dihapus beserta ukuran dan tipe ikonnya.
+   - Memiliki tombol "Batal" dan "Ya, Hapus Permanen" dengan indikator loading status saat proses penghapusan massal berjalan.
+   - 100% patuh aturan GEMINI.md: Zero browser native alerts/confirms.
+6. **Kompilasi Ulang Frontend:**
+   - Menjalankan Vite build produksi (`dist/assets/index-BmNHPoeP.js` & `dist/assets/index-D-vNd4Fk.css`) terverifikasi sukses tanpa error.
+
 
 
 

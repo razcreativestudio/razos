@@ -1,7 +1,7 @@
 <template>
   <!--
     RAZOS Task Manager (Windows 11 Enterprise Suite)
-    Timestamp: 2026-10-14 15:00:00 (v2.9.7 Hotfix: Perbaikan integrasi store windowStore.openWindows)
+    Timestamp: 2026-10-26 20:45:00 (v3.5.0: Fix Blank Window via safeFixed & robust processes memory schema)
     Deskripsi: Task Manager modern dengan antarmuka presisi Windows 11.
                Zero Dummy Data: Mengambil metrik hardware riil (CPU, RAM, Disk C:/DATA, Suhu),
                nama device dinamis (Komputer Windows / Armbian STB), antarmuka jaringan riil,
@@ -140,15 +140,15 @@
           <div class="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 text-[11px] font-mono space-y-1 text-slate-400">
             <div class="flex justify-between">
               <span>CPU:</span>
-              <span :class="getCpuColor(systemStore.metrics.cpu_percent)">{{ systemStore.metrics.cpu_percent.toFixed(0) }}%</span>
+              <span :class="getCpuColor(systemStore.metrics?.cpu_percent || 0)">{{ safeFixed(systemStore.metrics?.cpu_percent, 0) }}%</span>
             </div>
             <div class="flex justify-between">
               <span>RAM:</span>
-              <span :class="getMemColor(systemStore.metrics.ram_percent)">{{ systemStore.metrics.ram_percent.toFixed(0) }}%</span>
+              <span :class="getMemColor(systemStore.metrics?.ram_percent || 0)">{{ safeFixed(systemStore.metrics?.ram_percent, 0) }}%</span>
             </div>
             <div class="flex justify-between">
               <span>SUHU:</span>
-              <span class="text-amber-400">{{ systemStore.metrics.cpu_temp.toFixed(0) }}°C</span>
+              <span class="text-amber-400">{{ safeFixed(systemStore.metrics?.cpu_temp, 0) }}°C</span>
             </div>
           </div>
         </div>
@@ -168,11 +168,11 @@
           <div class="w-24 px-3 py-2 text-center">Status</div>
           <div class="w-24 px-3 py-2 text-right bg-slate-900/80">
             <span>CPU</span>
-            <span class="text-[10px] text-slate-400 block font-normal">{{ systemStore.metrics.cpu_percent.toFixed(0) }}%</span>
+            <span class="text-[10px] text-slate-400 block font-normal">{{ safeFixed(systemStore.metrics?.cpu_percent, 0) }}%</span>
           </div>
           <div class="w-28 px-3 py-2 text-right bg-slate-900/80">
             <span>Memori</span>
-            <span class="text-[10px] text-slate-400 block font-normal">{{ formatBytes(systemStore.metrics.ram_used) }}</span>
+            <span class="text-[10px] text-slate-400 block font-normal">{{ formatBytes(systemStore.metrics?.ram_used) }}</span>
           </div>
           <div class="w-48 px-3 py-2 hidden md:block text-slate-400">Lokasi / Direktori / Command</div>
         </div>
@@ -210,7 +210,7 @@
                 </span>
               </div>
               <div class="w-24 px-3 py-2 text-right transition-colors" :class="getCpuHeatmap(appItem.cpu)">
-                {{ appItem.cpu.toFixed(1) }}%
+                {{ safeFixed(appItem.cpu, 1) }}%
               </div>
               <div class="w-28 px-3 py-2 text-right transition-colors" :class="getMemHeatmap(appItem.memory)">
                 {{ appItem.memory }} MB
@@ -255,7 +255,7 @@
               </div>
               <!-- Heatmap CPU -->
               <div class="w-24 px-3 py-2 text-right transition-colors" :class="getCpuHeatmap(c.cpu)">
-                {{ typeof c.cpu === 'number' ? c.cpu.toFixed(1) : c.cpu }}%
+                {{ typeof c.cpu === 'number' ? safeFixed(c.cpu, 1) : (c.cpu || '0%') }}
               </div>
               <!-- Heatmap Memori -->
               <div class="w-28 px-3 py-2 text-right transition-colors" :class="getMemHeatmap(c.memory)">
@@ -305,11 +305,11 @@
               </div>
               <!-- Heatmap CPU -->
               <div class="w-24 px-3 py-2 text-right transition-colors" :class="getCpuHeatmap(proc.cpu)">
-                {{ proc.cpu.toFixed(1) }}%
+                {{ safeFixed(proc.cpu, 1) }}%
               </div>
               <!-- Heatmap Memori -->
-              <div class="w-28 px-3 py-2 text-right transition-colors" :class="getMemHeatmap(proc.memoryMb)">
-                {{ proc.memoryMb.toFixed(1) }} MB
+              <div class="w-28 px-3 py-2 text-right transition-colors" :class="getMemHeatmap(proc.memoryMb || proc.memory)">
+                {{ safeFixed(proc.memoryMb || proc.memory, 1) }} MB
               </div>
               <!-- Command Path -->
               <div class="w-48 px-3 py-2 hidden md:block truncate text-slate-500 text-[11px]" :title="proc.cmdline">
@@ -348,16 +348,16 @@
                 <Cpu class="w-4 h-4 text-sky-400" />
                 <span>Beban Prosesor CPU</span>
               </span>
-              <span class="text-xl font-bold font-mono text-sky-400">{{ systemStore.metrics.cpu_percent.toFixed(1) }}%</span>
+              <span class="text-xl font-bold font-mono text-sky-400">{{ safeFixed(systemStore.metrics?.cpu_percent, 1) }}%</span>
             </div>
             <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-slate-800">
-              <div class="bg-sky-400 h-full transition-all duration-300" :style="{ width: `${systemStore.metrics.cpu_percent}%` }"></div>
+              <div class="bg-sky-400 h-full transition-all duration-300" :style="{ width: `${systemStore.metrics?.cpu_percent || 0}%` }"></div>
             </div>
             <div class="grid grid-cols-2 gap-2 text-xs font-mono text-slate-400 pt-1">
-              <div>Prosesor: <span class="text-slate-200">{{ systemStore.metrics.cpu_model || 'Host CPU' }}</span></div>
-              <div>Jumlah Core: <span class="text-slate-200">{{ systemStore.metrics.cpu_cores || 4 }} Cores</span></div>
-              <div>Arsitektur: <span class="text-slate-200">{{ systemStore.metrics.os_arch || 'x64' }}</span></div>
-              <div>Suhu Inti: <span class="text-amber-400 font-bold">{{ systemStore.metrics.cpu_temp.toFixed(1) }}°C</span></div>
+              <div>Prosesor: <span class="text-slate-200">{{ systemStore.metrics?.cpu_model || 'Host CPU' }}</span></div>
+              <div>Jumlah Core: <span class="text-slate-200">{{ systemStore.metrics?.cpu_cores || 4 }} Cores</span></div>
+              <div>Arsitektur: <span class="text-slate-200">{{ systemStore.metrics?.os_arch || 'x64' }}</span></div>
+              <div>Suhu Inti: <span class="text-amber-400 font-bold">{{ safeFixed(systemStore.metrics?.cpu_temp, 1) }}°C</span></div>
             </div>
           </div>
 
@@ -368,16 +368,16 @@
                 <HardDrive class="w-4 h-4 text-emerald-400" />
                 <span>Memori RAM Fisik</span>
               </span>
-              <span class="text-xl font-bold font-mono text-emerald-400">{{ systemStore.metrics.ram_percent.toFixed(1) }}%</span>
+              <span class="text-xl font-bold font-mono text-emerald-400">{{ safeFixed(systemStore.metrics?.ram_percent, 1) }}%</span>
             </div>
             <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-slate-800">
-              <div class="bg-emerald-400 h-full transition-all duration-300" :style="{ width: `${systemStore.metrics.ram_percent}%` }"></div>
+              <div class="bg-emerald-400 h-full transition-all duration-300" :style="{ width: `${systemStore.metrics?.ram_percent || 0}%` }"></div>
             </div>
             <div class="grid grid-cols-2 gap-2 text-xs font-mono text-slate-400 pt-1">
-              <div>Terpakai: <span class="text-slate-200">{{ formatBytes(systemStore.metrics.ram_used) }}</span></div>
-              <div>Total RAM: <span class="text-slate-200">{{ formatBytes(systemStore.metrics.ram_total) }}</span></div>
-              <div>Sisa Bebas: <span class="text-emerald-400 font-bold">{{ formatBytes(systemStore.metrics.ram_total - systemStore.metrics.ram_used) }}</span></div>
-              <div>Swap / Virtual: <span class="text-slate-300">{{ systemStore.metrics.os_platform?.includes('Windows') ? 'Virtual Memory Aktif' : '~900 MiB ZRAM' }}</span></div>
+              <div>Terpakai: <span class="text-slate-200">{{ formatBytes(systemStore.metrics?.ram_used) }}</span></div>
+              <div>Total RAM: <span class="text-slate-200">{{ formatBytes(systemStore.metrics?.ram_total) }}</span></div>
+              <div>Sisa Bebas: <span class="text-emerald-400 font-bold">{{ formatBytes((systemStore.metrics?.ram_total || 0) - (systemStore.metrics?.ram_used || 0)) }}</span></div>
+              <div>Swap / Virtual: <span class="text-slate-300">{{ systemStore.metrics?.os_platform?.includes('Windows') ? 'Virtual Memory Aktif' : '~900 MiB ZRAM' }}</span></div>
             </div>
           </div>
 
@@ -386,17 +386,17 @@
             <div class="flex justify-between items-center text-slate-300">
               <span class="font-bold text-sm flex items-center gap-2">
                 <Server class="w-4 h-4 text-purple-400" />
-                <span>{{ systemStore.metrics.disk_name || 'Kapasitas Penyimpanan Utama (Disk)' }}</span>
+                <span>{{ systemStore.metrics?.disk_name || 'Kapasitas Penyimpanan Utama (Disk)' }}</span>
               </span>
-              <span class="text-xl font-bold font-mono text-purple-400">{{ systemStore.metrics.disk_percent.toFixed(1) }}%</span>
+              <span class="text-xl font-bold font-mono text-purple-400">{{ safeFixed(systemStore.metrics?.disk_percent, 1) }}%</span>
             </div>
             <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-slate-800">
-              <div class="bg-purple-400 h-full transition-all duration-300" :style="{ width: `${systemStore.metrics.disk_percent}%` }"></div>
+              <div class="bg-purple-400 h-full transition-all duration-300" :style="{ width: `${systemStore.metrics?.disk_percent || 0}%` }"></div>
             </div>
             <div class="grid grid-cols-2 gap-2 text-xs font-mono text-slate-400 pt-1">
-              <div>Terpakai: <span class="text-slate-200">{{ formatBytes(systemStore.metrics.disk_used) }}</span></div>
-              <div>Total Disk: <span class="text-slate-200">{{ formatBytes(systemStore.metrics.disk_total) }}</span></div>
-              <div>Sisa Bebas: <span class="text-purple-400 font-bold">{{ formatBytes(systemStore.metrics.disk_total - systemStore.metrics.disk_used) }}</span></div>
+              <div>Terpakai: <span class="text-slate-200">{{ formatBytes(systemStore.metrics?.disk_used) }}</span></div>
+              <div>Total Disk: <span class="text-slate-200">{{ formatBytes(systemStore.metrics?.disk_total) }}</span></div>
+              <div>Sisa Bebas: <span class="text-purple-400 font-bold">{{ formatBytes((systemStore.metrics?.disk_total || 0) - (systemStore.metrics?.disk_used || 0)) }}</span></div>
               <div>Status: <span class="text-emerald-400 font-bold">Siap Pakai</span></div>
             </div>
           </div>
@@ -666,11 +666,21 @@ const activeLogText = ref('')
 
 function formatBytes(bytes) {
   if (!bytes) return '0 MB'
-  const mb = bytes / (1024 * 1024)
+  const mb = Number(bytes) / (1024 * 1024)
   if (mb >= 1024) {
     return (mb / 1024).toFixed(2) + ' GB'
   }
   return mb.toFixed(0) + ' MB'
+}
+
+/**
+ * Helper kebal crash untuk pemformatan angka pecahan.
+ * Mencegah error "Cannot read properties of undefined (reading 'toFixed')"
+ * yang menyebabkan Task Manager tampil kosong di layar.
+ */
+function safeFixed(val, digits = 0, fallback = '0') {
+  const num = Number(val)
+  return Number.isFinite(num) ? num.toFixed(digits) : fallback
 }
 
 // -----------------------------------------------------------------
@@ -680,15 +690,15 @@ function formatBytes(bytes) {
 const filteredApps = computed(() => {
   if (!searchQuery.value.trim()) return activeWindows.value
   const q = searchQuery.value.toLowerCase()
-  return activeWindows.value.filter(a => a.name.toLowerCase().includes(q) || a.port.toLowerCase().includes(q))
+  return activeWindows.value.filter(a => (a.name && a.name.toLowerCase().includes(q)) || (a.port && a.port.toLowerCase().includes(q)))
 })
 
 const filteredContainers = computed(() => {
-  const list = containers.value.map(c => ({ ...c, type: 'container' }))
+  const list = (containers.value || []).map(c => ({ ...c, type: 'container' }))
   if (!searchQuery.value.trim()) return list
   const q = searchQuery.value.toLowerCase()
   return list.filter(c => 
-    c.name.toLowerCase().includes(q) || 
+    (c.name && c.name.toLowerCase().includes(q)) || 
     (c.image && c.image.toLowerCase().includes(q)) ||
     (c.ports && c.ports.toLowerCase().includes(q)) ||
     (c.dataPath && c.dataPath.toLowerCase().includes(q))
@@ -696,12 +706,18 @@ const filteredContainers = computed(() => {
 })
 
 const filteredProcesses = computed(() => {
-  const list = processes.value.map(p => ({ ...p, type: 'process' }))
+  const list = (processes.value || []).map(p => ({
+    ...p,
+    type: 'process',
+    cpu: Number(p.cpu) || 0,
+    memory: Number(p.memory || p.memoryMb) || 0,
+    memoryMb: Number(p.memoryMb || p.memory) || 0
+  }))
   if (!searchQuery.value.trim()) return list
   const q = searchQuery.value.toLowerCase()
   return list.filter(p => 
-    p.name.toLowerCase().includes(q) || 
-    p.pid.toString().includes(q) ||
+    (p.name && p.name.toLowerCase().includes(q)) || 
+    (p.pid && p.pid.toString().includes(q)) ||
     (p.cmdline && p.cmdline.toLowerCase().includes(q))
   )
 })
