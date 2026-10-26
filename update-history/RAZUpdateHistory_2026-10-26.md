@@ -133,3 +133,28 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
    - Mengaktifkan `convertEol: true` pada konfigurasi xterm untuk mencegah efek *stair-stepping* pada baris teks panjang.
 3. **Kompilasi Ulang Frontend:**
    - Melakukan build produksi Vite (`dist/assets/index-Cp0feTnm.js`).
+
+---
+
+### Versi: 3.9.2-razos-terminal-motd-banner-and-realtime-telemetry (Custom RAZOS Terminal Banner & Real-Time Performance Telemetry)
+**Waktu Eksekusi:** 2026-10-26 12:08 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah / Kebutuhan Pengguna
+- Pengguna meminta agar tampilan banner selamat datang di Web Terminal disesuaikan menjadi banner resmi **RAZOS** (bukan logo Armbian standar) lengkap dengan data telemetri performa sistem riil (CPU Load, Suhu, RAM, ZRAM, Storage `/` & `/DATA`, Uptime, IP LAN, dan Container).
+
+#### 2. Solusi & Rekayasa Kode
+1. **Pembuatan Generator Banner RAZOS (`RAZTerminalBanner.go`):**
+   - Merancang logo ASCII Art presisi untuk brand **RAZOS** dengan palet warna gradien Cyan/Sky-Blue (`\x1b[38;5;39m` ke `\x1b[38;5;51m`).
+   - Mengumpulkan data telemetri riil dari kernel Linux host menggunakan library `gopsutil` dan sensor thermal `/sys/class/thermal/`:
+     - **CPU Load & Cores**: Utilisasi CPU real-time dan jumlah core SOC Amlogic S905X.
+     - **Uptime**: Format hari, jam, menit dari `/proc/uptime`.
+     - **Memory Usage & ZRAM**: RAM fisik aktif dalam MiB/GiB dan persentase ZRAM Swap terpakai.
+     - **CPU Temp**: Suhu thermal zone SOC dengan pewarnaan dinamis (Hijau < 65°C, Kuning < 78°C, Merah >= 78°C).
+     - **Disk Storage**: Kapasitas riil partisi eMMC root `/` dan MicroSD `/DATA`.
+     - **Active Containers**: Jumlah kontainer Docker aktif via Docker API negotiation.
+     - **Network & IP**: Alamat IPv4 LAN aktif dan tautan Web Dashboard.
+   - Mengembangkan fungsi perataan visual `padRight` dan `stripANSI` agar kolom telemetri sejajar rapi secara matematis terlepas dari kode warna ANSI.
+2. **Penyambungan ke PTY WebSocket Handler (`RAZTerminalHandler.go`):**
+   - Mengganti pencetakan banner statis Armbian dengan pemanggilan `GenerateRAZOSBanner()`.
+   - Mengarahkan direktori awal shell interaktif ke home user (`/root`).

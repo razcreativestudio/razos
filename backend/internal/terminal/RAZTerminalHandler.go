@@ -78,8 +78,8 @@ func HandleTerminalWebSocket(c *gin.Context) {
 	if shell == "cmd.exe" {
 		cmd = exec.Command(shell)
 	} else {
-		// Gunakan mode login shell (-l) agar lingkungan Armbian, path, dan profile dimuat utuh
-		cmd = exec.Command(shell, "-l")
+		// Jalankan shell interaktif di home directory pengguna
+		cmd = exec.Command(shell)
 		cmd.Dir = homeDir
 	}
 
@@ -108,18 +108,9 @@ func HandleTerminalWebSocket(c *gin.Context) {
 		Cols: uint16(cols),
 	})
 
-	// Tampilkan banner MOTD Armbian resmi jika tersedia di host
-	motdPaths := []string{
-		"/run/motd.dynamic",
-		"/var/run/motd.dynamic",
-		"/etc/motd",
-	}
-	for _, p := range motdPaths {
-		if motdBytes, err := os.ReadFile(p); err == nil && len(motdBytes) > 0 {
-			_ = conn.WriteMessage(websocket.BinaryMessage, motdBytes)
-			break
-		}
-	}
+	// Tampilkan banner MOTD RAZOS resmi dengan telemetri performa hardware riil
+	razosBanner := GenerateRAZOSBanner()
+	_ = conn.WriteMessage(websocket.BinaryMessage, []byte(razosBanner))
 
 	// Channel sinyal keluar
 	done := make(chan struct{})
