@@ -63,3 +63,39 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
    - Mengubah label field menjadi "Domain Reverse Proxy (Opsional)" agar pengguna memahami bahwa website selalu dapat diakses langsung via IP dan port.
 4. **Kompilasi Ulang Frontend:**
    - Melakukan build produksi Vite (`dist/assets/index-CS45O_7f.js` & `dist/assets/index-BaanchvU.css`).
+
+---
+
+### Versi: 3.9.0-app-store-docker-pull-and-clean-uninstall-fix (App Store Docker Pull Engine & Deep Clean Error Fix)
+**Waktu Eksekusi:** 2026-10-26 09:21 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah / Kebutuhan Pengguna
+- Setiap kali pengguna memasang aplikasi dari App Store (misal Immich, dll.), proses instalasi selalu gagal dengan notifikasi modal:
+  `Error response from daemon: No such image: ghcr.io/immich-app/immich-server:release`
+- Ketika pengguna mengklik tombol "Deep Clean & Hapus Sampah", endpoint DELETE mengembalikan error 500 karena kontainer belum sempat terdaftar di Docker daemon.
+
+#### 2. Akar Masalah (Root Cause Analysis)
+1. **Silenced Error pada `cli.ImagePull` Docker Go SDK:**
+   - Pada `backend/internal/store/RAZAppStoreEngine.go`, saat image belum ada di lokal host, backend memanggil `cli.ImagePull(...)` dan membuang output stream-nya menggunakan `io.Copy(io.Discard, out)`.
+   - Di Docker Engine SDK, bila terjadi kegagalan unduh (seperti network timeout, DNS failure, 401 unauth, atau rate limit), error dikirimkan di dalam baris-baris JSON stream (`{"errorDetail":{"message":"..."},"error":"..."}`).
+   - Karena stream dibuang begitu saja tanpa di-decode dan tanpa verifikasi ulang `ImageInspectWithRaw`, backend langsung melanjutkan eksekusi ke `ContainerCreate`. Docker daemon pun merespons error `No such image`.
+2. **Missing `ExposedPorts` di `container.Config`:**
+   - Binding port host ke container membutuhkan deklarasi `ExposedPorts` eksplisit di `container.Config` agar network layer host memetakan port publik secara presisi.
+3. **Rollback Deep Clean Error 500:**
+   - Pemanggilan `CleanUninstall` melemparkan error jika kontainer yang hendak dihapus memang belum pernah berhasil dibuat (`no such container`).
+
+#### 3. Solusi & Rekayasa Kode
+1. **Penguatan Engine Pull Image (`RAZAppStoreEngine.go`):**
+   - Mengimplementasikan fungsi `pullDockerImage` berbasis multi-layer:
+     - **Prioritas 1 (Docker CLI):** Menjalankan `/usr/bin/docker pull` dengan konteks timeout 10 menit (sangat andal menangani layer besar, retry, multi-arch ARM64, dan DNS host).
+     - **Fallback (Go SDK):** Menggunakan `cli.ImagePull` dengan JSON message streaming decoder untuk menangkap detail pesan error asli dari daemon secara presisi.
+     - **Verifikasi Akhir:** Melakukan `ImageInspectWithRaw` untuk memastikan image 100% tersimpan sebelum `ContainerCreate` dipanggil.
+   - Menambahkan `ExposedPorts: nat.PortSet{natPort: struct{}{}}` pada `container.Config`.
+   - Menyelaraskan target mount volume kontainer agar menunjuk ke `/data` jika default volume adalah path host `/DATA/...`.
+2. **Self-Healing pada `CleanUninstall`:**
+   - Mengabaikan pesan error `no such container` / `not found` sehingga deep clean selalu berhasil (status 200 OK) dan folder `/DATA/apps/<slug>` langsung terhapus bersih tanpa error 500.
+3. **Penyelarasan UI Instalasi (`RAZAppStoreInstallView.vue`):**
+   - Memperbarui status teks pada Tahap 5 agar transparan menginformasikan proses download layer image dan inisialisasi kontainer.
+4. **Kompilasi Ulang Frontend:**
+   - Melakukan build produksi Vite (`dist/assets/index-sIXCvAIv.js`).

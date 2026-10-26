@@ -416,10 +416,10 @@ async function startInstallationProcess() {
 
     // TAHAP 5: Menjalankan Container & Hubungi API Backend
     stepIndex.value = 5
-    currentStageLabel.value = 'Tahap 5: Menjalankan Container'
-    terminalLogLine.value = `docker run -d --name razos-${app.value.slug} -p ${customPort.value}:${app.value.default_port || customPort.value} -v ${customVolume.value}:/data ${imageName}`
-    currentStepDetail.value = 'Memulai proses container...'
-    installProgress.value = 96
+    currentStageLabel.value = 'Tahap 5: Mengunduh Image & Menjalankan Container'
+    terminalLogLine.value = `docker pull ${imageName} && docker run -d --name razos-${app.value.slug} -p ${customPort.value}:${app.value.default_port || customPort.value} -v ${customVolume.value}:/data ${imageName}`
+    currentStepDetail.value = 'Mengunduh layer image dan menginisialisasi proses container...'
+    installProgress.value = 95
 
     const payload = {
       app_id: app.value.id,

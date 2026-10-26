@@ -729,13 +729,16 @@ func deployDockerContainer(site *Website) error {
 	_, _, inspectErr := cli.ImageInspectWithRaw(ctx, imageName)
 	if inspectErr != nil {
 		log.Printf("[RAZWebsite] Mengunduh Docker image: %s ...", imageName)
-		out, pullErr := cli.ImagePull(ctx, imageName, types.ImagePullOptions{})
-		if pullErr != nil {
-			log.Printf("[RAZWebsite] Gagal mengunduh image %s: %v", imageName, pullErr)
-			return pullErr
+		cmd := exec.CommandContext(ctx, "docker", "pull", imageName)
+		if outBytes, cmdErr := cmd.CombinedOutput(); cmdErr != nil {
+			log.Printf("[RAZWebsite] Docker CLI pull gagal (%v: %s), mencoba via SDK...", cmdErr, strings.TrimSpace(string(outBytes)))
+			out, pullErr := cli.ImagePull(ctx, imageName, types.ImagePullOptions{})
+			if pullErr != nil {
+				return fmt.Errorf("gagal mengunduh image %s: %s (SDK error: %v)", imageName, strings.TrimSpace(string(outBytes)), pullErr)
+			}
+			defer out.Close()
+			_, _ = io.Copy(io.Discard, out)
 		}
-		defer out.Close()
-		_, _ = io.Copy(io.Discard, out)
 	}
 
 	// Hapus jika ada container lama dengan nama sama

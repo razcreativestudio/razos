@@ -1,8 +1,9 @@
 /**
  * RAZOS App Store Engine
- * Updated: 2026-10-08
+ * Updated: 2026-10-26 (v3.9.0)
  * Deskripsi: Engine deploy dan uninstall container Docker ke partisi /DATA/apps/
- * dengan validasi memori RAM minimum (> 150 MB free) dan opsi Clean Uninstall.
+ * dengan validasi memori RAM minimum (> 150 MB free), multi-layer Docker CLI + Go SDK
+ * pull engine dengan error streaming decoder, serta robust container port exposure & clean uninstall.
  */
 
 package store
@@ -13,9 +14,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -175,14 +179,18 @@ func DeployApp(req DeployRequest) error {
 	}
 	defer cli.Close()
 
-	ctx := context.Background()
-
 	// Setup Port Binding
 	targetPort := req.Port
 	if targetPort <= 0 {
 		targetPort = defaultPort
 	}
 	natPort, _ := nat.NewPort("tcp", fmt.Sprintf("%d", defaultPort))
+
+	// Pastikan mount target volume di dalam container valid (/data jika format bawaan adalah path host /DATA/...)
+	mountTarget := defaultVol
+	if mountTarget == "" || strings.HasPrefix(mountTarget, "/DATA/") || strings.HasPrefix(mountTarget, "/data/") {
+		mountTarget = "/data"
+	}
 
 	hostConfig := &container.HostConfig{
 		PortBindings: nat.PortMap{
@@ -191,7 +199,7 @@ func DeployApp(req DeployRequest) error {
 			},
 		},
 		Binds: []string{
-			fmt.Sprintf("%s:%s", dataPath, defaultVol),
+			fmt.Sprintf("%s:%s", dataPath, mountTarget),
 		},
 		RestartPolicy: container.RestartPolicy{Name: "always"},
 		// Batasi memori per container di STB agar tidak memicu OOM Killer
@@ -200,29 +208,105 @@ func DeployApp(req DeployRequest) error {
 		},
 	}
 
-	// Pastikan Image Docker sudah ada di local STB atau unduh (ImagePull)
-	_, _, err = cli.ImageInspectWithRaw(ctx, targetImage)
-	if err != nil {
-		out, pullErr := cli.ImagePull(ctx, targetImage, types.ImagePullOptions{})
-		if pullErr != nil {
-			return fmt.Errorf("gagal mengunduh docker image %s: %v", targetImage, pullErr)
-		}
-		defer out.Close()
-		_, _ = io.Copy(io.Discard, out)
-	}
+	// Unduh Docker image ke host secara tangguh (dengan timeout 10 menit untuk image besar)
+	pullCtx, pullCancel := context.WithTimeout(context.Background(), 600*time.Second)
+	defer pullCancel()
 
-	// Hapus jika ada container lama dengan nama sama
-	_ = cli.ContainerRemove(ctx, containerName, types.ContainerRemoveOptions{Force: true})
-
-	resp, err := cli.ContainerCreate(ctx, &container.Config{
-		Image: targetImage,
-		Env:   envs,
-	}, hostConfig, nil, nil, containerName)
-	if err != nil {
+	if err := pullDockerImage(pullCtx, cli, targetImage); err != nil {
 		return err
 	}
 
-	return cli.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{})
+	// Hapus jika ada container lama dengan nama sama
+	_ = cli.ContainerRemove(context.Background(), containerName, types.ContainerRemoveOptions{Force: true})
+
+	// Buat container baru dengan ExposedPorts agar binding port aktif sempurna
+	resp, err := cli.ContainerCreate(context.Background(), &container.Config{
+		Image:        targetImage,
+		Env:          envs,
+		ExposedPorts: nat.PortSet{natPort: struct{}{}},
+	}, hostConfig, nil, nil, containerName)
+	if err != nil {
+		return fmt.Errorf("gagal membuat container %s: %v", containerName, err)
+	}
+
+	if err := cli.ContainerStart(context.Background(), resp.ID, types.ContainerStartOptions{}); err != nil {
+		return fmt.Errorf("gagal menjalankan container %s: %v", containerName, err)
+	}
+
+	return nil
+}
+
+// pullDockerImage mengunduh Docker image ke host dengan prioritas Docker CLI dan fallback Go SDK
+func pullDockerImage(ctx context.Context, cli *client.Client, imageName string) error {
+	// 1. Cek apakah image sudah tersedia secara lokal di host
+	_, _, err := cli.ImageInspectWithRaw(ctx, imageName)
+	if err == nil {
+		return nil
+	}
+
+	log.Printf("[RAZAppStore] Mengunduh Docker image: %s ...", imageName)
+
+	// 2. Prioritas 1: Gunakan Docker CLI bawaan sistem (/usr/bin/docker pull)
+	// Docker CLI memiliki penanganan layer, DNS, arsitektur CPU (ARM64), dan kredensial paling stabil di Linux
+	cmd := exec.CommandContext(ctx, "docker", "pull", imageName)
+	outBytes, cmdErr := cmd.CombinedOutput()
+	if cmdErr == nil {
+		log.Printf("[RAZAppStore] Sukses mengunduh image via Docker CLI: %s", imageName)
+		return nil
+	}
+
+	log.Printf("[RAZAppStore] Docker CLI pull gagal (%v: %s), mencoba via Docker Go SDK...", cmdErr, strings.TrimSpace(string(outBytes)))
+
+	// 3. Fallback: Gunakan Docker Go SDK jika CLI gagal atau terkendala
+	out, sdkErr := cli.ImagePull(ctx, imageName, types.ImagePullOptions{})
+	if sdkErr != nil {
+		if len(outBytes) > 0 {
+			return fmt.Errorf("gagal mengunduh docker image %s: %s", imageName, strings.TrimSpace(string(outBytes)))
+		}
+		return fmt.Errorf("gagal mengunduh docker image %s: %v", imageName, sdkErr)
+	}
+	defer out.Close()
+
+	// Parse JSON event stream dari Docker daemon untuk menangkap pesan error asli
+	type pullEvent struct {
+		Status      string `json:"status"`
+		Error       string `json:"error"`
+		ErrorDetail struct {
+			Message string `json:"message"`
+		} `json:"errorDetail"`
+	}
+
+	dec := json.NewDecoder(out)
+	var streamErr string
+	for {
+		var ev pullEvent
+		if err := dec.Decode(&ev); err != nil {
+			if err == io.EOF {
+				break
+			}
+			break
+		}
+		if ev.Error != "" {
+			streamErr = ev.Error
+		} else if ev.ErrorDetail.Message != "" {
+			streamErr = ev.ErrorDetail.Message
+		}
+	}
+
+	if streamErr != "" {
+		return fmt.Errorf("gagal mengunduh docker image %s: %s", imageName, streamErr)
+	}
+
+	// 4. Verifikasi final bahwa image benar-benar terdaftar di daemon
+	_, _, verifyErr := cli.ImageInspectWithRaw(ctx, imageName)
+	if verifyErr != nil {
+		if len(outBytes) > 0 {
+			return fmt.Errorf("gagal mengunduh docker image %s: %s", imageName, strings.TrimSpace(string(outBytes)))
+		}
+		return fmt.Errorf("image %s tidak ditemukan di daemon setelah proses pull selesai", imageName)
+	}
+
+	return nil
 }
 
 // CleanUninstall menghapus container dan opsi pembersihan direktori data /DATA/apps/
@@ -234,16 +318,24 @@ func CleanUninstall(appSlug string, purgeData bool) error {
 	defer cli.Close()
 
 	containerName := "razos-" + appSlug
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	// Stop dan remove container
-	_ = cli.ContainerStop(ctx, containerName, container.StopOptions{})
+	// Stop container (timeout 5 detik)
+	stopTimeout := 5
+	_ = cli.ContainerStop(ctx, containerName, container.StopOptions{Timeout: &stopTimeout})
+
+	// Hapus container dan volumenya
 	err = cli.ContainerRemove(ctx, containerName, types.ContainerRemoveOptions{
 		RemoveVolumes: true,
 		Force:         true,
 	})
-	if err != nil && (client.IsErrNotFound(err) || strings.Contains(strings.ToLower(err.Error()), "no such container")) {
-		err = nil
+	if err != nil {
+		errMsg := strings.ToLower(err.Error())
+		// Abaikan error jika container memang belum ada / sudah terhapus
+		if client.IsErrNotFound(err) || strings.Contains(errMsg, "no such") || strings.Contains(errMsg, "not found") {
+			err = nil
+		}
 	}
 
 	// Jika opsi purgeData aktif, musnahkan folder data di /DATA/apps/<slug>
