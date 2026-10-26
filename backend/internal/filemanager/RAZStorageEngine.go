@@ -22,6 +22,7 @@ import (
 
 // StorageDevice mendeskripsikan disk fisik atau partisi yang terpasang pada STB
 type StorageDevice struct {
+	Name       string  `json:"name"`       // Nama aslinya (misal: /DATA, /, C:, /media/usb)
 	Device     string  `json:"device"`     // contoh: /dev/sda1, C:
 	Mountpoint string  `json:"mountpoint"` // contoh: /DATA, /media/hdd, C:\
 	Fstype     string  `json:"fstype"`     // contoh: ext4, ntfs, btrfs
@@ -147,19 +148,20 @@ func GetStorageDevices() ([]StorageDevice, error) {
 			continue
 		}
 
-		label := p.Mountpoint
-		isUSB := false
-
-		if p.Mountpoint == "/DATA" || p.Mountpoint == "C:\\DATA" {
-			label = "Primary Storage (/DATA - MicroSD)"
-		} else if p.Mountpoint == "/" || strings.HasPrefix(strings.ToUpper(p.Mountpoint), "C:") {
-			label = "System Storage (/ - eMMC)"
-		} else if strings.Contains(strings.ToLower(p.Mountpoint), "media") || strings.Contains(strings.ToLower(p.Mountpoint), "usb") || strings.HasPrefix(p.Mountpoint, "/mnt") {
-			isUSB = true
-			label = "External Storage (" + filepath.Base(p.Mountpoint) + ")"
+		// Gunakan nama asli dari mount point (misal /DATA, /, /media/hdd, C:)
+		cleanLabel := filepath.ToSlash(p.Mountpoint)
+		if strings.HasSuffix(cleanLabel, "/") && len(cleanLabel) > 1 {
+			cleanLabel = strings.TrimSuffix(cleanLabel, "/")
+		} else if strings.HasSuffix(cleanLabel, "\\") && len(cleanLabel) == 3 && cleanLabel[1] == ':' {
+			cleanLabel = cleanLabel[:2]
 		}
 
+		isUSB := strings.Contains(strings.ToLower(p.Mountpoint), "media") ||
+			strings.Contains(strings.ToLower(p.Mountpoint), "usb") ||
+			strings.HasPrefix(p.Mountpoint, "/mnt")
+
 		devices = append(devices, StorageDevice{
+			Name:       cleanLabel,
 			Device:     p.Device,
 			Mountpoint: p.Mountpoint,
 			Fstype:     p.Fstype,
@@ -167,7 +169,7 @@ func GetStorageDevices() ([]StorageDevice, error) {
 			Used:       usage.Used,
 			Free:       usage.Free,
 			Percent:    usage.UsedPercent,
-			Label:      label,
+			Label:      cleanLabel,
 			IsUSB:      isUSB,
 		})
 	}

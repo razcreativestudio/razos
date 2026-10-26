@@ -50,12 +50,16 @@ export const useSystemStore = defineStore('system', () => {
     disk_total: 0,
     disk_used: 0,
     disk_percent: 0,
+    disks: [],
     net_sent: 0,
     net_recv: 0,
     net_interface: 'Wi-Fi / LAN',
     net_upload_speed: '0 KB/s',
     net_download_speed: '0 KB/s'
   })
+
+  // Daftar Storage Devices Fisik
+  const storageDevices = ref([])
 
   // State Pelacak Kecepatan Jaringan
   let lastNetTime = 0
@@ -169,11 +173,33 @@ export const useSystemStore = defineStore('system', () => {
 
         metrics.value = data
         isConnected.value = true
+
+        // Ambil daftar storage fisik jika data.disks kosong
+        if (!Array.isArray(data.disks) || data.disks.length === 0) {
+          if (storageDevices.value.length === 0) {
+            fetchStorageDevices()
+          }
+        }
       } else {
         isConnected.value = false
       }
     } catch (err) {
       isConnected.value = false
+    }
+  }
+
+  // Fetch daftar storage devices fisik (/api/v1/storage/devices)
+  async function fetchStorageDevices() {
+    try {
+      const res = await fetch('/api/v1/storage/devices')
+      if (res.ok) {
+        const data = await res.json()
+        if (Array.isArray(data)) {
+          storageDevices.value = data
+        }
+      }
+    } catch (e) {
+      console.warn('Gagal memuat daftar storage devices:', e)
     }
   }
 
@@ -264,6 +290,7 @@ export const useSystemStore = defineStore('system', () => {
 
   return {
     metrics,
+    storageDevices,
     isConnected,
     isCleaningRAM,
     isCleaningStorage,
@@ -283,6 +310,7 @@ export const useSystemStore = defineStore('system', () => {
     triggerAppsRefresh,
     showNotification,
     fetchMetrics,
+    fetchStorageDevices,
     cleanRAM,
     cleanStorage
   }

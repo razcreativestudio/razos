@@ -497,6 +497,36 @@ function formatBytes(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
+// Daftar Seluruh Storage Drive Fisik Aktif (Nama Asli Sesuai Permintaan)
+const storageList = computed(() => {
+  // 1. Prioritaskan daftar disks dari metrik sistem real-time
+  if (Array.isArray(systemStore.metrics?.disks) && systemStore.metrics.disks.length > 0) {
+    return systemStore.metrics.disks
+  }
+  // 2. Fallback ke storageDevices jika backend metrics belum memuat array disks
+  if (Array.isArray(systemStore.storageDevices) && systemStore.storageDevices.length > 0) {
+    return systemStore.storageDevices.map(d => ({
+      name: d.name || d.label || d.mountpoint,
+      mountpoint: d.mountpoint,
+      total: d.total,
+      used: d.used,
+      free: d.free,
+      percent: d.percent
+    }))
+  }
+  // 3. Fallback disk tunggal
+  if ((systemStore.metrics?.disk_total || 0) > 0) {
+    return [{
+      name: systemStore.metrics?.disk_name || '/DATA',
+      mountpoint: systemStore.metrics?.disk_name || '/DATA',
+      total: systemStore.metrics?.disk_total || 0,
+      used: systemStore.metrics?.disk_used || 0,
+      percent: systemStore.metrics?.disk_percent || 0
+    }]
+  }
+  return []
+})
+
 // ==========================================
 // DESKTOP RECOMMENDED APPS SLIDER (v3.2.0)
 // ==========================================
@@ -1155,22 +1185,28 @@ function handleDesktopDrop(e) {
               </div>
             </div>
 
-            <!-- Widget 3: Storage Status (/DATA) -->
-            <div v-if="systemStore.settings.widgets.storageStatus" class="space-y-2 pb-3 border-b border-slate-800/80">
-              <div class="flex items-center justify-between text-xs">
-                <span class="flex items-center gap-1.5 font-semibold text-slate-300">
-                  <HardDrive class="w-3.5 h-3.5 text-amber-400" />
-                  <span>Storage (/DATA)</span>
-                </span>
-                <span class="font-mono text-amber-400 font-bold text-[11px]">
-                  {{ formatBytes(systemStore.metrics.disk_used) }} / {{ formatBytes(systemStore.metrics.disk_total) }}
-                </span>
-              </div>
-              <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                <div
-                  class="h-full bg-amber-500 rounded-full transition-all duration-300"
-                  :style="{ width: `${Math.min(systemStore.metrics.disk_percent || 0, 100)}%` }"
-                ></div>
+            <!-- Widget 3: Storage Status (Daftar Seluruh Drive Fisik dengan Nama Aslinya) -->
+            <div v-if="systemStore.settings.widgets.storageStatus && storageList.length > 0" class="space-y-2.5 pb-3 border-b border-slate-800/80">
+              <div
+                v-for="d in storageList"
+                :key="d.mountpoint || d.name"
+                class="space-y-1.5"
+              >
+                <div class="flex items-center justify-between text-xs">
+                  <span class="flex items-center gap-1.5 font-semibold text-slate-300 truncate mr-2" :title="d.mountpoint || d.name">
+                    <HardDrive class="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span class="truncate font-mono">{{ d.name || d.mountpoint }}</span>
+                  </span>
+                  <span class="font-mono text-amber-400 font-bold text-[11px] shrink-0">
+                    {{ formatBytes(d.used) }} / {{ formatBytes(d.total) }}
+                  </span>
+                </div>
+                <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    class="h-full bg-amber-500 rounded-full transition-all duration-300"
+                    :style="{ width: `${Math.min(d.percent || 0, 100)}%` }"
+                  ></div>
+                </div>
               </div>
             </div>
 
