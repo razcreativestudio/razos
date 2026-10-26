@@ -24,6 +24,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/razos/razos/internal/database"
+	"github.com/razos/razos/internal/dev"
 	"github.com/razos/razos/internal/docker"
 	"github.com/razos/razos/internal/filemanager"
 	"github.com/razos/razos/internal/store"
@@ -107,6 +108,10 @@ func RegisterRoutes(r *gin.Engine) {
 		// OTA Updater
 		v1.GET("/updater/status", handleGetUpdateStatus)
 		v1.POST("/updater/apply", handleApplyUpdate)
+
+		// DevBridge Native Suite (Antigravity & MCP Agent Integration)
+		devGroup := v1.Group("/dev")
+		dev.RegisterDevRoutes(devGroup)
 
 		// Storage & Advanced File Manager
 		v1.GET("/storage/devices", handleGetStorageDevices)
