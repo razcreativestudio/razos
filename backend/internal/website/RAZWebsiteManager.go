@@ -739,6 +739,10 @@ func deployDockerContainer(site *Website) error {
 			defer out.Close()
 			_, _ = io.Copy(io.Discard, out)
 		}
+		// Verifikasi bahwa image berhasil diunduh
+		if _, _, checkErr := cli.ImageInspectWithRaw(ctx, imageName); checkErr != nil {
+			return fmt.Errorf("image %s belum siap di daemon Docker: %v", imageName, checkErr)
+		}
 	}
 
 	// Hapus jika ada container lama dengan nama sama
@@ -851,8 +855,14 @@ func ToggleWebsiteStatus(id int, action string) (*Website, error) {
 		switch action {
 		case "start":
 			inspect, inspectErr := cli.ContainerInspect(ctx, target.ContainerName)
+			needRecreate := false
 			if inspectErr != nil {
-				// Kontainer belum ada atau terhapus, lakukan redeploy otomatis
+				needRecreate = true
+			} else if inspect.HostConfig == nil || len(inspect.HostConfig.PortBindings) == 0 {
+				needRecreate = true
+			}
+			if needRecreate {
+				_ = cli.ContainerRemove(ctx, target.ContainerName, types.ContainerRemoveOptions{Force: true})
 				if deployErr := deployDockerContainer(target); deployErr != nil {
 					target.Status = "stopped"
 					saveSitesToDisk()
@@ -862,7 +872,7 @@ func ToggleWebsiteStatus(id int, action string) (*Website, error) {
 			} else {
 				if !inspect.State.Running {
 					if startErr := cli.ContainerStart(ctx, target.ContainerName, types.ContainerStartOptions{}); startErr != nil {
-						// Jika start gagal karena miskonfigurasi port/image lama, redeploy ulang
+						_ = cli.ContainerRemove(ctx, target.ContainerName, types.ContainerRemoveOptions{Force: true})
 						if deployErr := deployDockerContainer(target); deployErr != nil {
 							target.Status = "stopped"
 							saveSitesToDisk()
@@ -877,11 +887,12 @@ func ToggleWebsiteStatus(id int, action string) (*Website, error) {
 			_ = cli.ContainerStop(ctx, target.ContainerName, container.StopOptions{Timeout: &stopTimeout})
 			target.Status = "stopped"
 		case "restart":
-			stopTimeout := 5
-			_ = cli.ContainerRestart(ctx, target.ContainerName, container.StopOptions{Timeout: &stopTimeout})
-			inspect, inspectErr := cli.ContainerInspect(ctx, target.ContainerName)
-			if inspectErr != nil || (inspect.State != nil && !inspect.State.Running) {
-				_ = deployDockerContainer(target)
+			// Re-create kontainer baru secara bersih agar port mapping, exposed ports, dan file baru diterapkan 100%
+			_ = cli.ContainerRemove(ctx, target.ContainerName, types.ContainerRemoveOptions{Force: true})
+			if deployErr := deployDockerContainer(target); deployErr != nil {
+				target.Status = "stopped"
+				saveSitesToDisk()
+				return target, deployErr
 			}
 			target.Status = "running"
 		}
