@@ -402,6 +402,33 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 6. **Kompilasi Ulang Frontend:**
    - Menjalankan Vite build produksi (`dist/assets/index-BmNHPoeP.js` & `dist/assets/index-D-vNd4Fk.css`) terverifikasi sukses tanpa error.
 
+---
+
+### Versi: 4.2.0-windows-11-settings-suite-overhaul (Transformasi Total Tampilan Settings ala Windows 11 Fluent Design)
+**Waktu Eksekusi:** 2026-10-26 21:00 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah / Kebutuhan Pengguna
+- Pengguna meminta agar tampilan Settings dirombak total menyerupai antarmuka resmi **Windows 11 Settings** persis seperti screenshot referensi pengguna:
+  - Layout dua kolom: Left Navigation Rail (sidebar) dengan profil user, input pencarian "Find a setting", dan daftar kategori lengkap dengan indikator aktif biru khas Windows 11.
+  - Halaman `System > About` dengan Hero section (nama PC & tombol "Rename this PC") dan Accordion Collapsible Cards:
+    - **Device specifications:** Ikon bulat `(i)`, tombol "Copy", dan tabel spesifikasi hardware host riil (Device name, Processor CPU & Cores, Installed RAM usable, Device ID, Product ID, System Type 64-bit ARM/x64).
+    - **Windows specifications / RAZOS specifications:** Ikon 4-kotak logo, tombol "Copy", dan tabel detail OS (Edition, Version, Installed on, OS build, Kernel host, Experience pack).
+  - Kategori pengaturan fungsional lainnya: Personalization (pilihan wallpaper RAZOS resmi, tema, widget), Network & Internet (IP LAN, Cloudflare Tunnel, port WebUI), Accounts (profil Administrator, ganti password), Apps, Server Performance, Privacy & Security, dan Windows/RAZOS Update.
+
+#### 2. Solusi & Rekayasa Kode
+1. **Pembaruan Dimensi Jendela (`frontend/src/stores/RAZWindowStore.js`):**
+   - Menyesuaikan dimensi default jendela `settings` menjadi `width: 860, height: 560, minWidth: 480, minHeight: 360` agar tata letak dua kolom Windows 11 tampil proporsional tanpa terpotong.
+2. **Rekayasa Ulang Komponen Settings (`frontend/src/views/RAZSettingsView.vue`):**
+   - Mengembangkan Left Navigation Rail dengan avatar profil Administrator, kotak pencarian "Find a setting" reaktif, dan 11 kategori menu Windows 11 dengan pill bar biru vertikal aktif.
+   - Mengembangkan tampilan `System > About` dengan styling `#1c1b22` / `#201f27` / `#262530` persis Windows 11 Dark Mode.
+   - Mengintegrasikan Accordion Cards (`Device specifications` & `RAZOS specifications`) dengan tombol `Copy` fungsional yang menyalin detail spesifikasi ke clipboard dalam format tabulasi rapi.
+   - Mengintegrasikan tombol `Rename this PC` dengan custom modal dialog.
+   - Menghubungkan seluruh data hardware riil dari `systemStore.metrics` (CPU model, cores, RAM total/used, OS platform).
+   - Mempertahankan seluruh fitur kontrol sistem penting: Ubah password, ganti port WebUI, galeri wallpaper resmi RAZOS, pembersihan RAM 1-klik (`drop_caches`), restart/shutdown STB, dan OTA update.
+3. **Kompilasi Ulang Frontend:**
+   - Menjalankan build produksi Vite (`dist/assets/index-Bjj8GvcN.js` & `dist/assets/index-pQlwp5ri.css`) sukses tanpa error.
+
 
 
 
