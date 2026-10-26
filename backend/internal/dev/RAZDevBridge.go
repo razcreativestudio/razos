@@ -265,7 +265,7 @@ func handleDevLogs(c *gin.Context) {
 	service := c.DefaultQuery("service", "razos")
 	lines := c.DefaultQuery("lines", "50")
 
-	var cmd *exec.Command
+	var cmd *exec.Cmd
 	if service == "razos" {
 		cmd = exec.Command("journalctl", "-u", "razos", "-n", lines, "--no-pager")
 	} else if strings.HasPrefix(service, "docker:") {
