@@ -1,7 +1,7 @@
 <script setup>
 /**
  * RAZOS Windows 11 Fluent Settings Suite
- * Updated: 2026-10-26 21:00:00 (v4.2.0 - Complete Windows 11 Settings Architecture Overhaul)
+ * Updated: 2026-10-26 21:28:00 (v4.2.1 - Brand Alignment: Windows Update -> RAZOS Update & RAZOS Specifications)
  * Deskripsi: Panel pengaturan sistem komprehensif dengan tata letak dan estetika presisi Windows 11:
  * - Left Navigation Rail: Profil pengguna, search bar "Find a setting", dan daftar kategori lengkap dengan indikator aktif biru khas Windows 11.
  * - System > About Hero & Accordion Cards: Spesifikasi perangkat (Processor, RAM, Device ID, System Type)
@@ -15,7 +15,7 @@
  *   - Apps: Ringkasan aplikasi Docker terpasang.
  *   - Time & Language: Format waktu, zona waktu, dan bahasa sistem.
  *   - Privacy & Security: Token Pengembang MCP DevBridge & isolasi WebSocket.
- *   - Windows/RAZOS Update: Status git commit, branch, dan OTA Updater 1-klik.
+ *   - RAZOS Update: Status git commit, branch, dan OTA Updater 1-klik.
  * - Custom Modal Glassmorphism Slate-900 (Zero Native Alerts/Confirms).
  */
 import { ref, computed, onMounted } from 'vue'
@@ -61,7 +61,7 @@ const navigationItems = [
   { id: 'gaming', label: 'Server performance', icon: Cpu },
   { id: 'accessibility', label: 'Accessibility', icon: Accessibility },
   { id: 'privacy', label: 'Privacy & security', icon: Shield },
-  { id: 'update', label: 'Windows Update', icon: RefreshCw }
+  { id: 'update', label: 'RAZOS Update', icon: RefreshCw }
 ]
 
 // Filter Menu Berdasarkan Kotak Pencarian "Find a setting"
@@ -104,7 +104,7 @@ const deviceSpecs = computed(() => ({
 
 // Spesifikasi RAZOS (Windows 11 Enterprise Equivalent)
 const osSpecs = computed(() => ({
-  edition: 'RAZOS Enterprise Server (Windows 11 Suite)',
+  edition: 'RAZOS Enterprise Server',
   version: '4.1.4 LTS',
   installedOn: '26/10/2026',
   osBuild: '22631.ARM64',
@@ -508,7 +508,7 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- ACCORDION CARD 2: Windows / RAZOS specifications -->
+          <!-- ACCORDION CARD 2: RAZOS specifications -->
           <div class="rounded-xl bg-[#262530] border border-white/5 shadow-md overflow-hidden">
             <!-- Card Header -->
             <div
@@ -519,7 +519,7 @@ onMounted(() => {
                 <div class="w-7 h-7 rounded-lg bg-sky-500/10 flex items-center justify-center text-sky-400 border border-sky-500/20">
                   <LayoutGrid class="w-4 h-4" />
                 </div>
-                <h3 class="font-semibold text-sm text-slate-100">Windows / RAZOS specifications</h3>
+                <h3 class="font-semibold text-sm text-slate-100">RAZOS specifications</h3>
               </div>
               <div class="flex items-center gap-2" @click.stop>
                 <button
@@ -855,13 +855,13 @@ onMounted(() => {
       </div>
 
       <!-- ============================================================ -->
-      <!-- TAB 7: WINDOWS UPDATE / RAZOS UPDATE -->
+      <!-- TAB 7: RAZOS UPDATE -->
       <!-- ============================================================ -->
       <div v-else-if="activeCategory === 'update'" class="p-6 md:p-8 max-w-5xl mx-auto w-full space-y-6">
         <div class="flex items-center gap-2 text-xl font-bold text-slate-100">
-          <span>Windows Update</span>
+          <span>RAZOS Update</span>
           <span class="text-slate-500 font-normal">›</span>
-          <span class="text-slate-200">RAZOS OTA Updates</span>
+          <span class="text-slate-200">OTA & System Updates</span>
         </div>
 
         <div class="p-6 rounded-xl bg-[#262530] border border-white/5 space-y-4">
