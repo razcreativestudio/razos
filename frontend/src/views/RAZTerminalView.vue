@@ -205,7 +205,7 @@
     <!-- 3. BODY CONTENT: VIEW 2 - ACTIVE TERMINAL CONSOLE (xterm.js Canvas) -->
     <div 
       v-show="activeTab === 'terminal' && isAuthenticated" 
-      class="flex-1 w-full h-full p-2 bg-[#090d16] overflow-hidden"
+      class="flex-1 w-full min-h-0 p-2 bg-[#090d16] overflow-hidden"
     >
       <div ref="terminalContainer" class="w-full h-full"></div>
     </div>
@@ -420,6 +420,8 @@ const filteredLogs = computed(() => {
   return list
 })
 
+let resizeObserver = null
+
 onMounted(() => {
   window.addEventListener('resize', handleResize)
   // Ambil data log host di latar belakang
@@ -428,6 +430,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+  if (resizeObserver) {
+    try { resizeObserver.disconnect() } catch (e) {}
+    resizeObserver = null
+  }
   if (socket) {
     try { socket.close() } catch (e) {}
   }
@@ -440,6 +446,14 @@ function handleResize() {
   if (fitAddon && term && activeTab.value === 'terminal' && isAuthenticated.value) {
     try {
       fitAddon.fit()
+      // Kirim sinyal kontrol ukuran window (SIGWINCH) ke backend PTY via WebSocket
+      if (socket && socket.readyState === WebSocket.OPEN && term.cols > 0 && term.rows > 0) {
+        socket.send(JSON.stringify({
+          type: 'resize',
+          cols: term.cols,
+          rows: term.rows
+        }))
+      }
     } catch (e) {}
   }
 }
@@ -536,6 +550,7 @@ function initTerminal() {
     fontFamily: 'Consolas, "Fira Code", monospace',
     fontSize: 13,
     lineHeight: 1.25,
+    convertEol: true,
     theme: {
       background: '#090d16',
       foreground: '#e2e8f0',
@@ -555,7 +570,19 @@ function initTerminal() {
   fitAddon = new FitAddon()
   term.loadAddon(fitAddon)
   term.open(terminalContainer.value)
-  setTimeout(() => handleResize(), 150)
+
+  // Pasang ResizeObserver pada elemen container untuk mendeteksi perubahan ukuran jendela desktop
+  if (terminalContainer.value) {
+    if (resizeObserver) {
+      try { resizeObserver.disconnect() } catch (e) {}
+    }
+    resizeObserver = new ResizeObserver(() => {
+      handleResize()
+    })
+    resizeObserver.observe(terminalContainer.value)
+  }
+
+  setTimeout(() => handleResize(), 100)
 
   // Sambungkan input keyboard pengguna
   term.onData((data) => {
@@ -570,7 +597,9 @@ function initTerminal() {
 function connectWebSocket() {
   connectionStatus.value = 'connecting'
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsUrl = `${wsProtocol}//${window.location.host}/ws/terminal?host=${encodeURIComponent(sshConfig.host)}&port=${sshConfig.port}&user=${encodeURIComponent(sshConfig.user)}`
+  const initCols = (term && term.cols) ? term.cols : 120
+  const initRows = (term && term.rows) ? term.rows : 30
+  const wsUrl = `${wsProtocol}//${window.location.host}/ws/terminal?host=${encodeURIComponent(sshConfig.host)}&port=${sshConfig.port}&user=${encodeURIComponent(sshConfig.user)}&cols=${initCols}&rows=${initRows}`
 
   try {
     socket = new WebSocket(wsUrl)
@@ -578,7 +607,10 @@ function connectWebSocket() {
 
     socket.onopen = () => {
       connectionStatus.value = 'connected'
-      term.writeln(`\x1b[1;36m[RAZOS SSH]\x1b[0m Terhubung ke host Armbian Linux (${sshConfig.user}@${sshConfig.host}:${sshConfig.port})...\r\n`)
+      // Sinkronkan ukuran PTY begitu koneksi terbentuk
+      setTimeout(() => {
+        handleResize()
+      }, 100)
     }
 
     socket.onmessage = (event) => {

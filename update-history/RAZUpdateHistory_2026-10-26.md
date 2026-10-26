@@ -99,3 +99,37 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
    - Memperbarui status teks pada Tahap 5 agar transparan menginformasikan proses download layer image dan inisialisasi kontainer.
 4. **Kompilasi Ulang Frontend:**
    - Melakukan build produksi Vite (`dist/assets/index-sIXCvAIv.js`).
+
+---
+
+### Versi: 3.9.1-terminal-resize-sigwinch-and-motd-banner (Web Terminal PTY Resize Sync & Armbian MOTD Banner)
+**Waktu Eksekusi:** 2026-10-26 09:27 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah / Kebutuhan Pengguna
+- Saat jendela Web Terminal di RAZOS dimaksimalkan / diperbesar, tampilan terminal tidak melebar memenuhi layar (terkunci di kotak sempit sebelah kiri dengan ruang hitam kosong di kanan), dan baris teks terpotong atau wrap aneh dengan tanda `>`.
+- Terminal tidak menampilkan banner sambutan resmi sistem Armbian (logo ASCII merah `Armbian OS`, statistik performa, suhu CPU, penggunaan memori/disk, dsb) seperti halnya saat login via PuTTY SSH.
+
+#### 2. Akar Masalah (Root Cause Analysis)
+1. **Tidak Ada Handler Resize Window PTY (Missing SIGWINCH):**
+   - Di `backend/internal/terminal/RAZTerminalHandler.go`, PTY diinisialisasi tanpa ukuran dinamis dan WebSocket reader hanya meneruskan raw string ke `ptmx.Write` tanpa handler `pty.Setsize`.
+   - Di frontend (`RAZTerminalView.vue`), `handleResize` hanya memanggil `fitAddon.fit()`, namun **tidak pernah mengirim pesan cols/rows ke WebSocket backend**.
+   - Selain itu, event listener hanya terpasang di `window.onresize` peramban (bukan pada elemen kontainer jendela desktop OS), sehingga saat jendela desktop dimaksimalkan, event tidak memicu penyesuaian ukuran.
+   - Akibatnya, driver PTY Linux kernel tetap menganggap ukuran terminal adalah 80x24 kolom, sehingga bash membungkus (*line-wrap*) teks di kolom ke-80 dan menyisakan ruang kosong besar di layar yang dimaksimalkan.
+2. **Bash Dijalankan Sebagai Non-Login Shell:**
+   - Backend memanggil `exec.Command(shell)` tanpa opsi `--login` (`-l`), dan tidak mengirimkan berkas MOTD dinamis Armbian (`/run/motd.dynamic` / `/etc/motd`).
+   - Akibatnya, bash tidak memuat profile login Armbian dan tidak mencetak logo/banner telemetri host seperti halnya sesi SSH di PuTTY.
+
+#### 3. Solusi & Rekayasa Kode
+1. **Backend PTY Terminal Handler (`RAZTerminalHandler.go`):**
+   - Menjalankan shell bash dalam mode login (`/bin/bash -l`) di direktori home pengguna (`/root`).
+   - Membaca dan langsung menyalurkan berkas MOTD resmi Armbian (`/run/motd.dynamic` atau `/etc/motd`) sesaat setelah sesi WebSocket tersambung sehingga logo ASCII merah Armbian OS dan ringkasan performa langsung tampil persis seperti PuTTY.
+   - Menambahkan decoder pesan kontrol resize berformat JSON (`{"type":"resize","cols":...,"rows":...}`).
+   - Memanggil `pty.Setsize(ptmx, &pty.Winsize{Rows: rows, Cols: cols})` saat menerima pesan resize, yang secara otomatis memicu sinyal `SIGWINCH` kernel ke bash. Bash kini otomatis melebarkan lebar kolom mengikuti ukuran jendela penuh tanpa wrap terpotong.
+2. **Frontend Terminal Suite (`RAZTerminalView.vue`):**
+   - Memasang `ResizeObserver` pada `terminalContainer` untuk mendeteksi perubahan ukuran jendela desktop RAZOS secara instan (resize, snap, maximize).
+   - Mengirimkan paket resize `{ type: 'resize', cols, rows }` ke WebSocket backend setiap kali ukuran berubah.
+   - Mengirimkan query parameter `cols` & `rows` awal saat pembukaan WebSocket URL agar PTY langsung terbuka sesuai dimensi jendela sejak milidetik pertama.
+   - Mengaktifkan `convertEol: true` pada konfigurasi xterm untuk mencegah efek *stair-stepping* pada baris teks panjang.
+3. **Kompilasi Ulang Frontend:**
+   - Melakukan build produksi Vite (`dist/assets/index-Cp0feTnm.js`).
