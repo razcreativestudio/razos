@@ -429,6 +429,31 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 3. **Kompilasi Ulang Frontend:**
    - Menjalankan build produksi Vite (`dist/assets/index-Bjj8GvcN.js` & `dist/assets/index-pQlwp5ri.css`) sukses tanpa error.
 
+---
+
+### Versi: 4.2.1-empty-folder-null-slice-fix (Perbaikan Akses Direktori Kosong & Eliminasi Peringatan Palsu "Direktori Tidak Ditemukan")
+**Waktu Eksekusi:** 2026-10-26 21:18 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah / Temuan Pengguna
+- Saat pengguna membuka folder kosong seperti `/DATA/Documents`, `/DATA/Downloads`, `/DATA/Gallery`, atau `/DATA/Media` di File Manager, sistem memunculkan toast peringatan: `Direktori "/DATA/Documents" tidak ditemukan`, padahal foldernya nyata dan ada di penyimpanan disk host STB.
+
+#### 2. Investigasi & Akar Masalah (Root Cause Analysis)
+- Pada backend Go (`backend/internal/filemanager/RAZStorageEngine.go`), fungsi `ListDirectory` mendeklarasikan slice penampung berkas dengan sintaks `var items []FileItem`.
+- Ketika suatu direktori kosong (tanpa file atau folder di dalamnya), loop `for _, entry := range entries` tidak dieksekusi sehingga variabel `items` tetap berstatus `nil`.
+- Gin HTTP Serializer di Golang me-serialize slice bernilai `nil` menjadi JSON literal **`null`** (bukan array kosong `[]`).
+- Pada frontend (`frontend/src/views/RAZFileManagerView.vue`), validasi respon sebelumnya memeriksa `if (res.ok && Array.isArray(data))`. Karena `Array.isArray(null)` menghasilkan `false`, frontend keliru menganggap respon tersebut sebagai kegagalan (404/500) dan langsung memicu notifikasi peringatan `Direktori "${cleanPath}" tidak ditemukan`.
+
+#### 3. Solusi & Rekayasa Kode
+1. **Backend Go Non-Nil Slice (`backend/internal/filemanager/RAZStorageEngine.go` & `RAZApiController.go`):**
+   - Mengubah inisialisasi slice menjadi `items := make([]FileItem, 0)` sehingga selalu menghasilkan representasi JSON `[]` yang valid untuk direktori kosong.
+   - Menambahkan guard proteksi di `handleListFiles` agar mengembalikan `[]filemanager.FileItem{}` bila nilai slice `nil`.
+2. **Frontend Robust Empty Folder Handling (`frontend/src/views/RAZFileManagerView.vue`):**
+   - Menambahkan fallback normalisasi `const fileList = Array.isArray(data) ? data : (data === null ? [] : null)`.
+   - Mengizinkan navigasi masuk ke direktori kosong tanpa memicu notifikasi palsu.
+3. **Kompilasi Ulang Frontend:**
+   - Menjalankan build produksi Vite (`dist/assets/index-BBp8hl-M.js` & `dist/assets/index-pQlwp5ri.css`) sukses 100%.
+
 
 
 

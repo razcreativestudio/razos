@@ -308,12 +308,15 @@ async function fetchFiles(targetPath = currentPath.value, isHistoryNav = false) 
       return
     }
 
-    if (res.ok && Array.isArray(data)) {
+    // Tangani jika direktori kosong (server bisa mengembalikan null atau [])
+    const fileList = Array.isArray(data) ? data : (data === null ? [] : null)
+
+    if (res.ok && fileList !== null) {
       // Periksa apakah server me-resolve Windows Junction (misal My Documents -> Documents)
       const resolvedHeader = res.headers.get('X-Resolved-Path')
       const actualPath = resolvedHeader ? normalizePath(resolvedHeader) : cleanPath
 
-      files.value = data
+      files.value = fileList
       currentPath.value = actualPath
       addressInputValue.value = actualPath
 
@@ -328,7 +331,7 @@ async function fetchFiles(targetPath = currentPath.value, isHistoryNav = false) 
         }
       }
     } else {
-      // Notifikasi peringatan jika path tidak ditemukan
+      // Notifikasi peringatan jika path benar-benar tidak ditemukan (404/500)
       systemStore.showNotification('Peringatan', `Direktori "${cleanPath}" tidak ditemukan`, 'warning')
       addressInputValue.value = currentPath.value
     }

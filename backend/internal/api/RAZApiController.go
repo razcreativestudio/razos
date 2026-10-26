@@ -1230,6 +1230,9 @@ func handleListFiles(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	if files == nil {
+		files = []filemanager.FileItem{}
+	}
 	c.JSON(http.StatusOK, files)
 }
 

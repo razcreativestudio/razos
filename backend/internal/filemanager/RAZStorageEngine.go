@@ -187,7 +187,8 @@ func ListDirectory(targetPath string) ([]FileItem, error) {
 		return nil, err
 	}
 
-	var items []FileItem
+	// Inisialisasi slice kosong non-nil agar direktori kosong menghasilkan JSON [] bukan null
+	items := make([]FileItem, 0)
 	for _, entry := range entries {
 		info, err := entry.Info()
 		if err != nil {
