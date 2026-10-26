@@ -335,6 +335,26 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
    - API Server Version: `{"major":3,"minor":3,"patch":5,"prerelease":null}`.
    - Sisa RAM Bebas STB: `1.40 GB` (sangat lega).
 
+---
+
+### Versi: 4.1.3-remote-mcp-access-via-cloudflare-tunnel (Dukungan Akses Global Remote MCP via Cloudflare Tunnel)
+**Waktu Eksekusi:** 2026-10-26 14:22 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah / Kebutuhan Pengguna
+- Pengguna bertanya apakah saat berada di luar rumah (tidak satu jaringan Wi-Fi lokal dengan STB), pembaruan sistem atau perbaikan kerusakan masih bisa dilakukan melalui MCP Antigravity. Pengguna menyediakan domain aktif `server.razos.my.id`.
+
+#### 2. Investigasi & Verifikasi
+- Domain `server.razos.my.id` sudah terhubung aktif ke STB RAZOS melalui Cloudflare Zero Trust Tunnel (`cloudflared`).
+- Uji endpoint: `curl -H 'X-RAZOS-Dev-Token: ...' https://server.razos.my.id/api/v1/dev/status` merespons sukses `HTTP 200 OK` dengan payload telemetri real-time.
+
+#### 3. Rekayasa MCP Server (`RAZDevBridgeMCP.mjs`)
+- Memutakhirkan `RAZDevBridgeMCP.mjs` dengan mekanisme **Smart Dual-Endpoint Failover**:
+  1. **Primary Endpoint:** `https://server.razos.my.id/api/v1/dev` (akses HTTPS aman dari mana saja di seluruh dunia).
+  2. **Fallback Endpoint:** `http://192.168.100.117:8080/api/v1/dev` & `http://192.168.100.117/api/v1/dev` (akses LAN lokal super cepat saat satu Wi-Fi).
+- Jika laptop berada di luar rumah (kafe, kantor, tethering HP), MCP otomatis menggunakan jalur Cloudflare Tunnel tanpa perlu konfigurasi manual.
+- Menyimpan cache endpoint aktif yang berhasil merespons agar request berikutnya tetap cepat.
+
 
 
 
