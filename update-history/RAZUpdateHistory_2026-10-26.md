@@ -528,4 +528,22 @@ Sebelumnya terdapat fitur preferensi dan sistem yang belum terhubung di antarmuk
 2. **Kompilasi Ulang Frontend:**
    - Menjalankan build produksi Vite (`dist/assets/index-C2-1B4rm.js` & `dist/assets/index-LWZ0ZST2.css`) terverifikasi 100% sukses tanpa error dalam 5.5 detik.
 
+---
+
+### Versi: 4.4.1-clean-ribbon-bar (Pembersihan Tombol "+ Baru" Redundan di Ribbon Bar File Manager)
+**Waktu Eksekusi:** 2026-10-26 21:46 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah / Kebutuhan Pengguna
+- Pengguna meminta agar tombol kecil **"+ Baru ⌵"** yang berada di dalam ribbon bar File Manager (di sebelah tab filter `Semua`, `Folder`, dll.) dihapus karena redundan dan tidak diperlukan.
+
+#### 2. Solusi & Rekayasa Kode
+1. **Pembersihan Toolbar Ribbon (`frontend/src/views/RAZFileManagerView.vue`):**
+   - Menghapus tombol kecil `+ Baru ⌵` beserta dropdown menu dan divider separator `h-4 w-px bg-slate-800/80` pada ribbon bar.
+   - Tab filter (`Semua`, `Folder`, `Gambar`, `Video`, `Audio`, `Dokumen`, `Kode`) kini tampil bersih dan rapi merapat ke kiri.
+   - Aksi pembuatan folder baru, file baru, dan upload tetap tersedia secara lengkap dan mudah diakses melalui tombol utama `+ Baru` di sidebar kiri serta melalui klik kanan (context menu kanvas).
+2. **Kompilasi Ulang Frontend:**
+   - Menjalankan build produksi Vite (`dist/assets/index-BtegYGoI.js` & `dist/assets/index-DSiB8-2j.css`) terverifikasi 100% sukses tanpa error dalam 5.61 detik.
+
+
 

@@ -1,13 +1,14 @@
 <script setup>
 /**
  * RAZOS Google Drive-Style Storage & Windows File Explorer Hybrid File Manager
- * Updated: 2026-10-26 20:50:00 (v3.7.0 - Windows Multi-Selection, Dedicated Context Menu, and Custom Delete Confirmation Modal)
+ * Updated: 2026-10-26 21:45:00 (v3.7.2 - Clean Ribbon: Removed redundant ribbon "+ Baru" button, retaining main sidebar action & context menus)
  * Deskripsi: Antarmuka File Manager tingkat lanjut memadukan arsitektur Windows File Explorer dan Google Drive:
  * - Windows Multi-Selection Engine: Pemilihan multi-berkas dengan Ctrl/Cmd+Click (toggle) dan Shift+Click (range selection).
  * - Keyboard Shortcuts: Ctrl+A (Select All), Escape (Clear Selection), Delete (Hapus Terpilih dengan Konfirmasi).
- * - Dedicated Context Menu: Menu konteks kontekstual untuk berkas tunggal, multi-berkas terpilih (batch actions), dan kanvas area kosong.
+ * - Dedicated Context Menu: Menu konteks kontekstual khusus Folder vs Berkas vs Kanvas area kosong.
+ * - Windows 11 Sort Suite: Dropdown toolbar Sort by & context submenu pengurutan berkas.
  * - Custom Modal Konfirmasi Hapus: Konfirmasi hapus berdesain Glassmorphism Slate-900 (Zero Native Browser Confirm/Alert).
- * - New Action Suite (+ Baru Dropdown): Pembuatan folder baru, file baru, upload file/folder/ZIP auto-extract.
+ * - Main New Action Suite: Pembuatan folder baru, file baru, upload file/folder/ZIP auto-extract di sidebar kiri & menu klik kanan.
  * - Deep RAZ Studio Code Integration: Membuka berkas kode/teks langsung di Sublime/Notepad++ complex editor.
  * - Fluid Responsive Grid & List View: Auto-fill layout yang tidak pernah gepeng dengan status bar lengkap.
  */
@@ -1730,100 +1731,8 @@ onMounted(async () => {
 
       <!-- FILTER & VIEW MODE RIBBON BAR -->
       <div class="h-10 border-b border-slate-800/60 px-3 sm:px-4 flex items-center justify-between gap-2 sm:gap-3 bg-slate-900/30 text-xs font-mono shrink-0">
-        <!-- Quick Action "+ Baru" (Always Visible on Mobile / Small Windows) & Filter Tabs -->
-        <div class="flex items-center gap-2 overflow-x-auto py-0.5" style="scrollbar-width: none;">
-          <!-- Ribbon "+ Baru" Button with Dropdown (RBAC Guarded) -->
-          <div v-if="!authStore.canWriteStorage()" class="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800/60 border border-slate-700/50 text-slate-400 font-medium rounded-lg text-xs opacity-80 cursor-not-allowed shrink-0" title="Akun Anda hanya memiliki izin baca (Read-Only)">
-            <Lock class="w-3.5 h-3.5 text-amber-400" />
-            <span class="hidden sm:inline">Read Only</span>
-          </div>
-          <div v-else class="relative shrink-0">
-            <button
-              @click.stop="showRibbonNewMenu = !showRibbonNewMenu"
-              class="flex items-center gap-1.5 px-2.5 py-1 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-lg text-xs shadow-sm transition active:scale-95"
-              title="Buat folder, berkas teks/kode, atau unggah data"
-            >
-              <Plus class="w-3.5 h-3.5" />
-              <span>Baru</span>
-              <ChevronDown class="w-3 h-3 ml-0.5 opacity-80" />
-            </button>
-
-            <!-- Dropdown Menu -->
-            <div
-              v-if="showRibbonNewMenu"
-              class="absolute top-9 left-0 w-64 bg-slate-900/95 border border-slate-700/80 rounded-2xl shadow-2xl z-50 p-1.5 flex flex-col gap-1 text-xs font-sans text-slate-200 backdrop-blur-xl animate-in fade-in zoom-in-95"
-            >
-              <button
-                @click="() => { showRibbonNewMenu = false; showNewFolderModal = true; }"
-                class="w-full px-3 py-2 rounded-xl hover:bg-slate-800 flex items-center gap-3 transition text-left"
-              >
-                <div class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
-                  <FolderPlus class="w-4 h-4" />
-                </div>
-                <div>
-                  <span class="font-medium block text-slate-200">Folder Baru</span>
-                  <span class="text-[10px] text-slate-400 block">Buat folder di direktori aktif</span>
-                </div>
-              </button>
-
-              <button
-                @click="() => { showRibbonNewMenu = false; showNewFileModal = true; }"
-                class="w-full px-3 py-2 rounded-xl hover:bg-slate-800 flex items-center gap-3 transition text-left"
-              >
-                <div class="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-                  <FilePlus class="w-4 h-4" />
-                </div>
-                <div>
-                  <span class="font-medium block text-slate-200">File Baru (Teks/Kode)</span>
-                  <span class="text-[10px] text-slate-400 block">Buat & langsung buka di Editor</span>
-                </div>
-              </button>
-
-              <div class="h-px bg-slate-800 my-0.5"></div>
-
-              <button
-                @click="() => { showRibbonNewMenu = false; triggerUpload('file'); }"
-                class="w-full px-3 py-2 rounded-xl hover:bg-slate-800 flex items-center gap-3 transition text-left"
-              >
-                <div class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
-                  <FileUp class="w-4 h-4" />
-                </div>
-                <div>
-                  <span class="font-medium block text-slate-200">Upload File</span>
-                  <span class="text-[10px] text-slate-400 block">Unggah satu atau banyak berkas</span>
-                </div>
-              </button>
-
-              <button
-                @click="() => { showRibbonNewMenu = false; triggerUpload('folder'); }"
-                class="w-full px-3 py-2 rounded-xl hover:bg-slate-800 flex items-center gap-3 transition text-left"
-              >
-                <div class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
-                  <FolderUp class="w-4 h-4" />
-                </div>
-                <div>
-                  <span class="font-medium block text-slate-200">Upload Folder</span>
-                  <span class="text-[10px] text-slate-400 block">Unggah folder beserta seluruh isinya</span>
-                </div>
-              </button>
-
-              <button
-                @click="() => { showRibbonNewMenu = false; triggerUpload('zip'); }"
-                class="w-full px-3 py-2 rounded-xl hover:bg-slate-800 flex items-center gap-3 transition text-left"
-              >
-                <div class="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
-                  <Archive class="w-4 h-4" />
-                </div>
-                <div>
-                  <span class="font-medium block text-purple-300">Upload ZIP (Auto Extract)</span>
-                  <span class="text-[10px] text-slate-400 block">Unggah & langsung diekstrak</span>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          <div class="h-4 w-px bg-slate-800/80 shrink-0"></div>
-
+        <!-- Filter Tabs Media Viewers -->
+        <div class="flex items-center gap-1.5 overflow-x-auto py-0.5" style="scrollbar-width: none;">
           <!-- Filter Tabs Media Viewers -->
           <button
             v-for="f in [{ id: 'all', label: 'Semua' }, { id: 'folders', label: 'Folder' }, { id: 'images', label: 'Gambar' }, { id: 'video', label: 'Video' }, { id: 'audio', label: 'Audio' }, { id: 'docs', label: 'Dokumen' }, { id: 'code', label: 'Kode' }]"
