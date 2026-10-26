@@ -735,6 +735,34 @@ func handleGetDatabaseTables(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "db query required"})
 		return
 	}
+
+	// Dukungan PostgreSQL Engine jika database adalah immich atau postgres di container Docker
+	if db == "immich" || db == "postgres" {
+		cmd := exec.Command("docker", "exec", "razos-postgres", "psql", "-U", "postgres", "-d", db, "-t", "-A", "-c",
+			"SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name;")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": string(out)})
+			return
+		}
+		var tables []map[string]interface{}
+		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+		for _, line := range lines {
+			tName := strings.TrimSpace(line)
+			if tName == "" {
+				continue
+			}
+			tables = append(tables, map[string]interface{}{
+				"name":      tName,
+				"rows":      0,
+				"engine":    "PostgreSQL",
+				"collation": "UTF-8",
+			})
+		}
+		c.JSON(http.StatusOK, gin.H{"success": true, "db": db, "tables": tables})
+		return
+	}
+
 	_, rows, _, err := executeMysqlQuery(db, fmt.Sprintf("SHOW TABLE STATUS FROM `%s`;", db))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
@@ -774,6 +802,48 @@ func handleGetTableData(c *gin.Context) {
 
 	if db == "" || table == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "db and table required"})
+		return
+	}
+
+	// Dukungan PostgreSQL Engine
+	if db == "immich" || db == "postgres" {
+		colCmd := exec.Command("docker", "exec", "razos-postgres", "psql", "-U", "postgres", "-d", db, "-t", "-A", "-c",
+			fmt.Sprintf("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='%s' ORDER BY ordinal_position;", table))
+		colOut, _ := colCmd.CombinedOutput()
+		var columns []string
+		for _, col := range strings.Split(strings.TrimSpace(string(colOut)), "\n") {
+			trimmed := strings.TrimSpace(col)
+			if trimmed != "" {
+				columns = append(columns, trimmed)
+			}
+		}
+
+		cntCmd := exec.Command("docker", "exec", "razos-postgres", "psql", "-U", "postgres", "-d", db, "-t", "-A", "-c",
+			fmt.Sprintf("SELECT count(*) FROM \"%s\";", table))
+		cntOut, _ := cntCmd.CombinedOutput()
+		total, _ := strconv.Atoi(strings.TrimSpace(string(cntOut)))
+
+		qCmd := exec.Command("docker", "exec", "razos-postgres", "psql", "-U", "postgres", "-d", db, "-t", "-A", "-c",
+			fmt.Sprintf("SELECT COALESCE(json_agg(t), '[]'::json) FROM (SELECT * FROM \"%s\" LIMIT %d OFFSET %d) t;", table, limit, offset))
+		qOut, _ := qCmd.CombinedOutput()
+		var dataRows []map[string]interface{}
+		_ = json.Unmarshal([]byte(strings.TrimSpace(string(qOut))), &dataRows)
+		if dataRows == nil {
+			dataRows = []map[string]interface{}{}
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"success":    true,
+			"db":         db,
+			"table":      table,
+			"primaryKey": "id",
+			"columns":    columns,
+			"rows":       dataRows,
+			"total":      total,
+			"page":       page,
+			"limit":      limit,
+			"totalPages": (total + limit - 1) / limit,
+		})
 		return
 	}
 
@@ -831,6 +901,36 @@ func handleGetTableStructure(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "db and table required"})
 		return
 	}
+
+	if db == "immich" || db == "postgres" {
+		colCmd := exec.Command("docker", "exec", "razos-postgres", "psql", "-U", "postgres", "-d", db, "-t", "-A", "-c",
+			fmt.Sprintf("SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema='public' AND table_name='%s' ORDER BY ordinal_position;", table))
+		colOut, _ := colCmd.CombinedOutput()
+		var cols []map[string]interface{}
+		for _, line := range strings.Split(strings.TrimSpace(string(colOut)), "\n") {
+			parts := strings.Split(line, "|")
+			if len(parts) >= 2 {
+				nullable := "NO"
+				if len(parts) >= 3 {
+					nullable = parts[2]
+				}
+				defVal := ""
+				if len(parts) >= 4 {
+					defVal = parts[3]
+				}
+				cols = append(cols, map[string]interface{}{
+					"field":   parts[0],
+					"type":    parts[1],
+					"null":    nullable,
+					"default": defVal,
+					"key":     "",
+				})
+			}
+		}
+		c.JSON(http.StatusOK, gin.H{"success": true, "db": db, "table": table, "columns": cols})
+		return
+	}
+
 	_, rows, _, err := executeMysqlQuery(db, fmt.Sprintf("SHOW FULL COLUMNS FROM `%s`.`%s`;", db, table))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
@@ -859,6 +959,25 @@ func handleDatabaseQuery(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || strings.TrimSpace(body.Query) == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Query required"})
+		return
+	}
+
+	if body.DB == "immich" || body.DB == "postgres" {
+		startTime := time.Now()
+		cmd := exec.Command("docker", "exec", "razos-postgres", "psql", "-U", "postgres", "-d", body.DB, "-c", body.Query)
+		out, err := cmd.CombinedOutput()
+		elapsed := time.Since(startTime).Milliseconds()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": string(out), "timeMs": elapsed})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success":  true,
+			"columns":  []string{"Output"},
+			"rows":     []map[string]interface{}{{"Output": string(out)}},
+			"rowCount": 1,
+			"timeMs":   elapsed,
+		})
 		return
 	}
 	cols, rows, elapsed, err := executeMysqlQuery(body.DB, body.Query)

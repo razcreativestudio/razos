@@ -8,11 +8,11 @@ package database
 
 import (
 	"context"
+	"fmt"
+	"os/exec"
 
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
-	"github.com/docker/go-connections/nat"
 )
 
 // DatabaseEntry menyimpan metadata database yang terdaftar
@@ -27,33 +27,76 @@ type DatabaseEntry struct {
 	CreatedAt string `json:"created_at"`
 }
 
-// Inisialisasi daftar database dalam memori/SQLite
+// Inisialisasi daftar database cadangan
 var registeredDatabases = []DatabaseEntry{
 	{
 		ID:        1,
-		Name:      "razos_primary",
-		Engine:    "mariadb",
-		User:      "raz_admin",
-		Port:      3306,
-		Host:      "127.0.0.1",
-		Size:      "12.4 MB",
-		CreatedAt: "2026-10-08",
-	},
-	{
-		ID:        2,
-		Name:      "razos_pg_master",
+		Name:      "immich",
 		Engine:    "postgres",
 		User:      "postgres",
 		Port:      5432,
 		Host:      "127.0.0.1",
-		Size:      "28.1 MB",
-		CreatedAt: "2026-10-08",
+		Size:      "PostgreSQL",
+		CreatedAt: "Aktif",
 	},
 }
 
-// GetDatabases mengambil seluruh database terdaftar
+// GetDatabases mengambil seluruh database aktif yang terdeteksi di Docker STB
 func GetDatabases() []DatabaseEntry {
-	return registeredDatabases
+	var list []DatabaseEntry
+	idCounter := 1
+
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err == nil {
+		defer cli.Close()
+		containers, _ := cli.ContainerList(context.Background(), types.ContainerListOptions{All: true})
+		hasPostgres := false
+		hasMariaDB := false
+
+		for _, c := range containers {
+			for _, name := range c.Names {
+				if name == "/razos-postgres" && c.State == "running" {
+					hasPostgres = true
+				}
+				if (name == "/razos-mariadb" || name == "/razos-mysql") && c.State == "running" {
+					hasMariaDB = true
+				}
+			}
+		}
+
+		if hasPostgres {
+			list = append(list, DatabaseEntry{
+				ID:        idCounter,
+				Name:      "immich",
+				Engine:    "postgres",
+				User:      "postgres",
+				Port:      5432,
+				Host:      "127.0.0.1",
+				Size:      "PostgreSQL",
+				CreatedAt: "Aktif (Docker)",
+			})
+			idCounter++
+		}
+
+		if hasMariaDB {
+			list = append(list, DatabaseEntry{
+				ID:        idCounter,
+				Name:      "razos_primary",
+				Engine:    "mariadb",
+				User:      "root",
+				Port:      3306,
+				Host:      "127.0.0.1",
+				Size:      "MariaDB",
+				CreatedAt: "Aktif (Docker)",
+			})
+			idCounter++
+		}
+	}
+
+	if len(list) == 0 {
+		return registeredDatabases
+	}
+	return list
 }
 
 // CreateDatabaseRequest payload pembuatan database baru
@@ -79,7 +122,7 @@ func CreateDatabase(req CreateDatabaseRequest) (*DatabaseEntry, error) {
 		Port:      port,
 		Host:      "127.0.0.1",
 		Size:      "0.5 MB",
-		CreatedAt: "2026-10-08",
+		CreatedAt: "2026-10-26",
 	}
 
 	registeredDatabases = append(registeredDatabases, newDB)
@@ -109,23 +152,10 @@ func EnsureAdminerContainer() error {
 		}
 	}
 
-	natPort, _ := nat.NewPort("tcp", "8080")
-	resp, err := cli.ContainerCreate(ctx, &container.Config{
-		Image: "adminer:latest",
-	}, &container.HostConfig{
-		PortBindings: nat.PortMap{
-			natPort: []nat.PortBinding{
-				{HostIP: "0.0.0.0", HostPort: "8088"},
-			},
-		},
-		RestartPolicy: container.RestartPolicy{Name: "always"},
-		Resources: container.Resources{
-			Memory: 64 * 1024 * 1024, // Adminer ultra ringan 64 MB RAM
-		},
-	}, nil, nil, containerName)
-
-	if err != nil {
-		return err
+	// Gunakan CLI docker run agar otomatis terhubung ke network razos-apps-net dan port 8088
+	cmd := exec.Command("docker", "run", "-d", "--name", containerName, "--network", "razos-apps-net", "-p", "8088:8080", "--restart", "always", "-m", "64M", "adminer:latest")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("gagal menjalankan adminer: %s (%v)", string(out), err)
 	}
-	return cli.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{})
+	return nil
 }
