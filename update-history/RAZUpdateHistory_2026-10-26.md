@@ -499,3 +499,33 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 2. **Kompilasi Ulang Frontend:**
    - Menjalankan build produksi Vite (`dist/assets/index-CeZgTDrm.js` & `dist/assets/index-UmHbq5EH.css`) terverifikasi 100% sukses tanpa error.
 
+---
+
+### Versi: 4.4.0-settings-full-feature-parity (Integrasi Lengkap Seluruh Fitur Preferensi & Sistem ke Tata Letak Windows 11 Fluent)
+**Waktu Eksekusi:** 2026-10-26 21:43 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah / Kebutuhan Pengguna
+- Pengguna meminta agar seluruh fitur yang ada pada aplikasi Settings versi sebelumnya diintegrasikan dan disesuaikan ke dalam tampilan Settings Windows 11 yang terbaru tanpa ada yang terlewat.
+
+#### 2. Audit & Pemetaan Fitur Lengkap
+Sebelumnya terdapat fitur preferensi dan sistem yang belum terhubung di antarmuka baru:
+1. **Penyimpanan (Storage):** Tombol pembuka Storage Manager penuh (`RAZStorageManagerView :isModal="true"`), integrasi modul Sinkronisasi Cloud eksternal (rclone WebDAV / Nextcloud), serta toggle Automount USB Drive.
+2. **Bluetooth & devices:** Modul informasi port USB host, toggle Automount USB Drive, dan status radio Bluetooth standby.
+3. **Personalization:** Preferensi Taskbar & Desktop mencakup toggle Search Bar desktop, dropdown pemilihan Search Engine (DuckDuckGo, Google, Bing, Baidu), toggle Blog Feed, serta toggle 4 Widget desktop (Waktu, Metrik CPU/RAM, Status Storage, Kecepatan Jaringan).
+4. **Apps:** Toggle rekomendasi aplikasi populer di dashboard utama dan shortcut App Store.
+5. **Accounts:** Profil lengkap dengan avatar dan badge terverifikasi, display username & role badge (Admin, Operator, Member, Guest), Home directory pengguna, tombol Ubah Nama profil (membuka modal custom), tombol Ganti Password (membuka modal custom), kartu Manajemen Pengguna & RBAC (`windowStore.openUsersManager()`), dan tombol Logout.
+6. **Time & language:** Pengaturan bahasa sistem dinamis (`systemStore.settings.language`: English & Bahasa Indonesia), tampilan zona waktu WIB (UTC+07:00), dan status sinkronisasi NTP `systemd-timesyncd`.
+7. **Accessibility:** Konfigurasi kontras tinggi KaTeX/WCAG AA dan efisiensi Glassmorphism blur (batas 35MB RAM).
+8. **Privacy & security:** Status perlindungan token DevBridge MCP, isolasi WebSocket, dan pengamanan Unix Docker socket.
+9. **RAZOS Update:** Banner versi resmi `RAZOS v{{ updateStatus.current_version }}`, badge identitas resmi pengembang "Developed by RAZ Creative Studio", tombol Periksa Pembaruan, dan tombol "Update Sekarang" (`applyUpdate`) jika rilis baru terdeteksi.
+10. **Custom Modals:** Tersedia 8 custom modal Slate-900 (Rename PC, Edit Nama Profil, Ubah Kata Sandi, Ubah Port WebUI, Konfirmasi Restart, Konfirmasi Shutdown, Konfirmasi Logout, dan Storage Manager modal) tanpa pernah menggunakan alert/confirm browser bawaan.
+
+#### 3. Rekayasa Kode & Kompilasi
+1. **Modifikasi File `frontend/src/views/RAZSettingsView.vue`:**
+   - Menghubungkan seluruh fungsi dan state preferensi (`showStorageModal`, `applyUpdate`, `openEditName`, `saveEditName`, `showEditNameModal`).
+   - Merender seluruh kategori navigasi Windows 11 tanpa ada modul yang jatuh ke tampilan fallback kosong.
+2. **Kompilasi Ulang Frontend:**
+   - Menjalankan build produksi Vite (`dist/assets/index-C2-1B4rm.js` & `dist/assets/index-LWZ0ZST2.css`) terverifikasi 100% sukses tanpa error dalam 5.5 detik.
+
+

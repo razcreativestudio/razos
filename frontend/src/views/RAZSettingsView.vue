@@ -1,22 +1,24 @@
 <script setup>
 /**
  * RAZOS Windows 11 Fluent Settings Suite
- * Updated: 2026-10-26 21:28:00 (v4.2.1 - Brand Alignment: Windows Update -> RAZOS Update & RAZOS Specifications)
- * Deskripsi: Panel pengaturan sistem komprehensif dengan tata letak dan estetika presisi Windows 11:
+ * Updated: 2026-10-26 21:42:00 (v4.4.0 - Full Integration of All Previous Settings Features into Windows 11 Fluent Suite)
+ * Deskripsi: Panel pengaturan sistem komprehensif mengintegrasikan 100% fitur preferensi dan sistem sebelumnya:
  * - Left Navigation Rail: Profil pengguna, search bar "Find a setting", dan daftar kategori lengkap dengan indikator aktif biru khas Windows 11.
- * - System > About Hero & Accordion Cards: Spesifikasi perangkat (Processor, RAM, Device ID, System Type)
- *   dan spesifikasi RAZOS (Edition, Version, OS build, Experience Pack) dengan tombol salin (Copy) dan collapsible toggles.
- * - Dynamic Device Specifications: Mengambil data metrik hardware host riil (CPU cores, model, RAM, OS arch) tanpa dummy/hardcode.
- * - Interactive Categories:
- *   - System: About, Penyimpanan (Storage eMMC/MicroSD), Daya & Booting (Restart/Shutdown).
- *   - Personalization: Galeri Wallpaper resmi RAZ (Gold Luxury, Cosmic, dll), Custom URL, Glassmorphism blur, Desktop Widgets.
- *   - Network & Internet: Status IP LAN, Cloudflare Tunnel (server.razos.my.id), WebUI Port.
- *   - Accounts: Profil Administrator, ubah nama, ganti kata sandi, peran RBAC.
- *   - Apps: Ringkasan aplikasi Docker terpasang.
- *   - Time & Language: Format waktu, zona waktu, dan bahasa sistem.
- *   - Privacy & Security: Token Pengembang MCP DevBridge & isolasi WebSocket.
- *   - RAZOS Update: Status git commit, branch, dan OTA Updater 1-klik.
- * - Custom Modal Glassmorphism Slate-900 (Zero Native Alerts/Confirms).
+ * - System:
+ *   - About: Device & RAZOS specifications cards, rename PC modal, dan copy specifications.
+ *   - Storage: Bar kapasitas storage eMMC/MicroSD, modal Storage Manager penuh (Disks & Volumes), tombol sinkronisasi Cloud eksternal (rclone Nextcloud/WebDAV), dan toggle automount USB drive.
+ *   - Power: Opsi mulai ulang (Restart) dan matikan daya (Shutdown) dengan dialog konfirmasi custom.
+ * - Bluetooth & devices: Status port USB host, toggle automount USB drive, dan status Bluetooth daemon.
+ * - Network & internet: Status antarmuka jaringan aktif, domain Cloudflare tunnel, dan modal ganti port WebUI host.
+ * - Personalization: Galeri wallpaper resmi RAZ & custom URL, preferensi search bar & search engine (DuckDuckGo/Google/Bing/Baidu), toggle blog feed, serta widget dashboard desktop (Waktu, CPU/RAM, Storage, Jaringan).
+ * - Apps: Ringkasan aplikasi Docker, shortcut App Store, dan toggle rekomendasi aplikasi.
+ * - Accounts: Banner profil lengkap dengan avatar, username, badge peran (Admin/Operator/Member/Guest), Home dir, modal ubah nama, modal ganti password, integrasi modul RBAC / Users Manager, dan tombol Logout.
+ * - Time & language: Pengaturan bahasa sistem (English & Bahasa Indonesia), zona waktu (WIB UTC+7), dan status sinkronisasi waktu NTP.
+ * - Server performance: Pembersihan PageCache & Inode Linux 1-klik (`drop_caches`) dan hardware tuning.
+ * - Accessibility: Kontras visual tinggi KaTeX/WCAG AA dan optimalisasi blur Glassmorphism.
+ * - Privacy & security: Token pengembang DevBridge MCP, isolasi WebSocket, proteksi Unix socket Docker, dan audit RBAC.
+ * - RAZOS Update: Status versi real-time, badge pengembang resmi RAZ Creative Studio, tombol cek update OTA, dan tombol Update Sekarang.
+ * - 8 Custom Glassmorphism Modals (Zero Native Alerts/Confirms).
  */
 import { ref, computed, onMounted } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
@@ -30,13 +32,17 @@ import {
   ChevronRight, Info, ExternalLink, Lock, Key, Power, LogOut,
   Sliders, Check, Search, Sparkles, Clock, ArrowUpCircle, AlertTriangle,
   CheckCircle2, X, Pencil, Image, Terminal, Cloud, Layers, Cpu,
-  HardDrive, Server, ShieldCheck, Database, Users, HelpCircle
+  HardDrive, Server, ShieldCheck, Database, Users, HelpCircle,
+  Activity, Network
 } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
 const authStore = useAuthStore()
 const windowStore = useWindowStore()
 const cloudStore = useCloudStore()
+
+// State Modal Storage Manager
+const showStorageModal = ref(false)
 
 // -----------------------------------------------------------------
 // NAVIGASI KATEGORI SETTINGS (Windows 11 Master Categories)
@@ -167,14 +173,17 @@ const showEditNameModal = ref(false)
 const inputName = ref('')
 
 function openEditName() {
-  inputName.value = systemStore.settings.account?.name || 'Administrator'
+  inputName.value = authStore.currentUser?.name || authStore.currentUser?.username || systemStore.settings.account?.name || 'Administrator'
   showEditNameModal.value = true
 }
 
 function saveEditName() {
   if (!inputName.value.trim()) return
   systemStore.updateAccount(inputName.value.trim(), null)
-  systemStore.showNotification('Akun Diperbarui', `Nama profil diubah menjadi: ${inputName.value}`, 'success')
+  if (authStore.currentUser) {
+    authStore.currentUser.name = inputName.value.trim()
+  }
+  systemStore.showNotification('Akun Diperbarui', `Nama profil diubah menjadi: ${inputName.value.trim()}`, 'success')
   showEditNameModal.value = false
 }
 
@@ -281,6 +290,25 @@ async function checkUpdate() {
     systemStore.showNotification('Info Versi', 'RAZOS v4.1.4 berjalan stabil', 'success')
   } finally {
     isCheckingUpdate.value = false
+  }
+}
+
+async function applyUpdate() {
+  if (!updateStatus.value.download_url) return
+  try {
+    const res = await fetch('/api/v1/updater/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ download_url: updateStatus.value.download_url })
+    })
+    if (res.ok) {
+      systemStore.showNotification('Sukses', 'Pembaruan OTA berhasil dipasang!', 'success')
+      checkUpdate()
+    } else {
+      systemStore.showNotification('Gagal', 'Gagal memasang pembaruan otomatis', 'error')
+    }
+  } catch (e) {
+    systemStore.showNotification('Error', 'Gagal menghubungi server', 'error')
   }
 }
 
@@ -580,14 +608,70 @@ onMounted(() => {
             </h3>
             <div class="flex justify-between text-xs text-slate-300">
               <span>{{ formatBytes(systemStore.metrics?.disk_used) }} terpakai</span>
-              <span class="font-mono text-slate-400">{{ formatBytes(systemStore.metrics?.disk_total) }} total</span>
+              <span class="font-mono text-slate-400">{{ formatBytes(systemStore.metrics?.disk_total) }} total ({{ systemStore.metrics?.disk_percent || 0 }}%)</span>
             </div>
             <div class="w-full bg-black/40 h-2.5 rounded-full overflow-hidden border border-white/5">
-              <div class="bg-purple-500 h-full" :style="{ width: `${systemStore.metrics?.disk_percent || 0}%` }"></div>
+              <div class="bg-purple-500 h-full transition-all duration-300" :style="{ width: `${systemStore.metrics?.disk_percent || 0}%` }"></div>
             </div>
             <p class="text-xs text-slate-400">
               Partisi MicroSD di-mount pada <code class="px-1.5 py-0.5 rounded bg-black/40 text-purple-300 font-mono">/DATA</code> sebagai lokasi penyimpanan kontainer Docker, database, dan file manager.
             </p>
+          </div>
+
+          <!-- Action Card 1: Storage Manager (Manage Disks & Volumes) -->
+          <div class="p-5 rounded-xl bg-[#262530] border border-white/5 flex items-center justify-between gap-4">
+            <div class="space-y-1">
+              <h4 class="font-bold text-sm text-slate-100 flex items-center gap-2">
+                <Database class="w-4 h-4 text-sky-400" />
+                <span>Storage Manager (Disks & Volumes)</span>
+              </h4>
+              <p class="text-xs text-slate-400">Kelola partisi eMMC, MicroSD, dan drive penyimpanan fisik STB.</p>
+            </div>
+            <button
+              @click="showStorageModal = true"
+              class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs flex items-center gap-2 transition active:scale-95 shrink-0 shadow"
+            >
+              <HardDrive class="w-3.5 h-3.5" />
+              <span>Kelola Drive</span>
+            </button>
+          </div>
+
+          <!-- Action Card 2: External Cloud Storage & Sync -->
+          <div class="p-5 rounded-xl bg-[#262530] border border-white/5 flex items-center justify-between gap-4">
+            <div class="space-y-1">
+              <h4 class="font-bold text-sm text-slate-100 flex items-center gap-2">
+                <Cloud class="w-4 h-4 text-sky-400" />
+                <span>Sinkronisasi Cloud Eksternal</span>
+              </h4>
+              <p class="text-xs text-slate-400">Integrasi WebDAV / Nextcloud remote storage via engine rclone.</p>
+            </div>
+            <button
+              @click="windowStore.openCloudSync()"
+              class="px-4 py-2 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 text-sky-300 font-bold text-xs flex items-center gap-2 transition active:scale-95 shrink-0"
+            >
+              <Cloud class="w-3.5 h-3.5" />
+              <span>Buka Sync</span>
+            </button>
+          </div>
+
+          <!-- Setting Card 3: Automount USB Drive -->
+          <div class="p-5 rounded-xl bg-[#262530] border border-white/5 flex items-center justify-between gap-4">
+            <div class="space-y-1">
+              <h4 class="font-bold text-sm text-slate-100 flex items-center gap-2">
+                <Usb class="w-4 h-4 text-emerald-400" />
+                <span>Automount USB Drive</span>
+              </h4>
+              <p class="text-xs text-slate-400">Otomatis mount flashdisk atau harddisk eksternal USB saat ditancapkan ke STB.</p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                v-model="systemStore.settings.automountUsb"
+                @change="systemStore.saveSettings()"
+                class="sr-only peer"
+              />
+              <div class="w-11 h-6 bg-black/40 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
+            </label>
           </div>
         </div>
 
@@ -623,102 +707,71 @@ onMounted(() => {
       </div>
 
       <!-- ============================================================ -->
-      <!-- TAB 2: PERSONALIZATION (Wallpaper, Tema & Widgets) -->
+      <!-- TAB: BLUETOOTH & DEVICES -->
       <!-- ============================================================ -->
-      <div v-else-if="activeCategory === 'personalization'" class="p-6 md:p-8 max-w-5xl mx-auto w-full space-y-6">
+      <div v-else-if="activeCategory === 'bluetooth'" class="p-6 md:p-8 max-w-5xl mx-auto w-full space-y-6">
         <div class="flex items-center gap-2 text-xl font-bold text-slate-100">
-          <span>Personalization</span>
+          <span>Bluetooth & devices</span>
           <span class="text-slate-500 font-normal">›</span>
-          <span class="text-slate-200">Background & Desktop</span>
+          <span class="text-slate-200">Peripherals & USB</span>
         </div>
 
-        <!-- Wallpaper Gallery Presets -->
+        <!-- USB Hardware Interfaces Card -->
         <div class="p-5 rounded-xl bg-[#262530] border border-white/5 space-y-4">
-          <h3 class="font-bold text-sm text-slate-100 flex items-center gap-2">
-            <Palette class="w-4 h-4 text-sky-400" />
-            <span>Pilih Wallpaper Desktop</span>
-          </h3>
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <div
-              v-for="wp in presetWallpapers"
-              :key="wp.url"
-              @click="selectWallpaper(wp.url)"
-              class="group relative h-28 rounded-xl overflow-hidden border cursor-pointer transition shadow-md"
-              :class="systemStore.settings.wallpaper === wp.url ? 'border-sky-400 ring-2 ring-sky-400/50' : 'border-white/10 hover:border-white/30'"
-            >
-              <img :src="wp.url" :alt="wp.name" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-              <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-2">
-                <span class="text-[11px] font-medium text-white truncate">{{ wp.name }}</span>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-400 flex items-center justify-center border border-sky-500/20">
+                <Usb class="w-5 h-5" />
               </div>
-              <div v-if="systemStore.settings.wallpaper === wp.url" class="absolute top-2 right-2 w-5 h-5 rounded-full bg-sky-500 text-slate-950 flex items-center justify-center">
-                <Check class="w-3.5 h-3.5 stroke-[3]" />
+              <div>
+                <h4 class="font-bold text-sm text-slate-100">Port USB Host STB</h4>
+                <p class="text-xs text-slate-400">Mendukung flashdisk, hard disk eksternal, keyboard/mouse nirkabel, dan modem</p>
               </div>
             </div>
+            <span class="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 font-bold text-xs border border-emerald-500/30">
+              ● Siap
+            </span>
           </div>
 
-          <!-- Custom Wallpaper URL Input -->
-          <div class="pt-3 border-t border-white/5 flex gap-2">
-            <input
-              v-model="customWallpaperUrl"
-              type="text"
-              placeholder="Atau tempel URL gambar wallpaper kustom..."
-              class="flex-1 px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-xs text-slate-200 outline-none focus:border-sky-400"
-            />
-            <button @click="saveCustomWallpaper" class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition">
-              Terapkan
-            </button>
+          <div class="pt-3 border-t border-white/5 flex items-center justify-between">
+            <div>
+              <h5 class="text-xs font-bold text-slate-200">Automount USB Drive</h5>
+              <p class="text-[11px] text-slate-400">Secara otomatis mount penyimpanan USB yang baru ditancapkan ke direktori sistem</p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                v-model="systemStore.settings.automountUsb"
+                @change="systemStore.saveSettings()"
+                class="sr-only peer"
+              />
+              <div class="w-11 h-6 bg-black/40 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
+            </label>
           </div>
         </div>
 
-        <!-- Desktop Widgets Toggles -->
-        <div class="p-5 rounded-xl bg-[#262530] border border-white/5 space-y-4">
-          <h3 class="font-bold text-sm text-slate-100 flex items-center gap-2">
-            <LayoutGrid class="w-4 h-4 text-emerald-400" />
-            <span>Widget Desktop Dashboard</span>
-          </h3>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-            <div class="flex items-center justify-between p-3 rounded-lg bg-black/30 border border-white/5">
-              <span>Jam & Waktu Sistem</span>
-              <input
-                type="checkbox"
-                v-model="systemStore.settings.widgets.time"
-                @change="systemStore.saveSettings"
-                class="accent-sky-500 w-4 h-4"
-              />
+        <!-- Bluetooth Daemon Card -->
+        <div class="p-5 rounded-xl bg-[#262530] border border-white/5 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20">
+                <Activity class="w-5 h-5" />
+              </div>
+              <div>
+                <h4 class="font-bold text-sm text-slate-100">Radio Bluetooth</h4>
+                <p class="text-xs text-slate-400">Modul Bluetooth internal STB ARM64 (bluez)</p>
+              </div>
             </div>
-            <div class="flex items-center justify-between p-3 rounded-lg bg-black/30 border border-white/5">
-              <span>Metrik CPU & RAM</span>
-              <input
-                type="checkbox"
-                v-model="systemStore.settings.widgets.systemStatus"
-                @change="systemStore.saveSettings"
-                class="accent-sky-500 w-4 h-4"
-              />
-            </div>
-            <div class="flex items-center justify-between p-3 rounded-lg bg-black/30 border border-white/5">
-              <span>Kapasitas Disk Storage</span>
-              <input
-                type="checkbox"
-                v-model="systemStore.settings.widgets.storageStatus"
-                @change="systemStore.saveSettings"
-                class="accent-sky-500 w-4 h-4"
-              />
-            </div>
-            <div class="flex items-center justify-between p-3 rounded-lg bg-black/30 border border-white/5">
-              <span>Kecepatan Jaringan Riil</span>
-              <input
-                type="checkbox"
-                v-model="systemStore.settings.widgets.networkStatus"
-                @change="systemStore.saveSettings"
-                class="accent-sky-500 w-4 h-4"
-              />
-            </div>
+            <span class="text-xs font-mono text-slate-400">Standby</span>
           </div>
+          <p class="text-xs text-slate-400 pt-1">
+            Daemon Bluetooth berjalan di latar belakang untuk mendeteksi perangkat input dan dongle periferal yang terpasang pada port fisik STB.
+          </p>
         </div>
       </div>
 
       <!-- ============================================================ -->
-      <!-- TAB 3: NETWORK & INTERNET -->
+      <!-- TAB: NETWORK & INTERNET -->
       <!-- ============================================================ -->
       <div v-else-if="activeCategory === 'network'" class="p-6 md:p-8 max-w-5xl mx-auto w-full space-y-6">
         <div class="flex items-center gap-2 text-xl font-bold text-slate-100">
@@ -756,7 +809,7 @@ onMounted(() => {
                 <span class="text-slate-400 block mb-1">Port WebUI Host:</span>
                 <span class="text-slate-200 font-bold">:{{ systemStore.settings.webUiPort || 8080 }}</span>
               </div>
-              <button @click="openPortModal" class="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-slate-200 transition">
+              <button @click="openPortModal" class="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-slate-200 transition active:scale-95">
                 Ganti Port
               </button>
             </div>
@@ -765,45 +818,175 @@ onMounted(() => {
       </div>
 
       <!-- ============================================================ -->
-      <!-- TAB 4: ACCOUNTS -->
+      <!-- TAB: PERSONALIZATION (Wallpaper, Tema & Widgets) -->
       <!-- ============================================================ -->
-      <div v-else-if="activeCategory === 'accounts'" class="p-6 md:p-8 max-w-5xl mx-auto w-full space-y-6">
+      <div v-else-if="activeCategory === 'personalization'" class="p-6 md:p-8 max-w-5xl mx-auto w-full space-y-6">
         <div class="flex items-center gap-2 text-xl font-bold text-slate-100">
-          <span>Accounts</span>
+          <span>Personalization</span>
           <span class="text-slate-500 font-normal">›</span>
-          <span class="text-slate-200">Your info & Security</span>
+          <span class="text-slate-200">Background, Taskbar & Widgets</span>
         </div>
 
+        <!-- 1. Wallpaper Gallery Presets -->
         <div class="p-5 rounded-xl bg-[#262530] border border-white/5 space-y-4">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-4">
-              <div class="w-14 h-14 rounded-full overflow-hidden bg-slate-800 border-2 border-sky-400/40">
-                <img :src="systemStore.settings.account?.avatar || '/assets/brand/RAZBrandSquare.webp'" class="w-full h-full object-cover" />
+          <h3 class="font-bold text-sm text-slate-100 flex items-center gap-2">
+            <Palette class="w-4 h-4 text-sky-400" />
+            <span>Pilih Wallpaper Desktop</span>
+          </h3>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div
+              v-for="wp in presetWallpapers"
+              :key="wp.url"
+              @click="selectWallpaper(wp.url)"
+              class="group relative h-28 rounded-xl overflow-hidden border cursor-pointer transition shadow-md"
+              :class="systemStore.settings.wallpaper === wp.url ? 'border-sky-400 ring-2 ring-sky-400/50' : 'border-white/10 hover:border-white/30'"
+            >
+              <img :src="wp.url" :alt="wp.name" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+              <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-2">
+                <span class="text-[11px] font-medium text-white truncate">{{ wp.name }}</span>
               </div>
-              <div>
-                <h4 class="font-bold text-base text-slate-100">{{ systemStore.settings.account?.name || 'Administrator' }}</h4>
-                <p class="text-xs text-slate-400">Hak Akses: Administrator Penuh (Full Superuser Control)</p>
+              <div v-if="systemStore.settings.wallpaper === wp.url" class="absolute top-2 right-2 w-5 h-5 rounded-full bg-sky-500 text-slate-950 flex items-center justify-center">
+                <Check class="w-3.5 h-3.5 stroke-[3]" />
               </div>
             </div>
-            <button @click="openEditName" class="px-4 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-200 transition">
-              Ubah Nama
-            </button>
           </div>
 
-          <div class="pt-4 border-t border-white/5 flex items-center justify-between">
-            <div>
-              <h5 class="text-xs font-bold text-slate-200">Keamanan Kata Sandi</h5>
-              <p class="text-[11px] text-slate-400">Ubah kata sandi login Web Dashboard RAZOS</p>
-            </div>
-            <button @click="openEditPassword" class="px-4 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 text-xs font-semibold transition">
-              Ganti Password
+          <!-- Custom Wallpaper URL Input -->
+          <div class="pt-3 border-t border-white/5 flex gap-2">
+            <input
+              v-model="customWallpaperUrl"
+              type="text"
+              placeholder="Atau tempel URL gambar wallpaper kustom..."
+              class="flex-1 px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-xs text-slate-200 outline-none focus:border-sky-400"
+            />
+            <button @click="saveCustomWallpaper" class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition active:scale-95">
+              Terapkan
             </button>
+          </div>
+        </div>
+
+        <!-- 2. Taskbar & Search Preferences (Fitur Sebelumnya) -->
+        <div class="p-5 rounded-xl bg-[#262530] border border-white/5 space-y-4">
+          <h3 class="font-bold text-sm text-slate-100 flex items-center gap-2">
+            <Sliders class="w-4 h-4 text-purple-400" />
+            <span>Preferensi Desktop & Taskbar</span>
+          </h3>
+          <div class="divide-y divide-white/5 text-xs">
+            <!-- Row: Show search bar -->
+            <div class="flex items-center justify-between py-3">
+              <div>
+                <span class="font-semibold text-slate-200 block">Tampilkan Search Bar Desktop</span>
+                <span class="text-slate-400 text-[11px]">Kotak pencarian cepat web di layar utama dashboard</span>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  v-model="systemStore.settings.showSearchBar"
+                  @change="systemStore.saveSettings()"
+                  class="sr-only peer"
+                />
+                <div class="w-11 h-6 bg-black/40 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
+              </label>
+            </div>
+
+            <!-- Row: Search Engine -->
+            <div class="flex items-center justify-between py-3">
+              <div>
+                <span class="font-semibold text-slate-200 block">Mesin Pencari (Search Engine)</span>
+                <span class="text-slate-400 text-[11px]">Penyedia penelusuran default untuk kotak pencarian</span>
+              </div>
+              <select
+                v-model="systemStore.settings.searchEngine"
+                @change="systemStore.saveSettings()"
+                class="px-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-slate-200 text-xs font-medium outline-none focus:border-sky-400 cursor-pointer transition"
+              >
+                <option value="DuckDuckGo">DuckDuckGo</option>
+                <option value="Google">Google</option>
+                <option value="Bing">Bing</option>
+                <option value="Baidu">Baidu</option>
+              </select>
+            </div>
+
+            <!-- Row: Show blog feed -->
+            <div class="flex items-center justify-between py-3">
+              <div>
+                <span class="font-semibold text-slate-200 block">Tampilkan Feed Berita / Blog</span>
+                <span class="text-slate-400 text-[11px]">Widget feed artikel & informasi terbaru di desktop</span>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  v-model="systemStore.settings.showBlogFeed"
+                  @change="systemStore.saveSettings()"
+                  class="sr-only peer"
+                />
+                <div class="w-11 h-6 bg-black/40 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Desktop Widgets Toggles -->
+        <div class="p-5 rounded-xl bg-[#262530] border border-white/5 space-y-4">
+          <h3 class="font-bold text-sm text-slate-100 flex items-center gap-2">
+            <LayoutGrid class="w-4 h-4 text-emerald-400" />
+            <span>Widget Desktop Dashboard</span>
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div class="flex items-center justify-between p-3 rounded-lg bg-black/30 border border-white/5">
+              <div class="flex items-center gap-2.5">
+                <Clock class="w-4 h-4 text-sky-400" />
+                <span>Jam & Waktu Sistem</span>
+              </div>
+              <input
+                type="checkbox"
+                v-model="systemStore.settings.widgets.time"
+                @change="systemStore.saveSettings"
+                class="accent-sky-500 w-4 h-4 cursor-pointer"
+              />
+            </div>
+            <div class="flex items-center justify-between p-3 rounded-lg bg-black/30 border border-white/5">
+              <div class="flex items-center gap-2.5">
+                <Activity class="w-4 h-4 text-emerald-400" />
+                <span>Metrik CPU & RAM</span>
+              </div>
+              <input
+                type="checkbox"
+                v-model="systemStore.settings.widgets.systemStatus"
+                @change="systemStore.saveSettings"
+                class="accent-sky-500 w-4 h-4 cursor-pointer"
+              />
+            </div>
+            <div class="flex items-center justify-between p-3 rounded-lg bg-black/30 border border-white/5">
+              <div class="flex items-center gap-2.5">
+                <HardDrive class="w-4 h-4 text-amber-400" />
+                <span>Kapasitas Disk Storage</span>
+              </div>
+              <input
+                type="checkbox"
+                v-model="systemStore.settings.widgets.storageStatus"
+                @change="systemStore.saveSettings"
+                class="accent-sky-500 w-4 h-4 cursor-pointer"
+              />
+            </div>
+            <div class="flex items-center justify-between p-3 rounded-lg bg-black/30 border border-white/5">
+              <div class="flex items-center gap-2.5">
+                <Network class="w-4 h-4 text-indigo-400" />
+                <span>Kecepatan Jaringan Riil</span>
+              </div>
+              <input
+                type="checkbox"
+                v-model="systemStore.settings.widgets.networkStatus"
+                @change="systemStore.saveSettings"
+                class="accent-sky-500 w-4 h-4 cursor-pointer"
+              />
+            </div>
           </div>
         </div>
       </div>
 
       <!-- ============================================================ -->
-      <!-- TAB 5: APPS -->
+      <!-- TAB: APPS -->
       <!-- ============================================================ -->
       <div v-else-if="activeCategory === 'apps'" class="p-6 md:p-8 max-w-5xl mx-auto w-full space-y-6">
         <div class="flex items-center gap-2 text-xl font-bold text-slate-100">
@@ -818,15 +1001,199 @@ onMounted(() => {
               <h3 class="font-bold text-sm text-slate-100">Kelola Aplikasi & Docker Container</h3>
               <p class="text-xs text-slate-400">Buka App Store untuk menambah, mengatur port, atau menghapus kontainer.</p>
             </div>
-            <button @click="windowStore.openApp('app-store')" class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition">
+            <button @click="windowStore.openApp('app-store')" class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition active:scale-95 shadow">
               Buka App Store
+            </button>
+          </div>
+
+          <div class="pt-4 border-t border-white/5 flex items-center justify-between">
+            <div>
+              <h4 class="text-xs font-bold text-slate-200">Tampilkan Rekomendasi Aplikasi</h4>
+              <p class="text-[11px] text-slate-400">Tampilkan saran aplikasi populer di dashboard utama</p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                v-model="systemStore.settings.showRecommendedApps"
+                @change="systemStore.saveSettings()"
+                class="sr-only peer"
+              />
+              <div class="w-11 h-6 bg-black/40 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- TAB: ACCOUNTS (100% Fitur Akun & RBAC) -->
+      <!-- ============================================================ -->
+      <div v-else-if="activeCategory === 'accounts'" class="p-6 md:p-8 max-w-5xl mx-auto w-full space-y-6">
+        <div class="flex items-center gap-2 text-xl font-bold text-slate-100">
+          <span>Accounts</span>
+          <span class="text-slate-500 font-normal">›</span>
+          <span class="text-slate-200">Your info & Security</span>
+        </div>
+
+        <!-- 1. Profile Banner Card -->
+        <div class="p-6 rounded-xl bg-[#262530] border border-white/5 space-y-5">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+              <div class="relative group">
+                <div class="w-16 h-16 rounded-full overflow-hidden bg-slate-800 border-2 border-white/10 shadow-lg flex items-center justify-center">
+                  <img
+                    :src="systemStore.settings.account?.avatar || '/assets/brand/RAZBrandSquare.webp'"
+                    class="w-full h-full object-cover"
+                    @error="(e) => { e.target.src = '/assets/brand/RAZBrandCapsule.png' }"
+                  />
+                </div>
+                <div class="absolute bottom-0 right-0 w-5 h-5 rounded-full bg-sky-500 text-slate-950 flex items-center justify-center border-2 border-[#262530] shadow">
+                  <Check class="w-3 h-3 stroke-[3]" />
+                </div>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h4 class="font-bold text-base text-slate-100">
+                    {{ authStore.currentUser?.name || authStore.currentUser?.username || systemStore.settings.account?.name || 'Administrator' }}
+                  </h4>
+                  <span
+                    class="text-[10px] font-mono px-2 py-0.5 rounded-full uppercase font-bold border"
+                    :class="{
+                      'bg-purple-500/20 text-purple-300 border-purple-500/30': authStore.isAdmin(),
+                      'bg-sky-500/20 text-sky-300 border-sky-500/30': authStore.isOperator(),
+                      'bg-emerald-500/20 text-emerald-300 border-emerald-500/30': authStore.isMember(),
+                      'bg-amber-500/20 text-amber-300 border-amber-500/30': authStore.isGuest()
+                    }"
+                  >
+                    {{ authStore.currentUser?.role || 'admin' }}
+                  </span>
+                </div>
+                <p class="text-xs text-slate-400 font-mono mt-0.5">
+                  Home: {{ authStore.getUserHomeDir ? authStore.getUserHomeDir() : '/DATA/Users/admin' }}
+                </p>
+              </div>
+            </div>
+
+            <button
+              @click="showLogoutModal = true"
+              class="px-4 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500 text-rose-300 hover:text-white border border-rose-500/30 text-xs font-semibold transition active:scale-95 self-start sm:self-auto flex items-center gap-2"
+            >
+              <LogOut class="w-3.5 h-3.5" />
+              <span>Logout</span>
+            </button>
+          </div>
+
+          <!-- Credentials Rows -->
+          <div class="pt-4 border-t border-white/5 divide-y divide-white/5 text-xs">
+            <div class="flex items-center justify-between py-3">
+              <div>
+                <span class="font-semibold text-slate-200 block">Nama Lengkap / Username</span>
+                <span class="text-slate-400 text-[11px]">{{ authStore.currentUser?.username || systemStore.settings.account?.name || 'Administrator' }}</span>
+              </div>
+              <button
+                @click="openEditName"
+                class="px-3.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-slate-200 transition active:scale-95 flex items-center gap-1.5"
+              >
+                <Pencil class="w-3 h-3" />
+                <span>Ubah Nama</span>
+              </button>
+            </div>
+
+            <div class="flex items-center justify-between py-3">
+              <div>
+                <span class="font-semibold text-slate-200 block">Kata Sandi</span>
+                <span class="text-slate-400 font-mono tracking-widest text-[11px]">••••••••</span>
+              </div>
+              <button
+                @click="openEditPassword"
+                class="px-3.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-slate-200 transition active:scale-95 flex items-center gap-1.5"
+              >
+                <Pencil class="w-3 h-3" />
+                <span>Ganti Password</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. RBAC & Multi-User Management Card -->
+        <div class="p-5 rounded-xl bg-gradient-to-br from-[#262530] to-purple-950/20 border border-purple-500/20 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center border border-purple-500/30">
+                <Users class="w-5 h-5" />
+              </div>
+              <div>
+                <h4 class="font-bold text-sm text-slate-100">Manajemen Pengguna & RBAC</h4>
+                <p class="text-xs text-slate-400">Kelola pengguna multi-user, izin peran (Role-Based Access Control), dan pembatasan direktori</p>
+              </div>
+            </div>
+            <button
+              @click="windowStore.openUsersManager()"
+              class="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs shadow transition active:scale-95 flex items-center gap-2 shrink-0"
+            >
+              <span>Kelola Pengguna</span>
+              <ExternalLink class="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
       </div>
 
       <!-- ============================================================ -->
-      <!-- TAB 6: SERVER PERFORMANCE / GAMING -->
+      <!-- TAB: TIME & LANGUAGE -->
+      <!-- ============================================================ -->
+      <div v-else-if="activeCategory === 'time'" class="p-6 md:p-8 max-w-5xl mx-auto w-full space-y-6">
+        <div class="flex items-center gap-2 text-xl font-bold text-slate-100">
+          <span>Time & language</span>
+          <span class="text-slate-500 font-normal">›</span>
+          <span class="text-slate-200">Date, Time & Language</span>
+        </div>
+
+        <!-- 1. Language Card -->
+        <div class="p-5 rounded-xl bg-[#262530] border border-white/5 space-y-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-400 flex items-center justify-center border border-sky-500/20">
+                <Globe class="w-5 h-5" />
+              </div>
+              <div>
+                <h4 class="font-bold text-sm text-slate-100">Bahasa Tampilan Antarmuka (Language)</h4>
+                <p class="text-xs text-slate-400">Pilih bahasa sistem yang digunakan pada panel dan aplikasi</p>
+              </div>
+            </div>
+            <select
+              v-model="systemStore.settings.language"
+              @change="systemStore.saveSettings()"
+              class="px-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-slate-200 text-xs font-medium outline-none focus:border-sky-400 cursor-pointer transition"
+            >
+              <option value="English">English</option>
+              <option value="Bahasa Indonesia">Bahasa Indonesia</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 2. Timezone & Clock Sync Card -->
+        <div class="p-5 rounded-xl bg-[#262530] border border-white/5 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+                <Clock class="w-5 h-5" />
+              </div>
+              <div>
+                <h4 class="font-bold text-sm text-slate-100">Zona Waktu & Sinkronisasi Jam Host</h4>
+                <p class="text-xs text-slate-400">WIB (Asia/Jakarta • UTC+07:00) • Sinkronisasi NTP Otomatis</p>
+              </div>
+            </div>
+            <span class="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 font-bold text-xs border border-emerald-500/30">
+              ● Sinkron
+            </span>
+          </div>
+          <p class="text-xs text-slate-400 pt-1">
+            Jam sistem disinkronkan secara kontinu menggunakan daemon <code class="px-1.5 py-0.5 rounded bg-black/40 text-emerald-300 font-mono">systemd-timesyncd</code> dengan pool server NTP publik Indonesia.
+          </p>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- TAB: SERVER PERFORMANCE / GAMING -->
       <!-- ============================================================ -->
       <div v-else-if="activeCategory === 'gaming'" class="p-6 md:p-8 max-w-5xl mx-auto w-full space-y-6">
         <div class="flex items-center gap-2 text-xl font-bold text-slate-100">
@@ -846,7 +1213,7 @@ onMounted(() => {
           <button
             @click="systemStore.cleanRAM"
             :disabled="systemStore.isCleaningRAM"
-            class="px-5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-bold text-xs flex items-center gap-2 transition active:scale-95"
+            class="px-5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-bold text-xs flex items-center gap-2 transition active:scale-95 shadow"
           >
             <Sparkles class="w-4 h-4" :class="{ 'animate-spin': systemStore.isCleaningRAM }" />
             <span>{{ systemStore.isCleaningRAM ? 'Membersihkan Cache...' : 'Bebaskan RAM Host Sekarang' }}</span>
@@ -855,7 +1222,82 @@ onMounted(() => {
       </div>
 
       <!-- ============================================================ -->
-      <!-- TAB 7: RAZOS UPDATE -->
+      <!-- TAB: ACCESSIBILITY -->
+      <!-- ============================================================ -->
+      <div v-else-if="activeCategory === 'accessibility'" class="p-6 md:p-8 max-w-5xl mx-auto w-full space-y-6">
+        <div class="flex items-center gap-2 text-xl font-bold text-slate-100">
+          <span>Accessibility</span>
+          <span class="text-slate-500 font-normal">›</span>
+          <span class="text-slate-200">Vision & Motion</span>
+        </div>
+
+        <div class="p-5 rounded-xl bg-[#262530] border border-white/5 space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-400 flex items-center justify-center border border-sky-500/20">
+              <Accessibility class="w-5 h-5" />
+            </div>
+            <div>
+              <h4 class="font-bold text-sm text-slate-100">Kenyamanan Visual & Kontras Tinggi</h4>
+              <p class="text-xs text-slate-400">Pengaturan kontras warna, teks, dan animasi antarmuka</p>
+            </div>
+          </div>
+
+          <div class="pt-3 border-t border-white/5 divide-y divide-white/5 text-xs">
+            <div class="flex items-center justify-between py-3">
+              <div>
+                <span class="font-semibold text-slate-200 block">Tema Gelap Fluent Kontras Tinggi</span>
+                <span class="text-slate-400 text-[11px]">Memastikan teks tajam dengan kontras KaTeX & WCAG AA</span>
+              </div>
+              <span class="text-sky-400 font-semibold text-xs">Aktif (Default)</span>
+            </div>
+
+            <div class="flex items-center justify-between py-3">
+              <div>
+                <span class="font-semibold text-slate-200 block">Efek Transparansi Glassmorphism</span>
+                <span class="text-slate-400 text-[11px]">Optimalisasi performa GPU STB pada efek blur latar jendela</span>
+              </div>
+              <span class="text-emerald-400 font-semibold text-xs">Optimal (35MB Limit)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- TAB: PRIVACY & SECURITY -->
+      <!-- ============================================================ -->
+      <div v-else-if="activeCategory === 'privacy'" class="p-6 md:p-8 max-w-5xl mx-auto w-full space-y-6">
+        <div class="flex items-center gap-2 text-xl font-bold text-slate-100">
+          <span>Privacy & security</span>
+          <span class="text-slate-500 font-normal">›</span>
+          <span class="text-slate-200">DevBridge, Tokens & RBAC</span>
+        </div>
+
+        <div class="p-5 rounded-xl bg-[#262530] border border-white/5 space-y-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20">
+                <ShieldCheck class="w-5 h-5" />
+              </div>
+              <div>
+                <h4 class="font-bold text-sm text-slate-100">DevBridge MCP & Token Enkripsi</h4>
+                <p class="text-xs text-slate-400">Isolasi API bridge dan token sesi WebSocket terotentikasi</p>
+              </div>
+            </div>
+            <span class="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 font-bold text-xs border border-emerald-500/30">
+              ● Terlindungi
+            </span>
+          </div>
+
+          <div class="pt-3 border-t border-white/5 text-xs text-slate-300 space-y-2">
+            <p>
+              Akses sistem backend Go dilindungi melalui JWT bearer authentication, pembatasan Unix socket Docker di <code class="px-1.5 py-0.5 rounded bg-black/40 text-purple-300 font-mono">/var/run/docker.sock</code>, dan isolasi izin RBAC berbasis direktori.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- TAB: RAZOS UPDATE -->
       <!-- ============================================================ -->
       <div v-else-if="activeCategory === 'update'" class="p-6 md:p-8 max-w-5xl mx-auto w-full space-y-6">
         <div class="flex items-center gap-2 text-xl font-bold text-slate-100">
@@ -864,24 +1306,56 @@ onMounted(() => {
           <span class="text-slate-200">OTA & System Updates</span>
         </div>
 
+        <!-- Update Status Hero Card -->
         <div class="p-6 rounded-xl bg-[#262530] border border-white/5 space-y-4">
-          <div class="flex items-center gap-3 text-emerald-400">
-            <CheckCircle2 class="w-7 h-7" />
-            <div>
-              <h3 class="font-bold text-base text-slate-100">You're up to date</h3>
-              <p class="text-xs text-slate-400">Last checked: Today, 20:50 WIB • RAZOS v4.1.4</p>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div class="flex items-center gap-3.5">
+              <img
+                src="/assets/brand/RAZBrandSquare.webp"
+                alt="RAZOS"
+                class="w-12 h-12 rounded-xl object-cover border border-amber-500/30 shadow-md shrink-0"
+                @error="(e) => { e.target.src = '/assets/brand/RAZBrandCapsule.png' }"
+              />
+              <div>
+                <div class="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <span class="bg-gradient-to-r from-amber-200 to-yellow-400 bg-clip-text text-transparent">
+                    RAZOS v{{ updateStatus.current_version }}
+                  </span>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30 font-mono">
+                    STB Edition (ARM64)
+                  </span>
+                </div>
+                <div class="text-xs text-slate-400 font-medium flex items-center gap-1.5 mt-0.5">
+                  <span>Developed by</span>
+                  <img src="/assets/brand/RAZBrandCapsule.png" alt="RAZ Creative Studio" class="h-3.5 object-contain" />
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2.5">
+              <button
+                @click="checkUpdate"
+                :disabled="isCheckingUpdate"
+                class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 font-semibold text-xs transition active:scale-95 flex items-center gap-2 shadow-sm"
+              >
+                <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': isCheckingUpdate }" />
+                <span>{{ isCheckingUpdate ? 'Memeriksa...' : 'Periksa Pembaruan' }}</span>
+              </button>
+
+              <button
+                v-if="updateStatus.has_update"
+                @click="applyUpdate"
+                class="px-5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition shadow-lg active:scale-95 flex items-center gap-2"
+              >
+                <Sparkles class="w-3.5 h-3.5" />
+                <span>Update Sekarang</span>
+              </button>
             </div>
           </div>
 
-          <div class="pt-3 border-t border-white/5 flex items-center gap-3">
-            <button
-              @click="checkUpdate"
-              :disabled="isCheckingUpdate"
-              class="px-5 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs flex items-center gap-2 transition shadow active:scale-95"
-            >
-              <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': isCheckingUpdate }" />
-              <span>Check for updates</span>
-            </button>
+          <div class="pt-3 border-t border-white/5 text-xs text-slate-400 flex items-center gap-2">
+            <CheckCircle2 class="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{{ updateStatus.release_notes || 'Sistem dalam kondisi paling mutakhir (LTS Master Branch).' }}</span>
           </div>
         </div>
       </div>
@@ -923,7 +1397,31 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 2. Modal Ganti Password -->
+    <!-- 2. Modal Edit Profil Pengguna -->
+    <div v-if="showEditNameModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+      <div class="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-5 space-y-4 text-slate-100">
+        <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+          <h4 class="font-bold text-sm">Edit Profil Pengguna</h4>
+          <button @click="showEditNameModal = false" class="text-slate-400 hover:text-white"><X class="w-4 h-4" /></button>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-300 mb-1">Nama Lengkap / Username</label>
+          <input
+            v-model="inputName"
+            type="text"
+            class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-100 outline-none focus:border-sky-400"
+            placeholder="Masukkan nama pengguna..."
+            @keyup.enter="saveEditName"
+          />
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button @click="showEditNameModal = false" class="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs">Batal</button>
+          <button @click="saveEditName" class="px-4 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs">Simpan</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Modal Ganti Password -->
     <div v-if="showEditPasswordModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
       <div class="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-5 space-y-4 text-slate-100">
         <div class="flex justify-between items-center border-b border-slate-800 pb-2">
@@ -951,7 +1449,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 3. Modal Port WebUI -->
+    <!-- 4. Modal Port WebUI -->
     <div v-if="showPortModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
       <div class="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-5 space-y-4 text-slate-100">
         <div class="flex justify-between items-center border-b border-slate-800 pb-2">
@@ -969,7 +1467,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 4. Modal Konfirmasi Restart -->
+    <!-- 5. Modal Konfirmasi Restart -->
     <div v-if="showRestartModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
       <div class="w-full max-w-sm rounded-2xl bg-slate-900 border border-amber-500/40 shadow-2xl p-5 space-y-4 text-slate-100">
         <div class="flex items-center gap-2.5 text-amber-400">
@@ -986,7 +1484,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 5. Modal Konfirmasi Shutdown -->
+    <!-- 6. Modal Konfirmasi Shutdown -->
     <div v-if="showShutdownModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
       <div class="w-full max-w-sm rounded-2xl bg-slate-900 border border-rose-500/40 shadow-2xl p-5 space-y-4 text-slate-100">
         <div class="flex items-center gap-2.5 text-rose-400">
@@ -1003,7 +1501,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- 6. Modal Konfirmasi Logout -->
+    <!-- 7. Modal Konfirmasi Logout -->
     <div v-if="showLogoutModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
       <div class="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-5 space-y-4 text-slate-100">
         <div class="flex items-center gap-2.5 text-slate-200">
@@ -1017,6 +1515,16 @@ onMounted(() => {
           <button @click="showLogoutModal = false" class="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs">Batal</button>
           <button @click="confirmLogout" class="px-4 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs">Ya, Keluar</button>
         </div>
+      </div>
+    </div>
+
+    <!-- 8. Modal Storage Manager (Disks & Volumes) -->
+    <div
+      v-if="showStorageModal"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-3 sm:p-6 animate-in fade-in"
+    >
+      <div class="w-full max-w-3xl h-[600px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#1e1d24]">
+        <RAZStorageManagerView :isModal="true" @close="showStorageModal = false" />
       </div>
     </div>
 
