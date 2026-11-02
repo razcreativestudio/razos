@@ -1,9 +1,10 @@
 /**
  * RAZOS App Store Engine
- * Updated: 2026-10-26 (v3.9.4)
+ * Updated: 2026-11-02 09:10:00 (v4.0.0 - Real Container Parity & Dynamic ContainerPort/Volume Mapping)
  * Deskripsi: Engine deploy dan uninstall container Docker ke partisi /DATA/apps/
  * dengan validasi memori RAM minimum (> 150 MB free), multi-layer Docker CLI + Go SDK
- * pull engine dengan real-time terminal stdout scanner logging, robust container port exposure & clean uninstall.
+ * pull engine dengan real-time terminal stdout scanner logging, pemetaan ContainerPort & ContainerVolume dinamis,
+ * pencegahan bentrok port host dengan port inti RAZOS, serta clean uninstall.
  */
 
 package store
@@ -85,20 +86,22 @@ var embeddedAppsJSON []byte
 
 // AppManifest struktur skema aplikasi di App Store
 type AppManifest struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	Slug          string   `json:"slug"`
-	Category      string   `json:"category"`
-	Description   string   `json:"description"`
-	Image         string   `json:"image"`
-	DefaultPort   int      `json:"default_port"`
-	Port          int      `json:"port,omitempty"`
-	DefaultVolume string   `json:"default_volume"`
-	Env           []string `json:"env"`
-	Installed     bool     `json:"installed"`
-	Readme        string   `json:"readme,omitempty"`
-	Icon          string   `json:"icon,omitempty"`
-	Thumbnail     string   `json:"thumbnail,omitempty"`
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	Slug            string   `json:"slug"`
+	Category        string   `json:"category"`
+	Description     string   `json:"description"`
+	Image           string   `json:"image"`
+	DefaultPort     int      `json:"default_port"`
+	ContainerPort   int      `json:"container_port,omitempty"`
+	Port            int      `json:"port,omitempty"`
+	DefaultVolume   string   `json:"default_volume"`
+	ContainerVolume string   `json:"container_volume,omitempty"`
+	Env             []string `json:"env"`
+	Installed       bool     `json:"installed"`
+	Readme          string   `json:"readme,omitempty"`
+	Icon            string   `json:"icon,omitempty"`
+	Thumbnail       string   `json:"thumbnail,omitempty"`
 }
 
 // DeployRequest payload instalasi aplikasi dengan custom port/volume atau manual custom image
@@ -184,6 +187,7 @@ func DeployApp(req DeployRequest) error {
 	var defaultPort int
 	var envs []string
 	var slug string
+	var targetApp *AppManifest
 
 	// Fallback jika req.CustomImage kosong tetapi req.Image diberikan
 	if req.CustomImage == "" && req.Image != "" {
@@ -217,10 +221,9 @@ func DeployApp(req DeployRequest) error {
 			return err
 		}
 
-		var targetApp *AppManifest
-		for _, a := range catalog {
-			if a.ID == req.AppID {
-				targetApp = &a
+		for i := range catalog {
+			if catalog[i].ID == req.AppID {
+				targetApp = &catalog[i]
 				break
 			}
 		}
@@ -282,13 +285,22 @@ func DeployApp(req DeployRequest) error {
 			targetPort = 8090
 		}
 	}
-	natPort, _ := nat.NewPort("tcp", fmt.Sprintf("%d", defaultPort))
 
+	// Port internal container: jika container_port didefinisikan (misal web server internal 80 atau 8080)
+	containerPort := defaultPort
+	if targetApp != nil && targetApp.ContainerPort > 0 {
+		containerPort = targetApp.ContainerPort
+	}
+	natPort, _ := nat.NewPort("tcp", fmt.Sprintf("%d", containerPort))
+
+	// Volume mount target: jika container_volume didefinisikan (misal /config atau /var/lib/mysql)
 	mountTarget := defaultVol
-	if mountTarget == "" || strings.HasPrefix(mountTarget, "/DATA/") || strings.HasPrefix(mountTarget, "/data/") {
+	if targetApp != nil && targetApp.ContainerVolume != "" {
+		mountTarget = targetApp.ContainerVolume
+	} else if mountTarget == "" || strings.HasPrefix(mountTarget, "/DATA/") || strings.HasPrefix(mountTarget, "/data/") {
 		mountTarget = "/data"
 	}
-	AddInstallLog(slug, "info", "[NET]", fmt.Sprintf("Alokasi Port Host :%d -> Container :%d", targetPort, defaultPort))
+	AddInstallLog(slug, "info", "[NET]", fmt.Sprintf("Alokasi Port Host :%d -> Container :%d", targetPort, containerPort))
 	AddInstallLog(slug, "info", "[MOUNT]", fmt.Sprintf("Binding Volume %s -> %s", dataPath, mountTarget))
 
 	hostConfig := &container.HostConfig{

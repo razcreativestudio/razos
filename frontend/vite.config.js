@@ -1597,7 +1597,7 @@ server.listen(port, () => console.log('Server berjalan pada port ' + port));
           const installed = loadInstalledApps()
           const installedMap = new Map(installed.map(it => [it.slug || it.id, it]))
 
-          // Sinkronisasi status terpasang pada katalog 525+ apps
+          // Sinkronisasi status terpasang pada katalog aplikasi resmi RAZOS
           const merged = catalog.map(app => {
             const match = installedMap.get(app.slug) || installedMap.get(app.id)
             if (match) {

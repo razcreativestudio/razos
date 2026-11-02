@@ -1,10 +1,10 @@
 <script setup>
 /**
- * RAZOS App Store View - 525+ Apps Catalog, Installed Apps Management & CasaOS-Style YAML Docker Compose Suite
- * Updated: 2026-10-15 09:10:00 (v3.2.0 - Rekomendasi Aplikasi Unggulan di App Store & Desktop Layout)
+ * RAZOS App Store View - 100% Real & Verified Docker Containers Suite
+ * Updated: 2026-11-02 09:12:00 (v4.0.0 - Purged 450+ Dummy Suites, 100 Verified Real Usable Containers, Zero Dummy Data)
  * Deskripsi:
  * - 3 Tab Navigasi Utama:
- *   1. "Katalog Aplikasi (525+)" - Jelajah katalog lengkap dengan filter kategori, rekomendasi unggulan, & live search.
+ *   1. "Katalog Aplikasi" - Jelajah katalog 100 kontainer Docker terverifikasi dan siap pakai (Plex, Jellyfin, Nextcloud, WireGuard, Nginx, Uptime Kuma, dll).
  *   2. "Aplikasi Terpasang" - Kelola semua container yang sedang aktif, inspect port & mountpoint, peluncuran Web UI, settings, logs, serta uninstall bersih.
  *   3. "Instal via YAML (Docker Compose)" - Editor YAML ala CasaOS dengan live parse syntax, drag-and-drop / upload file .yaml/.yml, template preset cepat, dan direct deployment.
  * - Halaman Penuh Detail Aplikasi (Full Page Markdown README.md).
@@ -588,7 +588,7 @@ onMounted(async () => {
     <!-- MAIN BODY CONTAINER -->
     <div class="flex-1 overflow-hidden relative">
 
-      <!-- ================= TAB 1: KATALOG (525+ APPS) ================= -->
+      <!-- ================= TAB 1: KATALOG (REAL USABLE APPS) ================= -->
       <div v-if="activeTab === 'catalog' && currentView === 'catalog'" class="h-full flex flex-col gap-3 p-4 overflow-hidden animate-in fade-in">
         <!-- Search Bar & Statistics -->
         <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
@@ -597,7 +597,7 @@ onMounted(async () => {
             <input
               v-model="searchQuery"
               type="text"
-              placeholder="Cari dari 525+ aplikasi Docker (Plex, Jellyfin, MySQL, Nextcloud, Ollama, Nginx, qBittorrent...)"
+              placeholder="Cari aplikasi Docker (Plex, Jellyfin, MySQL, Nextcloud, Ollama, Nginx, WireGuard...)"
               class="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-100 placeholder-slate-500 outline-none focus:border-sky-400 transition"
             />
           </div>
@@ -837,7 +837,7 @@ onMounted(async () => {
               class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs transition flex items-center gap-2 shadow"
             >
               <Layers class="w-4 h-4" />
-              <span>Buka Katalog (525+)</span>
+              <span>Buka Katalog Aplikasi</span>
             </button>
             <button
               @click="activeTab = 'compose'"
