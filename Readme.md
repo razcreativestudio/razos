@@ -45,7 +45,7 @@ Tampilan antarmuka nyata RAZOS yang berjalan langsung di peramban web — respon
 | Docker App Store & Compose Suite | Task Manager & Real Hardware Telemetry |
 | :---: | :---: |
 | ![RAZOS App Store Docker](./docs/media/RAZOS-App-Install-Docker.png) | ![RAZOS Task Manager](./docs/media/RAZOS-Task-Manager.png) |
-| *Katalog 525+ aplikasi Docker, CasaOS-style compose YAML & installer fleksibel.* | *Windows 11 style task manager, telemetry host riil, heatmap & streaming log.* |
+| *Katalog 150+ aplikasi Docker terverifikasi ARM64, CasaOS-style compose YAML & installer fleksibel.* | *Windows 11 style task manager, telemetry host riil, heatmap & streaming log.* |
 
 | Storage Manager & Partisi Host |
 | :---: |
@@ -63,7 +63,7 @@ Berbeda dengan dashboard web pada umumnya yang membebani memori dan mengorbankan
 | **Server Pribadi Hemat Daya** | Backend tunggal berbasis Golang murni dengan konsumsi RAM idle $\le 35\text{ MB}$, tanpa runtime berat seperti Python atau Node.js pada server inti. |
 | **Pengalaman Desktop Sejati** | Multi-windowing lengkap, resize bebas lag, Windows 11 Snap-to-Top Maximize gesture, persistensi ukuran/posisi jendela per aplikasi, serta transisi animasi 60 FPS. |
 | **Manajemen Berkas & Koding Lengkap** | Unggah file, folder bertingkat, dan arsip ZIP (auto-extract instan di server), serta Sublime Text / Notepad++ Style Code Editor multi-tab langsung di browser. |
-| **Ekosistem Kontainer Mandiri** | Akses ke 525+ aplikasi Docker siap pakai, tab manajemen kontainer terpasang, editor Docker Compose YAML visual, dan integrasi context menu desktop. |
+| **Ekosistem Kontainer Mandiri** | Akses ke 150+ aplikasi Docker siap pakai terverifikasi ARM64, tab manajemen kontainer terpasang, editor Docker Compose YAML visual, dan integrasi context menu desktop. |
 | **Hosting Multi-Website Ringan** | Dukungan website statis (HTML/Nginx Alpine 15 MB RAM), Micro-Framework API (Go, PHP Native, FastAPI), database SQLite tanpa memori layanan (0 MB RAM), dan auto-pull repositori GitHub via PAT. |
 | **Akses Sistem & Log Kernel Riil** | Web Terminal SSH berbasis xterm.js dan PTY WebSocket, didukung penampil log Linux Armbian riil (`dmesg`, `journalctl`, `/var/log/syslog`). |
 
@@ -151,8 +151,8 @@ flowchart TD
   - *Download Only (Mirroring):* Salin berkas remote ke penyimpanan lokal STB.
 - **Uji Koneksi Real-Time & Live Logs:** Tombol uji coba konektivitas server (*Test Connection*) sebelum menyimpan remote, disertai pelacakan log sinkronisasi durasi detik dan status keberhasilan.
 
-### 5. App Store 525+ Docker & CasaOS-Style Compose Suite
-- **Katalog Lengkap:** Akses instan ke 525+ template kontainer Docker siap pasang.
+### 5. App Store 150+ Docker & CasaOS-Style Compose Suite
+- **Katalog Lengkap & Terverifikasi:** Akses instan ke 150+ template kontainer Docker siap pasang yang 100% kompatibel dengan Armbian STB ARM64 (bebas dummy data, zero port conflict).
 - **Metode Instalasi Fleksibel:** Mendukung 1-klik template, upload file `docker-compose.yml`, instalasi via Docker CLI, dan custom wizard.
 - **Manajemen Kontainer Terpasang:** Tab khusus untuk memantau status hidup kontainer, membuka Web UI, restart, dan clean uninstall tanpa meninggalkan data sampah.
 
@@ -299,7 +299,7 @@ Pembaruan dicatat secara berkala pada berkas riwayat harian di folder [`update-h
 - [x] File Manager Hybrid (Breadcrumbs, Virtual Scrolling, Thumbnail Caching)
 - [x] Unggah File, Folder, dan ZIP Auto-Extract
 - [x] Sublime Text & Notepad++ Enterprise Code Editor Multi-Tab
-- [x] App Store 525+ Docker dengan Dukungan Compose YAML
+- [x] App Store 150+ Docker dengan Dukungan Compose YAML (100% Verified ARM64)
 - [x] Task Manager Hardware Host Riil (Zero Dummy Data)
 - [x] Website Manager & Multi-Hosting Ringan (Nginx Alpine + SQLite)
 - [x] Web SSH Terminal & Linux Armbian Kernel Logs Streamer
