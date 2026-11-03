@@ -37,3 +37,28 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 
 3. **Kompilasi Ulang Frontend:**
    - Membangun kembali bundle Vite (`dist/assets/index-Ci8-d08i.js` & `dist/assets/index-DSiB8-2j.css`) 100% sukses tanpa error.
+
+---
+
+### Versi: 4.5.2-app-store-port-zero-elimination (Perbaikan Port 0 & Defensive UI Background Services)
+**Waktu Eksekusi:** 2026-11-03 09:18 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah / Temuan Pengguna
+- Pengguna melihat kartu aplikasi `Watchtower Auto-Update`, `Tailscale Mesh VPN`, dan `Cloudflare Tunnel Client` di App Store menampilkan label `Port: 0` serta ikon Tailscale yang gelap/tidak kontras.
+
+#### 2. Investigasi & Akar Masalah
+- Ketiga aplikasi tersebut sebelumnya diset dengan `default_port: 0` karena beroperasi sebagai daemon/service latar belakang.
+- Tampilan kartu katalog langsung merender `Port: {{ app.default_port }}` sehingga memicu angka `Port: 0`. Selain itu, jika pengguna menekan tombol "Buka", sistem mencoba membuka `http://hostname:0` yang tidak valid.
+
+#### 3. Solusi & Rekayasa Kode
+1. **Alokasi Port Riil & Endpoint Resmi di `RAZApps.json`:**
+   - **Tailscale Mesh VPN:** Dialokasikan port resmi `5252` (`container_port: 5252`), diaktifkan antarmuka web auth (`TS_EXTRA_ARGS=--web`), dan ikon diganti dengan SVG putih berkontras tinggi (`https://cdn.simpleicons.org/tailscale/white`).
+   - **Watchtower Auto-Update:** Dialokasikan port `8100` (`container_port: 8080`) dengan mengaktifkan HTTP status/metrics API (`WATCHTOWER_HTTP_API_METRICS=true`).
+   - **Cloudflare Tunnel Client:** Dialokasikan port `2002` (`container_port: 2000`) dengan metrik & status endpoint (`TUNNEL_METRICS=0.0.0.0:2000`).
+2. **Defensive UI & Penanganan Background Daemon di `RAZAppStoreView.vue`:**
+   - Ditambahkan pengecekan kondisional: jika suatu container memiliki port `<= 0`, tampilan otomatis menampilkan badge rapi `Background Daemon` atau `Daemon (Tanpa Web Port)` alih-alih angka `Port: 0`.
+3. **Pengamanan Peluncuran di `RAZWindowStore.js`:**
+   - `launchStoreApp(app)` memvalidasi nilai port; jika port `<= 0`, browser tidak akan membuka URL kosong `http://hostname:0`, melainkan memunculkan notifikasi sistem bahwa aplikasi berjalan sebagai background daemon.
+4. **Kompilasi Ulang Bundle Produksi:**
+   - Bundle Vite (`dist/assets/index-DWXF6Ios.js`) sukses dikompilasi 100% tanpa error.

@@ -681,7 +681,12 @@ onMounted(async () => {
                 <!-- Action Bar -->
                 <div class="flex items-center justify-between pt-2 border-t border-slate-800/70 text-xs">
                   <span class="text-[10px] font-mono text-slate-500">
-                    Port: <strong class="text-slate-300">{{ rec.default_port }}</strong>
+                    <template v-if="rec.default_port > 0">
+                      Port: <strong class="text-slate-300">{{ rec.default_port }}</strong>
+                    </template>
+                    <template v-else>
+                      <span class="text-amber-400 font-sans font-medium text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">Background Daemon</span>
+                    </template>
                   </span>
 
                   <div class="flex items-center gap-1.5">
@@ -757,8 +762,13 @@ onMounted(async () => {
               <!-- Card Bottom: Ports & Action Buttons -->
               <div class="flex items-center justify-between border-t border-slate-800/60 pt-2.5 text-xs">
                 <div class="text-slate-500 font-mono flex items-center gap-1.5">
-                  <span>Port:</span>
-                  <span class="text-sky-400 font-bold">{{ app.default_port }}</span>
+                  <template v-if="app.default_port > 0">
+                    <span>Port:</span>
+                    <span class="text-sky-400 font-bold">{{ app.default_port }}</span>
+                  </template>
+                  <template v-else>
+                    <span class="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-sans font-medium">Background Daemon</span>
+                  </template>
                 </div>
 
                 <div class="flex items-center gap-2">
@@ -885,7 +895,8 @@ onMounted(async () => {
                 <div class="mt-2 text-[11px] text-slate-400 flex flex-col gap-1 font-mono bg-slate-950/60 p-2 rounded-xl border border-slate-800/80">
                   <div class="flex items-center justify-between">
                     <span class="text-slate-500">Port Web UI:</span>
-                    <span class="text-sky-400 font-bold">{{ app.default_port }}</span>
+                    <span v-if="app.default_port > 0" class="text-sky-400 font-bold">{{ app.default_port }}</span>
+                    <span v-else class="text-amber-400 text-[10px] font-sans">Daemon (Tanpa Web Port)</span>
                   </div>
                   <div class="flex items-center justify-between truncate">
                     <span class="text-slate-500 shrink-0">Path Data:</span>
@@ -1207,7 +1218,8 @@ onMounted(async () => {
 
                 <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
                   <span class="text-[10px] text-slate-500 block">Port Akses Bawaan:</span>
-                  <span class="font-mono text-sky-400 text-sm font-bold">{{ selectedApp.default_port }}</span>
+                  <span v-if="selectedApp.default_port > 0" class="font-mono text-sky-400 text-sm font-bold">{{ selectedApp.default_port }}</span>
+                  <span v-else class="text-amber-400 text-xs font-medium">Daemon Service (Tanpa Port Web UI)</span>
                 </div>
 
                 <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800">

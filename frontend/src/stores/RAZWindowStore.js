@@ -7,6 +7,7 @@
 
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { ref, computed } from 'vue'
+import { useSystemStore } from './RAZSystemStore'
 
 export const useWindowStore = defineStore('window', () => {
   // Aplikasi bawaan sistem operasi
@@ -730,7 +731,13 @@ export const useWindowStore = defineStore('window', () => {
   function launchStoreApp(app) {
     if (!app) return
     const fallbackPort = (app.slug === 'immich') ? 2283 : (app.default_port || app.storeData?.default_port || 8090)
-    const port = app.port || app.default_port || app.storeData?.port || app.storeData?.default_port || fallbackPort
+    const port = parseInt(app.port || app.default_port || app.storeData?.port || app.storeData?.default_port || fallbackPort)
+    if (!port || port <= 0) {
+      // Notifikasi ramah jika aplikasi berjalan sebagai daemon/background service
+      const sysStore = useSystemStore()
+      sysStore?.showNotification('Layanan Background', `${app.name} beroperasi sebagai background daemon tanpa port Web UI.`, 'info')
+      return
+    }
     const url = `http://${window.location.hostname}:${port}`
     window.open(url, '_blank')
   }

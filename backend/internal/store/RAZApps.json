@@ -1677,16 +1677,17 @@
     "category": "Monitoring & Analytics",
     "description": "Layanan pemantau otomatis yang mengunduh dan memperbarui container Docker Anda saat ada image baru.",
     "image": "containrrr/watchtower:latest",
-    "default_port": 0,
-    "container_port": 0,
+    "default_port": 8100,
+    "container_port": 8080,
     "default_volume": "/DATA/apps/watchtower",
     "container_volume": "/data",
     "env": [
       "WATCHTOWER_CLEANUP=true",
-      "WATCHTOWER_SCHEDULE=0 0 4 * * *"
+      "WATCHTOWER_SCHEDULE=0 0 4 * * *",
+      "WATCHTOWER_HTTP_API_METRICS=true"
     ],
     "installed": false,
-    "readme": "![Preview Watchtower](https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop&q=60)\n\n# Watchtower\n\nMemastikan container Docker Anda selalu mendapatkan patch keamanan terbaru tanpa harus melakukan pull manual satu per satu.",
+    "readme": "![Preview Watchtower](https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop&q=60)\n\n# Watchtower\n\nMemastikan container Docker Anda selalu mendapatkan patch keamanan terbaru tanpa harus melakukan pull manual satu per satu. Endpoint status dan metrik HTTP aktif pada port 8100.",
     "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/watchtower.png",
     "thumbnail": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop&q=60"
   },
@@ -1697,17 +1698,18 @@
     "category": "Networking & Security",
     "description": "Jaringan VPN WireGuard mesh tanpa konfigurasi rumit untuk mengakses seluruh perangkat STB Anda dari luar rumah dengan aman.",
     "image": "tailscale/tailscale:latest",
-    "default_port": 0,
-    "container_port": 0,
+    "default_port": 5252,
+    "container_port": 5252,
     "default_volume": "/DATA/apps/tailscale",
     "container_volume": "/var/lib/tailscale",
     "env": [
       "TS_STATE_DIR=/var/lib/tailscale",
-      "TS_USERSPACE=true"
+      "TS_USERSPACE=true",
+      "TS_EXTRA_ARGS=--web"
     ],
     "installed": false,
-    "readme": "![Preview Tailscale](https://images.unsplash.com/photo-1563986768609-322da13575f3?w=800&auto=format&fit=crop&q=60)\n\n# Tailscale Mesh VPN\n\nHubungkan STB RAZOS dengan laptop, smartphone, dan cloud server Anda dalam satu jaringan privat terenkripsi tanpa butuh IP publik statis.",
-    "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/tailscale.png",
+    "readme": "![Preview Tailscale](https://images.unsplash.com/photo-1563986768609-322da13575f3?w=800&auto=format&fit=crop&q=60)\n\n# Tailscale Mesh VPN\n\nHubungkan STB RAZOS dengan laptop, smartphone, dan cloud server Anda dalam satu jaringan privat terenkripsi tanpa butuh IP publik statis. Buka antarmuka login web pada port 5252 untuk menghubungkan perangkat ke akun Tailscale Anda.",
+    "icon": "https://cdn.simpleicons.org/tailscale/white",
     "thumbnail": "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=800&auto=format&fit=crop&q=60"
   },
   {
@@ -1717,13 +1719,15 @@
     "category": "Networking & Security",
     "description": "Daemon terowongan Cloudflare untuk mengekspos aplikasi internal STB ke internet publik dengan proteksi DDoS dan SSL gratis.",
     "image": "cloudflare/cloudflared:latest",
-    "default_port": 0,
-    "container_port": 0,
+    "default_port": 2002,
+    "container_port": 2000,
     "default_volume": "/DATA/apps/cloudflared",
     "container_volume": "/etc/cloudflared",
-    "env": [],
+    "env": [
+      "TUNNEL_METRICS=0.0.0.0:2000"
+    ],
     "installed": false,
-    "readme": "![Preview Cloudflared](https://images.unsplash.com/photo-1563986768609-322da13575f3?w=800&auto=format&fit=crop&q=60)\n\n# Cloudflare Tunnel Client\n\nBuka akses aplikasi dan server web Anda ke domain publik tanpa perlu port forwarding pada router atau IP publik.",
+    "readme": "![Preview Cloudflared](https://images.unsplash.com/photo-1563986768609-322da13575f3?w=800&auto=format&fit=crop&q=60)\n\n# Cloudflare Tunnel Client\n\nBuka akses aplikasi dan server web Anda ke domain publik tanpa perlu port forwarding pada router atau IP publik. Server metrics dan health check aktif pada port 2002.",
     "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/cloudflare.png",
     "thumbnail": "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=800&auto=format&fit=crop&q=60"
   },
