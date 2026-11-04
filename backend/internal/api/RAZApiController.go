@@ -120,6 +120,8 @@ func RegisterRoutes(r *gin.Engine) {
 		v1.POST("/files/create-file", handleCreateFile)
 		v1.DELETE("/files/item", handleDeleteFile)
 		v1.POST("/files/rename", handleRenameFile)
+		v1.POST("/files/copy", handleCopyFiles)
+		v1.POST("/files/move", handleMoveFiles)
 		v1.GET("/files/content", handleGetFileContent)
 		v1.POST("/files/content", handleSaveFileContent)
 		v1.GET("/files/raw", handleGetRawFile)
@@ -1275,6 +1277,128 @@ func handleRenameFile(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "renamed"})
+}
+
+// handleCopyFiles memproses penyalinan satu atau banyak berkas/folder ke direktori tujuan
+func handleCopyFiles(c *gin.Context) {
+	var body struct {
+		Sources        []string `json:"sources"`
+		Destination    string   `json:"destination"`
+		DestinationDir string   `json:"destination_dir"`
+		Overwrite      bool     `json:"overwrite"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Format permintaan tidak valid: " + err.Error()})
+		return
+	}
+	if len(body.Sources) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Tidak ada berkas sumber yang dipilih untuk disalin."})
+		return
+	}
+	dest := body.Destination
+	if dest == "" {
+		dest = body.DestinationDir
+	}
+	if dest == "" {
+		dest = "/DATA"
+	}
+
+	type ResultItem struct {
+		Source string `json:"source"`
+		Target string `json:"target"`
+		Error  string `json:"error,omitempty"`
+	}
+
+	var results []ResultItem
+	successCount := 0
+
+	for _, src := range body.Sources {
+		target, err := filemanager.CopyItem(src, dest, body.Overwrite)
+		if err != nil {
+			results = append(results, ResultItem{Source: src, Error: err.Error()})
+		} else {
+			results = append(results, ResultItem{Source: src, Target: target})
+			successCount++
+		}
+	}
+
+	if successCount == 0 && len(body.Sources) > 0 {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Gagal menyalin berkas.",
+			"results": results,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":       true,
+		"status":        "copied",
+		"success_count": successCount,
+		"total":         len(body.Sources),
+		"results":       results,
+	})
+}
+
+// handleMoveFiles memproses pemindahan satu atau banyak berkas/folder ke direktori tujuan
+func handleMoveFiles(c *gin.Context) {
+	var body struct {
+		Sources        []string `json:"sources"`
+		Destination    string   `json:"destination"`
+		DestinationDir string   `json:"destination_dir"`
+		Overwrite      bool     `json:"overwrite"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Format permintaan tidak valid: " + err.Error()})
+		return
+	}
+	if len(body.Sources) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "Tidak ada berkas sumber yang dipilih untuk dipindahkan."})
+		return
+	}
+	dest := body.Destination
+	if dest == "" {
+		dest = body.DestinationDir
+	}
+	if dest == "" {
+		dest = "/DATA"
+	}
+
+	type ResultItem struct {
+		Source string `json:"source"`
+		Target string `json:"target"`
+		Error  string `json:"error,omitempty"`
+	}
+
+	var results []ResultItem
+	successCount := 0
+
+	for _, src := range body.Sources {
+		target, err := filemanager.MoveItem(src, dest, body.Overwrite)
+		if err != nil {
+			results = append(results, ResultItem{Source: src, Error: err.Error()})
+		} else {
+			results = append(results, ResultItem{Source: src, Target: target})
+			successCount++
+		}
+	}
+
+	if successCount == 0 && len(body.Sources) > 0 {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Gagal memindahkan berkas.",
+			"results": results,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":       true,
+		"status":        "moved",
+		"success_count": successCount,
+		"total":         len(body.Sources),
+		"results":       results,
+	})
 }
 
 func handleCreateFile(c *gin.Context) {

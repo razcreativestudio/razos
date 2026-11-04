@@ -66,3 +66,46 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 6. **Kompilasi Ulang Bundle Produksi:**
    - Build Vite (`dist/assets/index-DBZpIQut.js` & `dist/assets/index-dhKDcG6e.css`) sukses 100% tanpa error dalam 5.57 detik.
 
+
+---
+
+### Versi: 4.5.5-file-manager-clipboard-move-suite (Implementasi Suite Copy, Cut, Paste & Move To Folder Picker)
+**Waktu Eksekusi:** 2026-11-04 11:38 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah / Permintaan Pengguna
+- Pengguna meminta penambahan fitur esensial pengorganisasian berkas pada File Manager: *"di file manager tambahkan fitur copy, paste, cut, move to"*.
+
+#### 2. Investigasi & Analisis Arsitektur
+1. **Dukungan Backend Go:**
+   - Sebelumnya backend hanya memiliki fungsi pembuatan (`create-folder`, `create-file`), `rename`, dan `delete`. Operasi duplikasi rekursif dan pemindahan lintas direktori/partisi belum tersedia.
+   - Diperlukan algoritma penanganan rekursi yang aman (mencegah loop rekursif menyalin direktori ke dalam dirinya sendiri), pembuatan nama unik otomatis (`- Salinan`, `- Salinan (2)`) jika berkas sudah ada, dan mekanisme fallback `os.Rename` ke `Copy + Delete` untuk operasi pemindahan berkas lintas storage mount / partisi fisik.
+2. **Dukungan Frontend UI & Interaktivitas:**
+   - Diperlukan clipboard state (`fileClipboard`) yang mendukung operasi `copy` maupun `cut` dengan visual cue yang jelas (status cut ditandai dengan `opacity-40 ring-2 ring-dashed ring-amber-400`).
+   - Tombol aksi harus tersedia di tiga titik akses utama:
+     - **Windows 11 Ribbon Toolbar:** Tombol Cut, Copy, Paste (dengan badge jumlah item di clipboard), dan Move to.
+     - **Context Menu Klik Kanan:** Submenu kontekstual pada seleksi tunggal (berkas/folder), multi-seleksi, serta kanvas area kosong (opsi Tempel).
+     - **Keyboard Shortcuts:** Pintasan standar keyboard `Ctrl+C` (Salin), `Ctrl+X` (Potong), `Ctrl+V` (Tempel).
+   - Dialog pemilih folder ("Move To") harus interaktif, modern (Glassmorphism Slate-900), memungkinkan navigasi drill-down ke subdirektori, menyediakan jalan pintas root storage (`/DATA`, drive eksternal), serta tombol konfirmasi "Pindahkan ke Sini".
+
+#### 3. Rekayasa & Implementasi
+1. **Backend Storage Engine (`backend/internal/filemanager/RAZStorageEngine.go`):**
+   - Menambahkan fungsi `generateUniqueCopyName` untuk menghasilkan nama unik saat berkas tujuan duplikat.
+   - Menambahkan fungsi `CopyFile` dan `CopyDirectory` (rekursif) dengan pelestarian file permission.
+   - Menambahkan fungsi `CopyItem` dengan pencegahan loop rekursi (`strings.HasPrefix(targetDst, cleanSrc)`).
+   - Menambahkan fungsi `MoveItem` yang mengutamakan `os.Rename` atomik (cepat pada filesystem yang sama) dan fallback ke `CopyDirectory/CopyFile + os.RemoveAll` saat melintasi mountpoint partisi berbeda.
+2. **Backend API Endpoints (`backend/internal/api/RAZApiController.go`):**
+   - Menambahkan endpoint `POST /api/v1/files/copy` (`handleCopyFiles`) dan `POST /api/v1/files/move` (`handleMoveFiles`).
+   - Menerima payload batch array `sources`, direktori tujuan `destination` / `destination_dir`, dan flag `overwrite`.
+   - Mengembalikan laporan hasil per-berkas (`results`, `success_count`, `total`).
+3. **Frontend File Manager Suite (`frontend/src/views/RAZFileManagerView.vue`):**
+   - Mengintegrasikan icon `Scissors`, `ClipboardPaste`, `FolderInput` dari `lucide-vue-next`.
+   - Menambahkan reactive state `fileClipboard` (`operation`, `items`) dan status `isPasting`, `isMoving`.
+   - Menambahkan fungsi `copyItems()`, `cutItems()`, `pasteItems()`, dan helper visual `isItemCut()`.
+   - Menambahkan modal interaktif "Pindahkan ke Direktori" (`showMoveToModal`) lengkap dengan tombol navigasi `ArrowUp`, breadcrumb path, list subfolder dengan aksi double click / klik buka, serta tombol konfirmasi "Pindahkan ke Sini".
+   - Mengaitkan pintasan keyboard `Ctrl+C`, `Ctrl+X`, dan `Ctrl+V` pada `handleGlobalKeydown`.
+   - Menghubungkan opsi potong, salin, dan pindahkan ke context menu berkas tunggal, folder tunggal, multi-seleksi, dan kanvas klik kanan.
+   - Menambahkan grup tombol Ribbon Bar Windows 11 style dengan indikator badge item di clipboard.
+4. **Verifikasi & Build Produksi:**
+   - Build frontend Vite sukses 100% tanpa error dalam 4.85 detik.
+   - Telah dibackup ke `backup/RAZFileManagerView_backup_20261104_copymove.vue`.

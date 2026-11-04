@@ -1,10 +1,13 @@
 <script setup>
 /**
  * RAZOS Google Drive-Style Storage & Windows File Explorer Hybrid File Manager
- * Updated: 2026-10-26 21:45:00 (v3.7.2 - Clean Ribbon: Removed redundant ribbon "+ Baru" button, retaining main sidebar action & context menus)
+ * Updated: 2026-11-04 11:35:00 (v3.8.0 - Added Windows 11 Ribbon & Context Cut, Copy, Paste, and Move To Suite with Interactive Folder Picker Modal)
  * Deskripsi: Antarmuka File Manager tingkat lanjut memadukan arsitektur Windows File Explorer dan Google Drive:
  * - Windows Multi-Selection Engine: Pemilihan multi-berkas dengan Ctrl/Cmd+Click (toggle) dan Shift+Click (range selection).
- * - Keyboard Shortcuts: Ctrl+A (Select All), Escape (Clear Selection), Delete (Hapus Terpilih dengan Konfirmasi).
+ * - Full Clipboard Suite: Potong (Cut), Salin (Copy), Tempel (Paste) via Ribbon Toolbar, Context Menu, dan Shortcuts (Ctrl+C, Ctrl+X, Ctrl+V).
+ * - Visual Cut Feedback: Indikator visual dashed ring & opacity saat berkas berada dalam status cut.
+ * - Interactive Move-to Modal: Dialog Glassmorphism Slate-900 untuk memilih folder tujuan pemindahan berkas dengan breadcrumbs dan quick roots.
+ * - Keyboard Shortcuts: Ctrl+A, Escape, Ctrl+C, Ctrl+X, Ctrl+V, Delete (Hapus Terpilih dengan Konfirmasi).
  * - Dedicated Context Menu: Menu konteks kontekstual khusus Folder vs Berkas vs Kanvas area kosong.
  * - Windows 11 Sort Suite: Dropdown toolbar Sort by & context submenu pengurutan berkas.
  * - Custom Modal Konfirmasi Hapus: Konfirmasi hapus berdesain Glassmorphism Slate-900 (Zero Native Browser Confirm/Alert).
@@ -24,7 +27,8 @@ import {
   Grid, List, Search, Star, Download, Info, CheckCircle2, Clock, Upload,
   Share2, MoreVertical, LayoutGrid, Server, Image, Film, Music, FileCheck, Play,
   Copy, Check, BookOpen, FilePlus, FolderPlus, FileUp, FolderUp, Archive, UploadCloud,
-  ChevronDown, ChevronUp, Minus, Maximize2, Sparkles, Loader2, Code2, Cloud, CloudUpload, ShieldAlert, Lock, ArrowUpDown
+  ChevronDown, ChevronUp, Minus, Maximize2, Sparkles, Loader2, Code2, Cloud, CloudUpload, ShieldAlert, Lock, ArrowUpDown,
+  Scissors, ClipboardPaste, FolderInput
 } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
@@ -49,6 +53,24 @@ function isItemSelected(item) {
   if (!item || !item.path) return false
   return selectedItems.value.some(it => it.path === item.path)
 }
+
+// Cek apakah ada seleksi aktif (single atau multi-selection)
+const hasActiveSelection = computed(() => selectedItems.value.length > 0 || !!selectedItem.value)
+
+// State Clipboard Operasi Berkas (Copy & Cut / Move)
+const fileClipboard = ref({
+  operation: null, // 'copy' | 'cut' | null
+  items: []        // Array item yang sedang disalin atau dipotong
+})
+const isPasting = ref(false)
+
+// State Modal "Pindahkan ke..." (Move To Folder Picker)
+const showMoveToModal = ref(false)
+const moveToTargetItems = ref([])
+const pickerPath = ref('/DATA')
+const pickerFolders = ref([])
+const isPickerLoading = ref(false)
+const isMoving = ref(false)
 
 // State Modal Konfirmasi Hapus Kustom (Zero Browser Native Alerts / Confirms)
 const showDeleteConfirmModal = ref(false)
@@ -647,6 +669,217 @@ function clearSelection() {
 }
 
 /**
+ * Mendapatkan item target operasi dari seleksi aktif atau parameter eksplisit
+ */
+function getActiveTargetItems(explicitItems = null) {
+  if (explicitItems && Array.isArray(explicitItems) && explicitItems.length > 0) {
+    return explicitItems
+  }
+  if (explicitItems && !Array.isArray(explicitItems)) {
+    return [explicitItems]
+  }
+  if (selectedItems.value.length > 0) {
+    return [...selectedItems.value]
+  }
+  if (selectedItem.value) {
+    return [selectedItem.value]
+  }
+  return []
+}
+
+/**
+ * Operasi Salin (Copy) berkas/folder terpilih ke clipboard sistem
+ */
+function copyItems(items = null) {
+  const targets = getActiveTargetItems(items)
+  if (targets.length === 0) return
+  fileClipboard.value = {
+    operation: 'copy',
+    items: targets
+  }
+  systemStore.showNotification('Disalin', `${targets.length} item disalin ke clipboard`, 'info')
+}
+
+/**
+ * Operasi Potong (Cut) berkas/folder terpilih ke clipboard sistem (dipindahkan saat dipaste)
+ */
+function cutItems(items = null) {
+  const targets = getActiveTargetItems(items)
+  if (targets.length === 0) return
+  fileClipboard.value = {
+    operation: 'cut',
+    items: targets
+  }
+  systemStore.showNotification('Dipotong', `${targets.length} item dipotong. Tempel (Ctrl+V) di folder tujuan`, 'info')
+}
+
+/**
+ * Cek apakah berkas atau folder sedang dalam status dipotong (cut) untuk indikator visual
+ */
+function isItemCut(item) {
+  if (!item || !item.path) return false
+  if (fileClipboard.value.operation !== 'cut') return false
+  return fileClipboard.value.items.some(it => it.path === item.path)
+}
+
+/**
+ * Operasi Tempel (Paste) berkas/folder dari clipboard ke direktori aktif
+ */
+async function pasteItems(targetDestDir = null) {
+  if (!authStore.canWriteStorage()) {
+    systemStore.showNotification('Akses Dibatasi', 'Peran akun Anda tidak memiliki izin untuk menulis atau menempel berkas.', 'warning')
+    return
+  }
+  if (!fileClipboard.value.operation || fileClipboard.value.items.length === 0) {
+    return
+  }
+
+  const dest = targetDestDir || currentPath.value
+  const op = fileClipboard.value.operation
+  const sourcePaths = fileClipboard.value.items.map(it => it.path)
+
+  isPasting.value = true
+  try {
+    const endpoint = op === 'cut' ? '/api/v1/files/move' : '/api/v1/files/copy'
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authStore.token}`
+      },
+      body: JSON.stringify({
+        sources: sourcePaths,
+        destination_dir: dest,
+        overwrite: false
+      })
+    })
+
+    const data = await res.json()
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || `Gagal ${op === 'cut' ? 'memindahkan' : 'menyalin'} berkas`)
+    }
+
+    const count = data.data ? data.data.length : sourcePaths.length
+    systemStore.showNotification(
+      'Berhasil',
+      `${count} item berhasil ${op === 'cut' ? 'dipindahkan' : 'disalin'} ke ${dest}`,
+      'success'
+    )
+
+    // Kosongkan clipboard jika operasi potong (cut)
+    if (op === 'cut') {
+      fileClipboard.value = { operation: null, items: [] }
+    }
+
+    await fetchFiles(currentPath.value)
+  } catch (err) {
+    console.error('Paste error:', err)
+    systemStore.showNotification('Gagal', err.message || 'Terjadi kesalahan saat menempel berkas', 'error')
+  } finally {
+    isPasting.value = false
+  }
+}
+
+/**
+ * Buka Dialog Pemilih Folder "Pindahkan ke..." (Move To)
+ */
+function openMoveToDialog(items = null) {
+  const targets = getActiveTargetItems(items)
+  if (targets.length === 0) return
+  moveToTargetItems.value = targets
+  pickerPath.value = currentPath.value || '/DATA'
+  showMoveToModal.value = true
+  fetchPickerFolders(pickerPath.value)
+}
+
+/**
+ * Mengambil daftar subdirektori untuk dialog pemilih folder Move To
+ */
+async function fetchPickerFolders(path) {
+  isPickerLoading.value = true
+  try {
+    const res = await fetch(`/api/v1/files/list?path=${encodeURIComponent(path)}`, {
+      headers: {
+        'Authorization': `Bearer ${authStore.token}`
+      }
+    })
+    const data = await res.json()
+    if (res.ok && data.success) {
+      pickerFolders.value = (data.data || []).filter(item => item.is_dir)
+      pickerPath.value = path
+    } else {
+      pickerFolders.value = []
+    }
+  } catch (err) {
+    pickerFolders.value = []
+  } finally {
+    isPickerLoading.value = false
+  }
+}
+
+function navigatePickerFolder(folder) {
+  if (!folder || !folder.path) return
+  fetchPickerFolders(folder.path)
+}
+
+function navigatePickerUp() {
+  const norm = normalizePath(pickerPath.value)
+  if (norm === '/' || norm === 'C:/') return
+  const lastSlash = norm.lastIndexOf('/')
+  if (lastSlash <= 0) {
+    fetchPickerFolders('/')
+    return
+  }
+  fetchPickerFolders(norm.substring(0, lastSlash))
+}
+
+/**
+ * Eksekusi Pindahkan Berkas/Folder Terpilih ke Direktori Tujuan Pilihan
+ */
+async function executeMoveTo() {
+  if (!authStore.canWriteStorage()) {
+    systemStore.showNotification('Akses Dibatasi', 'Peran akun Anda tidak memiliki izin untuk memindahkan berkas.', 'warning')
+    return
+  }
+  if (moveToTargetItems.value.length === 0) return
+
+  const dest = pickerPath.value
+  const sourcePaths = moveToTargetItems.value.map(it => it.path)
+
+  isMoving.value = true
+  try {
+    const res = await fetch('/api/v1/files/move', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authStore.token}`
+      },
+      body: JSON.stringify({
+        sources: sourcePaths,
+        destination_dir: dest,
+        overwrite: false
+      })
+    })
+
+    const data = await res.json()
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Gagal memindahkan berkas')
+    }
+
+    const count = data.data ? data.data.length : sourcePaths.length
+    systemStore.showNotification('Berhasil Dipindahkan', `${count} item dipindahkan ke "${dest}"`, 'success')
+    showMoveToModal.value = false
+    clearSelection()
+    await fetchFiles(currentPath.value)
+  } catch (err) {
+    console.error('Move error:', err)
+    systemStore.showNotification('Gagal Memindahkan', err.message || 'Terjadi kesalahan sistem saat memindahkan berkas', 'error')
+  } finally {
+    isMoving.value = false
+  }
+}
+
+/**
  * Handler shortcut keyboard global File Manager
  */
 function handleGlobalKeydown(e) {
@@ -664,6 +897,33 @@ function handleGlobalKeydown(e) {
   if (e.key === 'Escape') {
     clearSelection()
     return
+  }
+
+  // Ctrl + C / Cmd + C: Salin (Copy)
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+    if (hasActiveSelection.value) {
+      e.preventDefault()
+      copyItems()
+      return
+    }
+  }
+
+  // Ctrl + X / Cmd + X: Potong (Cut)
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
+    if (hasActiveSelection.value) {
+      e.preventDefault()
+      cutItems()
+      return
+    }
+  }
+
+  // Ctrl + V / Cmd + V: Tempel (Paste)
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+    if (fileClipboard.value.items.length > 0) {
+      e.preventDefault()
+      pasteItems()
+      return
+    }
   }
 
   // Delete: Buka modal konfirmasi hapus untuk item yang dipilih
@@ -1234,6 +1494,22 @@ function handleFileItemContextMenu(e, item) {
           })
           systemStore.showNotification('Favorit', `${selectedItems.value.length} berkas ditambahkan ke favorit`, 'success')
         }
+      },
+      { separator: true },
+      {
+        label: `Potong ${selectedItems.value.length} Item (Cut)`,
+        icon: Scissors,
+        action: () => cutItems(selectedItems.value)
+      },
+      {
+        label: `Salin ${selectedItems.value.length} Item (Copy)`,
+        icon: Copy,
+        action: () => copyItems(selectedItems.value)
+      },
+      {
+        label: `Pindahkan ${selectedItems.value.length} Item ke... (Move to)`,
+        icon: FolderInput,
+        action: () => openMoveToDialog(selectedItems.value)
       }
     ]
 
@@ -1276,6 +1552,22 @@ function handleFileItemContextMenu(e, item) {
         label: isItemStarred(item.path) ? 'Hapus dari Bintang' : 'Beri Bintang',
         icon: Star,
         action: () => toggleStar(item)
+      },
+      { separator: true },
+      {
+        label: 'Potong Folder (Cut)',
+        icon: Scissors,
+        action: () => cutItems(item)
+      },
+      {
+        label: 'Salin Folder (Copy)',
+        icon: Copy,
+        action: () => copyItems(item)
+      },
+      {
+        label: 'Pindahkan Folder ke... (Move to)',
+        icon: FolderInput,
+        action: () => openMoveToDialog(item)
       }
     ]
 
@@ -1346,6 +1638,22 @@ function handleFileItemContextMenu(e, item) {
       label: isItemStarred(item.path) ? 'Hapus dari Bintang' : 'Beri Bintang',
       icon: Star,
       action: () => toggleStar(item)
+    },
+    { separator: true },
+    {
+      label: 'Potong Berkas (Cut)',
+      icon: Scissors,
+      action: () => cutItems(item)
+    },
+    {
+      label: 'Salin Berkas (Copy)',
+      icon: Copy,
+      action: () => copyItems(item)
+    },
+    {
+      label: 'Pindahkan Berkas ke... (Move to)',
+      icon: FolderInput,
+      action: () => openMoveToDialog(item)
     }
   )
 
@@ -1443,6 +1751,18 @@ function handleCanvasContextMenu(e) {
     },
     { separator: true }
   )
+
+  // Tempel Berkas dari Clipboard jika ada item yang di-copy atau di-cut
+  if (fileClipboard.value.items.length > 0 && authStore.canWriteStorage()) {
+    canvasMenu.push(
+      {
+        label: `Tempel (${fileClipboard.value.operation === 'cut' ? 'Pindahkan' : 'Salin'} ${fileClipboard.value.items.length} Item)`,
+        icon: ClipboardPaste,
+        action: () => pasteItems()
+      },
+      { separator: true }
+    )
+  }
 
   // Tambahkan opsi Folder, File, dan Upload hanya jika akun memiliki izin tulis
   if (authStore.canWriteStorage()) {
@@ -1919,8 +2239,57 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <!-- Right Side: Cloud Sync Shortcut, Sort Dropdown & Grid/List View Mode -->
-        <div class="flex items-center gap-2 sm:gap-2.5 shrink-0">
+        <!-- Right Side: Clipboard Actions, Cloud Sync Shortcut, Sort Dropdown & Grid/List View Mode -->
+        <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <!-- Clipboard & File Operations Action Bar (Windows 11 Ribbon Style) -->
+          <div class="flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-slate-800/80">
+            <button
+              @click="cutItems()"
+              :disabled="!hasActiveSelection"
+              class="p-1 sm:px-2 sm:py-1 rounded-lg transition flex items-center gap-1 text-[11px] font-sans"
+              :class="hasActiveSelection ? 'hover:bg-slate-800 text-slate-300 hover:text-white active:scale-95' : 'opacity-40 cursor-not-allowed text-slate-500'"
+              title="Potong Terpilih (Ctrl+X)"
+            >
+              <Scissors class="w-3.5 h-3.5 text-amber-400" />
+              <span class="hidden md:inline">Cut</span>
+            </button>
+            <button
+              @click="copyItems()"
+              :disabled="!hasActiveSelection"
+              class="p-1 sm:px-2 sm:py-1 rounded-lg transition flex items-center gap-1 text-[11px] font-sans"
+              :class="hasActiveSelection ? 'hover:bg-slate-800 text-slate-300 hover:text-white active:scale-95' : 'opacity-40 cursor-not-allowed text-slate-500'"
+              title="Salin Terpilih (Ctrl+C)"
+            >
+              <Copy class="w-3.5 h-3.5 text-sky-400" />
+              <span class="hidden md:inline">Copy</span>
+            </button>
+            <button
+              @click="pasteItems()"
+              :disabled="fileClipboard.items.length === 0 || isPasting"
+              class="p-1 sm:px-2 sm:py-1 rounded-lg transition flex items-center gap-1 text-[11px] font-sans relative"
+              :class="fileClipboard.items.length > 0 && !isPasting ? 'hover:bg-slate-800 text-amber-300 hover:text-amber-200 active:scale-95' : 'opacity-40 cursor-not-allowed text-slate-500'"
+              title="Tempel di Sini (Ctrl+V)"
+            >
+              <RefreshCw v-if="isPasting" class="w-3.5 h-3.5 animate-spin text-amber-400" />
+              <ClipboardPaste v-else class="w-3.5 h-3.5" />
+              <span class="hidden md:inline">Paste</span>
+              <span v-if="fileClipboard.items.length > 0" class="w-4 h-4 rounded-full bg-amber-500 text-slate-950 font-bold text-[9px] flex items-center justify-center -ml-0.5 shadow">
+                {{ fileClipboard.items.length }}
+              </span>
+            </button>
+            <div class="h-3 w-[1px] bg-slate-800 my-auto mx-0.5 hidden sm:block"></div>
+            <button
+              @click="openMoveToDialog()"
+              :disabled="!hasActiveSelection"
+              class="p-1 sm:px-2 sm:py-1 rounded-lg transition flex items-center gap-1 text-[11px] font-sans"
+              :class="hasActiveSelection ? 'hover:bg-slate-800 text-emerald-400 hover:text-emerald-300 active:scale-95' : 'opacity-40 cursor-not-allowed text-slate-500'"
+              title="Pindahkan ke Direktori Lain... (Move to)"
+            >
+              <FolderInput class="w-3.5 h-3.5 text-emerald-400" />
+              <span class="hidden lg:inline">Move to</span>
+            </button>
+          </div>
+
           <!-- Tombol Cloud Sync Cepat -->
           <button
             @click="windowStore.openCloudSync()"
@@ -2039,9 +2408,12 @@ onUnmounted(() => {
               @dblclick="handleItemDoubleClick(item)"
               @contextmenu.prevent.stop="handleFileItemContextMenu($event, item)"
               class="p-3 rounded-2xl border transition-all duration-200 cursor-pointer flex flex-col justify-between group relative select-none min-h-[140px]"
-              :class="isItemSelected(item)
-                ? 'bg-sky-500/25 border-sky-400 ring-2 ring-sky-400/50 shadow-lg text-sky-100'
-                : 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900/90 hover:shadow-md'"
+              :class="[
+                isItemSelected(item)
+                  ? 'bg-sky-500/25 border-sky-400 ring-2 ring-sky-400/50 shadow-lg text-sky-100'
+                  : 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900/90 hover:shadow-md',
+                isItemCut(item) ? 'opacity-40 ring-2 ring-dashed ring-amber-400/80' : ''
+              ]"
             >
               <!-- Card Top: Icon & Action Controls (Info & Star) -->
               <div class="flex items-start justify-between gap-2 mb-2">
@@ -2125,7 +2497,10 @@ onUnmounted(() => {
                   @dblclick="handleItemDoubleClick(item)"
                   @contextmenu.prevent.stop="handleFileItemContextMenu($event, item)"
                   class="hover:bg-slate-800/60 cursor-pointer transition select-none"
-                  :class="isItemSelected(item) ? 'bg-sky-500/20 text-sky-200 font-medium' : ''"
+                  :class="[
+                    isItemSelected(item) ? 'bg-sky-500/20 text-sky-200 font-medium' : '',
+                    isItemCut(item) ? 'opacity-40 line-through decoration-amber-400' : ''
+                  ]"
                 >
                   <td class="py-2.5 px-3 font-medium flex items-center gap-2.5">
                     <button @click.stop="(e) => toggleStar(item, e)" class="text-slate-500 hover:text-amber-400">
@@ -2727,6 +3102,152 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- CUSTOM MODAL: Pindahkan ke Direktori (Move To Folder Picker - Glassmorphism Slate-900) -->
+    <Teleport to="body">
+      <div
+        v-if="showMoveToModal"
+        class="fixed inset-0 bg-black/75 backdrop-blur-sm z-[9999] flex items-center justify-center p-3 sm:p-4 animate-in fade-in"
+      >
+        <div class="w-full max-w-lg bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black rounded-2xl flex flex-col max-h-[85vh] overflow-hidden text-slate-100 ring-1 ring-white/10">
+          <!-- Modal Header -->
+          <div class="p-4 flex items-center justify-between bg-slate-950/70 border-b border-slate-800 select-none">
+            <div class="flex items-center gap-2.5">
+              <div class="w-9 h-9 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
+                <FolderInput class="w-5 h-5" />
+              </div>
+              <div>
+                <h4 class="font-bold text-slate-100 text-sm">Pindahkan ke Direktori</h4>
+                <p class="text-[11px] text-slate-400">
+                  {{ moveToTargetItems.length }} item akan dipindahkan ke folder tujuan
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              @click="showMoveToModal = false"
+              :disabled="isMoving"
+              class="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition disabled:opacity-50"
+            >
+              <X class="w-4 h-4" />
+            </button>
+          </div>
+
+          <!-- Quick Storage Roots & Navigation Breadcrumb -->
+          <div class="p-3 bg-slate-950/40 border-b border-slate-800 flex flex-col gap-2 font-mono text-xs">
+            <!-- Quick Root Shortcuts -->
+            <div class="flex items-center gap-1.5 overflow-x-auto pb-1" style="scrollbar-width: none;">
+              <button
+                @click="fetchPickerFolders('/DATA')"
+                class="px-2 py-0.5 rounded-lg border text-[11px] shrink-0 transition"
+                :class="pickerPath.startsWith('/DATA') ? 'bg-sky-500/20 border-sky-500/40 text-sky-300 font-bold' : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-slate-200'"
+              >
+                /DATA
+              </button>
+              <button
+                v-for="d in storageDevices"
+                :key="d.mountpoint"
+                @click="fetchPickerFolders(d.mountpoint)"
+                class="px-2 py-0.5 rounded-lg border text-[11px] shrink-0 transition"
+                :class="pickerPath === d.mountpoint ? 'bg-sky-500/20 border-sky-500/40 text-sky-300 font-bold' : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-slate-200'"
+              >
+                {{ d.mountpoint }}
+              </button>
+            </div>
+
+            <!-- Path Bar with Up button -->
+            <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 rounded-xl px-2 py-1 text-slate-300">
+              <button
+                type="button"
+                @click="navigatePickerUp"
+                class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-sky-400 transition"
+                title="Naik satu tingkat (Up)"
+              >
+                <ArrowUp class="w-3.5 h-3.5" />
+              </button>
+              <span class="text-slate-500 text-xs">/</span>
+              <span class="truncate flex-1 text-xs text-sky-300 font-medium" :title="pickerPath">
+                {{ pickerPath }}
+              </span>
+              <button
+                type="button"
+                @click="fetchPickerFolders(pickerPath)"
+                class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
+                title="Muat ulang folder"
+              >
+                <RefreshCw class="w-3 h-3" :class="isPickerLoading ? 'animate-spin' : ''" />
+              </button>
+            </div>
+          </div>
+
+          <!-- Folder List Body -->
+          <div class="flex-1 p-3 overflow-y-auto min-h-[220px] max-h-[320px] divide-y divide-slate-800/50">
+            <div v-if="isPickerLoading" class="p-8 flex flex-col items-center justify-center gap-2 text-slate-500">
+              <RefreshCw class="w-5 h-5 animate-spin text-sky-400" />
+              <span class="text-xs">Memuat direktori...</span>
+            </div>
+
+            <div v-else-if="pickerFolders.length === 0" class="p-8 text-center text-slate-500 flex flex-col items-center gap-1.5">
+              <Folder class="w-8 h-8 text-slate-700" />
+              <span class="text-xs text-slate-400">Tidak ada subfolder di dalam direktori ini</span>
+              <span class="text-[11px] text-slate-600">Berkas akan dipindahkan langsung ke dalam folder ini.</span>
+            </div>
+
+            <div v-else class="space-y-1">
+              <div
+                v-for="folder in pickerFolders"
+                :key="folder.path"
+                @dblclick="navigatePickerFolder(folder)"
+                @click="pickerPath = folder.path"
+                class="flex items-center justify-between p-2 rounded-xl transition cursor-pointer select-none group"
+                :class="pickerPath === folder.path ? 'bg-sky-500/20 text-sky-200 font-semibold border border-sky-500/30' : 'hover:bg-slate-800/60 text-slate-300'"
+              >
+                <div class="flex items-center gap-2.5 min-w-0">
+                  <Folder class="w-4 h-4 text-sky-400 fill-sky-400/20 shrink-0" />
+                  <span class="text-xs truncate font-mono">{{ folder.name }}</span>
+                </div>
+                <button
+                  type="button"
+                  @click.stop="navigatePickerFolder(folder)"
+                  class="text-[10px] px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition flex items-center gap-1 opacity-0 group-hover:opacity-100"
+                >
+                  <span>Buka</span>
+                  <ChevronRight class="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Destination Target Summary -->
+          <div class="px-4 py-2 bg-slate-950/80 border-t border-slate-800 flex items-center gap-2 text-xs font-mono text-slate-400">
+            <span class="text-slate-500">Tujuan:</span>
+            <span class="text-emerald-400 font-semibold truncate">{{ pickerPath }}</span>
+          </div>
+
+          <!-- Modal Footer -->
+          <div class="flex items-center justify-end gap-2 bg-slate-950 px-4 py-3 border-t border-slate-800 select-none">
+            <button
+              type="button"
+              @click="showMoveToModal = false"
+              :disabled="isMoving"
+              class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition active:scale-95 disabled:opacity-50"
+            >
+              Batal
+            </button>
+            <button
+              type="button"
+              @click="executeMoveTo"
+              :disabled="isMoving"
+              class="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition flex items-center gap-2 shadow-lg shadow-sky-950/50 active:scale-95 disabled:opacity-50"
+            >
+              <RefreshCw v-if="isMoving" class="w-3.5 h-3.5 animate-spin" />
+              <FolderInput v-else class="w-3.5 h-3.5" />
+              <span>{{ isMoving ? 'Memindahkan...' : 'Pindahkan ke Sini' }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Hidden Native Inputs untuk File, Folder, dan ZIP Upload -->
     <input

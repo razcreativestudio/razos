@@ -346,3 +346,167 @@ func ExtractZip(srcZip, destDir string) error {
 	}
 	return nil
 }
+
+// generateUniqueCopyName menghasilkan nama berkas/folder baru jika tujuan sudah ada (contoh: "dokumen - Salinan.txt" atau "dokumen - Salinan (2).txt")
+func generateUniqueCopyName(destDir, baseName string) string {
+	ext := filepath.Ext(baseName)
+	nameWithoutExt := strings.TrimSuffix(baseName, ext)
+
+	candidate := filepath.Join(destDir, fmt.Sprintf("%s - Salinan%s", nameWithoutExt, ext))
+	if _, err := os.Stat(candidate); os.IsNotExist(err) {
+		return candidate
+	}
+
+	for i := 2; i <= 1000; i++ {
+		candidate = filepath.Join(destDir, fmt.Sprintf("%s - Salinan (%d)%s", nameWithoutExt, i, ext))
+		if _, err := os.Stat(candidate); os.IsNotExist(err) {
+			return candidate
+		}
+	}
+	return filepath.Join(destDir, fmt.Sprintf("%s_%d%s", nameWithoutExt, time.Now().Unix(), ext))
+}
+
+// CopyFile menyalin satu berkas tunggal dari src ke dst dengan izin yang sama
+func CopyFile(src, dst string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	srcStat, err := srcFile.Stat()
+	if err != nil {
+		return err
+	}
+
+	_ = os.MkdirAll(filepath.Dir(dst), 0755)
+	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, srcStat.Mode())
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return err
+	}
+	return dstFile.Sync()
+}
+
+// CopyDirectory menyalin sebuah direktori beserta seluruh subfolder dan isinya secara rekursif
+func CopyDirectory(srcDir, dstDir string) error {
+	srcStat, err := os.Stat(srcDir)
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(dstDir, srcStat.Mode()); err != nil {
+		return err
+	}
+
+	entries, err := os.ReadDir(srcDir)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(srcDir, entry.Name())
+		dstPath := filepath.Join(dstDir, entry.Name())
+
+		if entry.IsDir() {
+			if err := CopyDirectory(srcPath, dstPath); err != nil {
+				return err
+			}
+		} else {
+			if err := CopyFile(srcPath, dstPath); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// CopyItem menyalin berkas atau folder ke direktori tujuan (destParent)
+func CopyItem(src, destParent string, overwrite bool) (string, error) {
+	normSrc := NormalizeStoragePath(src)
+	cleanSrc := filepath.FromSlash(normSrc)
+
+	normDest := NormalizeStoragePath(destParent)
+	cleanDestDir := filepath.FromSlash(normDest)
+
+	srcStat, err := os.Stat(cleanSrc)
+	if err != nil {
+		return "", fmt.Errorf("berkas sumber tidak ditemukan: %w", err)
+	}
+
+	baseName := filepath.Base(cleanSrc)
+	targetDst := filepath.Join(cleanDestDir, baseName)
+
+	// Jika tujuan sama dengan sumber atau sudah ada dan tidak overwrite
+	if _, err := os.Stat(targetDst); err == nil && !overwrite {
+		targetDst = generateUniqueCopyName(cleanDestDir, baseName)
+	}
+
+	if srcStat.IsDir() {
+		// Proteksi rekursi menyalin folder ke dalam dirinya sendiri
+		if strings.HasPrefix(filepath.Clean(targetDst), filepath.Clean(cleanSrc)) {
+			return "", fmt.Errorf("tidak dapat menyalin folder ke dalam dirinya sendiri")
+		}
+		if err := CopyDirectory(cleanSrc, targetDst); err != nil {
+			return "", err
+		}
+	} else {
+		if err := CopyFile(cleanSrc, targetDst); err != nil {
+			return "", err
+		}
+	}
+
+	return filepath.ToSlash(targetDst), nil
+}
+
+// MoveItem memindahkan berkas atau folder ke direktori tujuan (destParent)
+func MoveItem(src, destParent string, overwrite bool) (string, error) {
+	normSrc := NormalizeStoragePath(src)
+	cleanSrc := filepath.FromSlash(normSrc)
+
+	normDest := NormalizeStoragePath(destParent)
+	cleanDestDir := filepath.FromSlash(normDest)
+
+	srcStat, err := os.Stat(cleanSrc)
+	if err != nil {
+		return "", fmt.Errorf("berkas sumber tidak ditemukan: %w", err)
+	}
+
+	baseName := filepath.Base(cleanSrc)
+	targetDst := filepath.Join(cleanDestDir, baseName)
+
+	if filepath.Clean(cleanSrc) == filepath.Clean(targetDst) {
+		return filepath.ToSlash(targetDst), nil // sudah di folder yang sama
+	}
+
+	if srcStat.IsDir() && strings.HasPrefix(filepath.Clean(targetDst), filepath.Clean(cleanSrc)) {
+		return "", fmt.Errorf("tidak dapat memindahkan folder ke dalam dirinya sendiri")
+	}
+
+	if _, err := os.Stat(targetDst); err == nil && !overwrite {
+		targetDst = generateUniqueCopyName(cleanDestDir, baseName)
+	}
+
+	// Coba rename langsung (sangat cepat jika partisi yang sama)
+	if err := os.Rename(cleanSrc, targetDst); err == nil {
+		return filepath.ToSlash(targetDst), nil
+	}
+
+	// Fallback jika lintas partisi / storage device: Copy lalu Delete
+	if srcStat.IsDir() {
+		if err := CopyDirectory(cleanSrc, targetDst); err != nil {
+			return "", err
+		}
+	} else {
+		if err := CopyFile(cleanSrc, targetDst); err != nil {
+			return "", err
+		}
+	}
+	_ = os.RemoveAll(cleanSrc)
+
+	return filepath.ToSlash(targetDst), nil
+}
