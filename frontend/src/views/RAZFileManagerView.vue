@@ -12,7 +12,7 @@
  * - Deep RAZ Studio Code Integration: Membuka berkas kode/teks langsung di Sublime/Notepad++ complex editor.
  * - Fluid Responsive Grid & List View: Auto-fill layout yang tidak pernah gepeng dengan status bar lengkap.
  */
-import { ref, onMounted, computed, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import { useSystemStore } from '../stores/RAZSystemStore'
 import { useWindowStore } from '../stores/RAZWindowStore'
 import { useContextMenuStore } from '../stores/RAZContextMenuStore'
@@ -24,7 +24,7 @@ import {
   Grid, List, Search, Star, Download, Info, CheckCircle2, Clock, Upload,
   Share2, MoreVertical, LayoutGrid, Server, Image, Film, Music, FileCheck, Play,
   Copy, Check, BookOpen, FilePlus, FolderPlus, FileUp, FolderUp, Archive, UploadCloud,
-  ChevronDown, Sparkles, Loader2, Code2, Cloud, CloudUpload, ShieldAlert, Lock, ArrowUpDown
+  ChevronDown, ChevronUp, Minus, Maximize2, Sparkles, Loader2, Code2, Cloud, CloudUpload, ShieldAlert, Lock, ArrowUpDown
 } from 'lucide-vue-next'
 
 const systemStore = useSystemStore()
@@ -224,22 +224,45 @@ const uploadCurrentFileName = ref('')
 const uploadTotalCount = ref(0)
 const uploadCompletedCount = ref(0)
 const showUploadModal = ref(false)
+const isUploadMinimized = ref(false) // Toggle Minimize ke pojok taskbar (Google Drive style)
+const showCancelConfirmModal = ref(false) // Modal konfirmasi pembatalan unggahan
 const uploadType = ref('file') // 'file' | 'folder' | 'zip'
 const uploadTransferredBytes = ref(0)
 const uploadTotalBytes = ref(0)
 const uploadSpeedText = ref('')
 const uploadErrorMsg = ref('')
+const lockedUploadDestDir = ref('/DATA')
 let isUploadCancelled = false
 
-// Batalkan proses unggah yang sedang berjalan
-function cancelUpload() {
+// Peringatan sebelum refresh browser jika upload sedang berlangsung
+function handleBeforeUnload(e) {
+  if (isUploading.value) {
+    e.preventDefault()
+    e.returnValue = 'Proses upload sedang berlangsung. Jika Anda me-refresh atau menutup halaman, proses upload akan dibatalkan.'
+    return e.returnValue
+  }
+}
+
+// Buka dialog konfirmasi sebelum membatalkan proses upload
+function requestCancelUpload() {
+  if (!isUploading.value) {
+    showUploadModal.value = false
+    return
+  }
+  showCancelConfirmModal.value = true
+}
+
+// Konfirmasi pembatalan proses unggah yang sedang berjalan
+function confirmCancelUpload() {
+  showCancelConfirmModal.value = false
   isUploadCancelled = true
   isUploading.value = false
   uploadErrorMsg.value = 'Unggahan dibatalkan oleh pengguna'
+  systemStore.showNotification('Upload Dibatalkan', 'Proses transfer berkas telah dihentikan.', 'info')
   setTimeout(() => {
     showUploadModal.value = false
-    fetchFiles()
-  }, 1200)
+    fetchFiles(currentPath.value)
+  }, 1000)
 }
 
 // Buka Jendela Mandiri Info & Properti Berkas (v2.6.0)
@@ -832,8 +855,8 @@ function triggerUpload(type) {
 const UPLOAD_CHUNK_SIZE = 4 * 1024 * 1024
 
 // Helper Upload Single File ke API raw-stream dengan Chunked Slicing & Real-time Byte Progress
-async function uploadSingleFileRaw(file, relativePath = '', autoExtract = false) {
-  const destDir = currentPath.value
+async function uploadSingleFileRaw(file, relativePath = '', autoExtract = false, targetDir = lockedUploadDestDir.value) {
+  const destDir = targetDir || lockedUploadDestDir.value || currentPath.value
   const totalSize = file.size
   const totalChunks = Math.max(1, Math.ceil(totalSize / UPLOAD_CHUNK_SIZE))
 
@@ -927,6 +950,7 @@ async function handleFileUploadChange(e) {
   // Reset input agar dapat memilih kembali berkas yang sama
   if (fileUploadInputRef.value) fileUploadInputRef.value.value = ''
 
+  lockedUploadDestDir.value = currentPath.value // Kunci direktori target upload
   isUploadCancelled = false
   uploadType.value = 'file'
   uploadTotalCount.value = selectedFiles.length
@@ -935,6 +959,7 @@ async function handleFileUploadChange(e) {
   uploadErrorMsg.value = ''
   isUploading.value = true
   showUploadModal.value = true
+  isUploadMinimized.value = false // Tampilkan widget mengapung
 
   const overallTotalBytes = selectedFiles.reduce((acc, f) => acc + f.size, 0)
   let overallTransferredBytes = 0
@@ -946,7 +971,7 @@ async function handleFileUploadChange(e) {
     uploadCurrentFileName.value = file.name
 
     try {
-      await uploadSingleFileRaw(file, '', false)
+      await uploadSingleFileRaw(file, '', false, lockedUploadDestDir.value)
       uploadCompletedCount.value++
       overallTransferredBytes += file.size
       uploadProgress.value = Math.round((overallTransferredBytes / overallTotalBytes) * 100)
@@ -962,9 +987,11 @@ async function handleFileUploadChange(e) {
   if (!uploadErrorMsg.value && !isUploadCancelled) {
     uploadProgress.value = 100
     systemStore.showNotification('Upload Selesai', `${uploadCompletedCount.value} berkas berhasil diunggah`, 'success')
-    setTimeout(() => { showUploadModal.value = false }, 1800)
+    setTimeout(() => {
+      if (!isUploading.value) showUploadModal.value = false
+    }, 3500)
   }
-  fetchFiles()
+  fetchFiles(currentPath.value)
 }
 
 // Handler Upload Seluruh Folder (Recursive WebkitDirectory)
@@ -974,6 +1001,7 @@ async function handleFolderUploadChange(e) {
 
   if (folderUploadInputRef.value) folderUploadInputRef.value.value = ''
 
+  lockedUploadDestDir.value = currentPath.value
   isUploadCancelled = false
   uploadType.value = 'folder'
   uploadTotalCount.value = selectedFiles.length
@@ -982,6 +1010,7 @@ async function handleFolderUploadChange(e) {
   uploadErrorMsg.value = ''
   isUploading.value = true
   showUploadModal.value = true
+  isUploadMinimized.value = false
 
   const overallTotalBytes = selectedFiles.reduce((acc, f) => acc + f.size, 0)
   let overallTransferredBytes = 0
@@ -993,7 +1022,7 @@ async function handleFolderUploadChange(e) {
     uploadCurrentFileName.value = file.webkitRelativePath || file.name
 
     try {
-      await uploadSingleFileRaw(file, file.webkitRelativePath || '', false)
+      await uploadSingleFileRaw(file, file.webkitRelativePath || '', false, lockedUploadDestDir.value)
       uploadCompletedCount.value++
       overallTransferredBytes += file.size
       uploadProgress.value = Math.round((overallTransferredBytes / overallTotalBytes) * 100)
@@ -1009,9 +1038,11 @@ async function handleFolderUploadChange(e) {
   if (!uploadErrorMsg.value && !isUploadCancelled) {
     uploadProgress.value = 100
     systemStore.showNotification('Folder Diunggah', `Folder beserta ${uploadCompletedCount.value} berkas berhasil diunggah`, 'success')
-    setTimeout(() => { showUploadModal.value = false }, 1800)
+    setTimeout(() => {
+      if (!isUploading.value) showUploadModal.value = false
+    }, 3500)
   }
-  fetchFiles()
+  fetchFiles(currentPath.value)
 }
 
 // Handler Upload ZIP dengan Auto-Extract Otomatis
@@ -1022,6 +1053,7 @@ async function handleZipUploadChange(e) {
   if (zipUploadInputRef.value) zipUploadInputRef.value.value = ''
 
   const zipFile = selectedFiles[0]
+  lockedUploadDestDir.value = currentPath.value
   isUploadCancelled = false
   uploadType.value = 'zip'
   uploadTotalCount.value = 1
@@ -1031,19 +1063,22 @@ async function handleZipUploadChange(e) {
   uploadErrorMsg.value = ''
   isUploading.value = true
   showUploadModal.value = true
+  isUploadMinimized.value = false
 
   try {
-    const res = await uploadSingleFileRaw(zipFile, '', true)
+    const res = await uploadSingleFileRaw(zipFile, '', true, lockedUploadDestDir.value)
     uploadProgress.value = 100
     uploadCompletedCount.value = 1
     systemStore.showNotification('Ekstraksi Sukses', res.message || `Arsip "${zipFile.name}" berhasil diekstrak`, 'success')
-    setTimeout(() => { showUploadModal.value = false }, 1800)
+    setTimeout(() => {
+      if (!isUploading.value) showUploadModal.value = false
+    }, 3500)
   } catch (err) {
     uploadErrorMsg.value = `Gagal mengekstrak ZIP: ${err.message}`
     systemStore.showNotification('Gagal', `Gagal mengekstrak ZIP: ${err.message}`, 'error')
   } finally {
     isUploading.value = false
-    fetchFiles()
+    fetchFiles(currentPath.value)
   }
 }
 
@@ -1500,6 +1535,7 @@ function handleCanvasContextMenu(e) {
 }
 
 onMounted(async () => {
+  window.addEventListener('beforeunload', handleBeforeUnload)
   await fetchDevices()
   // Tentukan path awal berbasis izin RBAC & direktori home pengguna
   const userHome = authStore.getUserHomeDir()
@@ -1508,6 +1544,10 @@ onMounted(async () => {
   addressInputValue.value = targetPath
   activeSidebarSection.value = 'drive'
   await fetchFiles(targetPath)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
 
@@ -2418,80 +2458,198 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- CUSTOM MODAL: Progress Upload File / Folder / ZIP -->
-    <div
-      v-if="showUploadModal"
-      class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 animate-in fade-in"
-    >
-      <div class="w-full max-w-sm bg-slate-900 border border-slate-700/80 shadow-2xl shadow-black ring-1 ring-white/10 rounded-2xl flex flex-col overflow-hidden">
-        <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800 px-4 py-2.5 select-none">
-          <div class="flex items-center gap-2">
-            <div class="w-6 h-6 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
-              <UploadCloud class="w-3.5 h-3.5" />
-            </div>
-            <h4 class="font-bold text-slate-100 text-xs">
-              {{ uploadType === 'zip' ? 'Mengekstrak Arsip ZIP' : 'Mengunggah Berkas' }}
-            </h4>
+    <!-- ========================================================================= -->
+    <!-- FLOATING UPLOAD WIDGET (Google Drive Style Non-Blocking Background Dock)    -->
+    <!-- ========================================================================= -->
+    <Teleport to="body">
+      <div
+        v-if="showUploadModal"
+        class="fixed bottom-14 right-6 z-[9999] flex flex-col items-end pointer-events-none select-none transition-all duration-300 font-sans"
+      >
+        <!-- MODE 1: MINIMIZED (Capsule Pill di Atas Taskbar) -->
+        <div
+          v-if="isUploadMinimized"
+          @click="isUploadMinimized = false"
+          class="pointer-events-auto flex items-center gap-3 px-3.5 py-2 rounded-2xl bg-slate-900/95 border border-slate-700/80 hover:border-sky-500/60 shadow-2xl shadow-black backdrop-blur-md cursor-pointer transition-all hover:scale-105 active:scale-95 group text-slate-100 ring-1 ring-white/10"
+          title="Klik untuk membuka detail unggahan"
+        >
+          <div class="w-6 h-6 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
+            <RefreshCw v-if="isUploading" class="w-3.5 h-3.5 animate-spin" />
+            <Check v-else class="w-3.5 h-3.5 text-emerald-400" />
           </div>
-          <button v-if="!isUploading" @click="showUploadModal = false" class="w-6 h-6 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95" title="Tutup">
-            <X class="w-3.5 h-3.5" />
-          </button>
+
+          <div class="flex flex-col text-left">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold text-slate-200">
+                {{ isUploading ? `Mengunggah ${uploadProgress}%` : 'Unggahan Selesai' }}
+              </span>
+              <span class="text-[10px] text-slate-400 font-mono">
+                ({{ uploadCompletedCount }}/{{ uploadTotalCount }})
+              </span>
+            </div>
+            <span v-if="isUploading && uploadSpeedText" class="text-[10px] text-sky-400 font-mono">
+              {{ uploadSpeedText }}
+            </span>
+          </div>
+
+          <div class="flex items-center gap-1 ml-2">
+            <button
+              type="button"
+              @click.stop="isUploadMinimized = false"
+              class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
+              title="Perbesar Tampilan"
+            >
+              <ChevronUp class="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              @click.stop="requestCancelUpload"
+              class="p-1 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition"
+              :title="isUploading ? 'Batalkan Unggahan' : 'Tutup'"
+            >
+              <X class="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
-        <div class="p-4 space-y-3 font-sans">
-          <div class="flex items-center justify-between text-xs font-mono">
-            <span class="text-slate-300 truncate max-w-[200px]" :title="uploadCurrentFileName">
-              {{ uploadCurrentFileName || 'Memproses berkas...' }}
-            </span>
-            <span class="text-sky-400 font-bold">{{ uploadProgress }}%</span>
-          </div>
+        <!-- MODE 2: EXPANDED (Floating Card Ala Google Drive / Windows 11) -->
+        <div
+          v-else
+          class="pointer-events-auto w-84 sm:w-96 bg-slate-900/95 border border-slate-700/80 shadow-2xl shadow-black ring-1 ring-white/10 rounded-2xl flex flex-col overflow-hidden backdrop-blur-md animate-in fade-in slide-in-from-bottom-3 duration-200"
+        >
+          <!-- Card Header -->
+          <div class="flex items-center justify-between bg-slate-950/85 border-b border-slate-800/80 px-4 py-3 select-none">
+            <div class="flex items-center gap-2.5">
+              <div class="w-7 h-7 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center border border-sky-500/30">
+                <UploadCloud class="w-4 h-4" />
+              </div>
+              <div>
+                <h4 class="font-bold text-slate-100 text-xs">
+                  {{ isUploading ? `Mengunggah ${uploadTotalCount} item` : 'Unggahan Selesai' }}
+                </h4>
+                <span class="text-[10px] text-slate-400 font-mono block">
+                  Ke direktori: {{ lockedUploadDestDir }}
+                </span>
+              </div>
+            </div>
 
-          <!-- Progress Bar Beranimasi Halus -->
-          <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-700/60">
-            <div
-              class="h-full bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-400 transition-all duration-300 rounded-full"
-              :style="{ width: `${uploadProgress}%` }"
-            ></div>
-          </div>
-
-          <!-- Rincian Ukuran Byte & Kecepatan Transfer -->
-          <div class="flex items-center justify-between text-[11px] font-mono text-slate-400">
-            <span>{{ formatBytes(uploadTransferredBytes) }} / {{ formatBytes(uploadTotalBytes) }}</span>
-            <span v-if="isUploading && uploadSpeedText" class="text-sky-300 font-semibold">{{ uploadSpeedText }}</span>
-          </div>
-
-          <!-- Pesan Error / Peringatan jika Terjadi Gangguan -->
-          <div v-if="uploadErrorMsg" class="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px] flex items-center gap-2">
-            <AlertTriangle class="w-4 h-4 text-rose-400 shrink-0" />
-            <span class="truncate">{{ uploadErrorMsg }}</span>
-          </div>
-
-          <!-- Status Bawah & Tombol Aksi -->
-          <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800/60">
-            <span>{{ uploadCompletedCount }} dari {{ uploadTotalCount }} item selesai</span>
-
-            <div class="flex items-center gap-2">
+            <!-- Minimize & Close Action Buttons -->
+            <div class="flex items-center gap-1">
               <button
-                v-if="isUploading"
                 type="button"
-                @click="cancelUpload"
-                class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-slate-700 transition text-[10px] active:scale-95"
+                @click="isUploadMinimized = true"
+                class="w-6 h-6 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95"
+                title="Minimalkan ke pojok bawah (Google Drive style)"
               >
-                Batal
+                <Minus class="w-3.5 h-3.5" />
               </button>
-              <span v-if="isUploading" class="flex items-center gap-1 text-sky-400 font-medium">
-                <RefreshCw class="w-3 h-3 animate-spin" />
-                <span>Mengunggah...</span>
+              <button
+                type="button"
+                @click="requestCancelUpload"
+                class="w-6 h-6 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95"
+                :title="isUploading ? 'Batalkan Unggahan' : 'Tutup'"
+              >
+                <X class="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <!-- Card Body Content -->
+          <div class="p-4 space-y-3 font-sans">
+            <!-- File Info & Percent -->
+            <div class="flex items-center justify-between text-xs font-mono">
+              <span class="text-slate-200 font-medium truncate max-w-[210px]" :title="uploadCurrentFileName">
+                {{ uploadCurrentFileName || 'Memproses berkas...' }}
               </span>
-              <span v-else-if="!uploadErrorMsg" class="text-emerald-400 flex items-center gap-1 font-semibold">
-                <Check class="w-3.5 h-3.5" />
-                <span>Selesai</span>
-              </span>
+              <span class="text-sky-400 font-bold">{{ uploadProgress }}%</span>
+            </div>
+
+            <!-- Animated Smooth Progress Bar -->
+            <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-800">
+              <div
+                class="h-full bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-400 transition-all duration-300 rounded-full"
+                :style="{ width: `${uploadProgress}%` }"
+              ></div>
+            </div>
+
+            <!-- Real-time Byte Stats & Speed -->
+            <div class="flex items-center justify-between text-[11px] font-mono text-slate-400">
+              <span>{{ formatBytes(uploadTransferredBytes) }} / {{ formatBytes(uploadTotalBytes) }}</span>
+              <span v-if="isUploading && uploadSpeedText" class="text-sky-300 font-semibold">{{ uploadSpeedText }}</span>
+            </div>
+
+            <!-- Error Banner jika ada kendala -->
+            <div v-if="uploadErrorMsg" class="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px] flex items-center gap-2">
+              <AlertTriangle class="w-4 h-4 text-rose-400 shrink-0" />
+              <span class="truncate">{{ uploadErrorMsg }}</span>
+            </div>
+
+            <!-- Card Bottom Bar: Item Count & Actions -->
+            <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1.5 border-t border-slate-800/60">
+              <span>{{ uploadCompletedCount }} dari {{ uploadTotalCount }} item selesai</span>
+
+              <div class="flex items-center gap-2">
+                <button
+                  v-if="isUploading"
+                  type="button"
+                  @click="requestCancelUpload"
+                  class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-slate-700 transition text-[10px] active:scale-95"
+                >
+                  Batal
+                </button>
+                <span v-if="isUploading" class="flex items-center gap-1 text-sky-400 font-medium">
+                  <RefreshCw class="w-3 h-3 animate-spin" />
+                  <span>Mengunggah...</span>
+                </span>
+                <span v-else-if="!uploadErrorMsg" class="text-emerald-400 flex items-center gap-1 font-semibold">
+                  <Check class="w-3.5 h-3.5" />
+                  <span>Selesai</span>
+                </span>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </Teleport>
+
+    <!-- CUSTOM MODAL: Konfirmasi Batalkan Unggahan (Glassmorphism Slate-900) -->
+    <Teleport to="body">
+      <div
+        v-if="showCancelConfirmModal"
+        class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 animate-in fade-in"
+      >
+        <div class="w-full max-w-sm bg-slate-900 border border-amber-500/40 shadow-2xl shadow-black ring-1 ring-amber-500/20 rounded-2xl flex flex-col overflow-hidden text-slate-100">
+          <div class="p-4 flex items-start gap-3 bg-slate-950/60 border-b border-slate-800">
+            <div class="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+              <AlertTriangle class="w-5 h-5" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <h4 class="font-bold text-slate-100 text-sm">Batalkan Proses Unggah?</h4>
+              <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+                Saat ini berkas <strong class="text-slate-200">{{ uploadCurrentFileName }}</strong> sedang ditransfer ke server. Membatalkan akan menghentikan proses unggah dan berkas tidak akan tersimpan utuh.
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center justify-end gap-2 bg-slate-950/90 px-4 py-2.5 border-t border-slate-800">
+            <button
+              type="button"
+              @click="showCancelConfirmModal = false"
+              class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition active:scale-95"
+            >
+              Lanjutkan Unggah
+            </button>
+            <button
+              type="button"
+              @click="confirmCancelUpload"
+              class="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition flex items-center gap-1.5 shadow active:scale-95"
+            >
+              <Trash2 class="w-3.5 h-3.5" />
+              <span>Ya, Batalkan</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- CUSTOM MODAL: Konfirmasi Hapus Berkas / Folder (Glassmorphism Slate-900) -->
     <div

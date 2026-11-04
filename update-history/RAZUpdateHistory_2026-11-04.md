@@ -40,3 +40,29 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
    - Banner notifikasi error jika terjadi penolakan server.
 5. **Kompilasi Ulang Frontend:**
    - Build produksi Vite (`dist/assets/index-BQp6uWBU.js`) sukses 100% tanpa error dalam 5.74 detik.
+
+---
+
+### Versi: 4.5.4-file-manager-gdrive-floating-background-upload (Google Drive Style Floating Minimizable Upload Manager & Anti-Refresh Guard)
+**Waktu Eksekusi:** 2026-11-04 10:25 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah / Permintaan Pengguna
+- Pengguna meminta agar proses unggah berkas dapat berjalan di latar belakang (*background process*), dapat diminimalkan ke pojok taskbar (seperti pada Google Drive) sehingga pengguna tetap bisa bebas beraktivitas, serta adanya proteksi konfirmasi/peringatan jika tab browser tidak sengaja di-refresh saat proses unggah masih berlangsung.
+
+#### 2. Investigasi & Solusi Desain UI/UX
+1. **Penghapusan Modal Backdrop Penuh (Zero Blocking):**
+   - Mengganti dialog modal tengah layar yang memblokir layar (`fixed inset-0 bg-black/40`) dengan **Floating Dock Widget** menggunakan `<Teleport to="body">` yang melayang di pojok kanan bawah desktop (`fixed bottom-14 right-6 z-[9999]`).
+   - Kontainer induk bersifat `pointer-events-none` sementara kartu widget bersifat `pointer-events-auto`, sehingga pengguna bebas membuka folder lain, membaca berkas, atau menjalankan aplikasi lain di File Manager / Desktop sembari proses unggah tetap berjalan di background.
+2. **Dua Mode Tampilan Ala Google Drive:**
+   - **Mode Penuh (Expanded Card):** Menampilkan nama berkas aktif, progress bar beranimasi, byte stats, kecepatan transfer, ringkasan jumlah item, tombol minimize, dan tombol batal.
+   - **Mode Minim (Taskbar Floating Pill):** Dikompresi menjadi kapsul anggun di atas taskbar (`Mengunggah 22% (3/6) • 933 KB/s`) lengkap dengan indikator animasi dan tombol perbesar/tutup.
+3. **Penguncian Path Tujuan (*Locked Destination Directory*):**
+   - Jalur direktori penyimpanan dikunci saat unggahan dimulai (`lockedUploadDestDir`). Pengguna dapat berpindah-pindah folder tanpa khawatir berkas terkirim ke folder yang salah.
+4. **Proteksi Anti-Refresh & Anti-Close (`beforeunload` Guard):**
+   - Mendaftarkan event listener `beforeunload` saat proses unggah aktif. Jika pengguna menekan F5, Ctrl+R, atau menutup tab browser, browser secara otomatis memunculkan dialog peringatan untuk mencegah hilangnya progres unggah.
+5. **Custom Modal Konfirmasi Pembatalan (Glassmorphism Slate-900):**
+   - Menekan tombol Batal atau Tutup saat unggahan berlangsung tidak akan langsung memutus koneksi, melainkan memunculkan dialog konfirmasi kustom: *"Batalkan Proses Unggah?"* dengan tombol *"Lanjutkan Unggah"* dan *"Ya, Batalkan"*.
+6. **Kompilasi Ulang Bundle Produksi:**
+   - Build Vite (`dist/assets/index-DBZpIQut.js` & `dist/assets/index-dhKDcG6e.css`) sukses 100% tanpa error dalam 5.57 detik.
+
