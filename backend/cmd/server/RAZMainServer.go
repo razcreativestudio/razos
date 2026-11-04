@@ -26,10 +26,14 @@ func main() {
 	r := gin.New()
 	r.Use(gin.Recovery())
 
-	// Konfigurasi CORS agar frontend dapat berkomunikasi lancar
+	// Konfigurasi CORS agar frontend dapat berkomunikasi lancar lintas origin dan proxy
 	config := cors.DefaultConfig()
 	config.AllowAllOrigins = true
-	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
+	config.AllowHeaders = []string{
+		"Origin", "Content-Length", "Content-Type", "Authorization",
+		"x-dest-dir", "x-filename", "x-relative-path", "x-auto-extract",
+		"x-chunk-index", "x-total-chunks", "x-chunk-offset", "x-file-size",
+	}
 	r.Use(cors.New(config))
 
 	// Daftarkan seluruh rute REST API

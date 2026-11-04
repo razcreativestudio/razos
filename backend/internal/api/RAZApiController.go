@@ -1377,12 +1377,30 @@ func handleGetThumbnail(c *gin.Context) {
 	c.File(cleanPath)
 }
 
-// handleUploadRaw memproses streaming upload berkas tunggal, folder, atau ZIP auto-extract
+// handleUploadRaw memproses streaming upload berkas tunggal, folder, atau ZIP auto-extract,
+// serta mendukung chunked slice upload untuk berkas berukuran besar (>100 MB) agar bebas batasan reverse proxy (Cloudflare/Nginx).
 func handleUploadRaw(c *gin.Context) {
 	destDir, _ := url.QueryUnescape(c.GetHeader("x-dest-dir"))
 	filename, _ := url.QueryUnescape(c.GetHeader("x-filename"))
 	relPath, _ := url.QueryUnescape(c.GetHeader("x-relative-path"))
 	autoExtract := c.GetHeader("x-auto-extract") == "true"
+
+	// Deteksi header chunked slice upload
+	chunkIndexStr := c.GetHeader("x-chunk-index")
+	totalChunksStr := c.GetHeader("x-total-chunks")
+
+	chunkIndex := -1
+	totalChunks := 1
+	if chunkIndexStr != "" {
+		if idx, err := strconv.Atoi(chunkIndexStr); err == nil {
+			chunkIndex = idx
+		}
+	}
+	if totalChunksStr != "" {
+		if tot, err := strconv.Atoi(totalChunksStr); err == nil {
+			totalChunks = tot
+		}
+	}
 
 	if destDir == "" {
 		destDir = "/DATA"
@@ -1408,9 +1426,20 @@ func handleUploadRaw(c *gin.Context) {
 	}
 
 	targetFilePath := filepath.Join(targetDir, finalFilename)
-	out, err := os.Create(targetFilePath)
+
+	var out *os.File
+	var err error
+
+	// Jika ini chunk pertama (0) atau upload non-chunked (-1), buat berkas baru / truncate
+	if chunkIndex <= 0 {
+		out, err = os.OpenFile(targetFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	} else {
+		// Jika ini chunk lanjutan (1, 2, ...), append ke berkas yang sudah ada
+		out, err = os.OpenFile(targetFilePath, os.O_WRONLY|os.O_APPEND, 0644)
+	}
+
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat berkas tujuan: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuka/membuat berkas tujuan: " + err.Error()})
 		return
 	}
 	defer out.Close()
@@ -1421,12 +1450,19 @@ func handleUploadRaw(c *gin.Context) {
 	}
 	out.Close()
 
-	// Jika berkas adalah zip dan flag auto-extract aktif, ekstrak isi zip
-	if autoExtract && strings.HasSuffix(strings.ToLower(finalFilename), ".zip") {
+	isCompleted := (chunkIndex == -1) || (chunkIndex == totalChunks-1)
+
+	// Jika seluruh chunk telah selesai dan berkas adalah zip dengan flag auto-extract aktif
+	if isCompleted && autoExtract && strings.HasSuffix(strings.ToLower(finalFilename), ".zip") {
 		_ = filemanager.ExtractZip(targetFilePath, targetDir)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "uploaded", "path": filepath.ToSlash(targetFilePath)})
+	c.JSON(http.StatusOK, gin.H{
+		"status":      "uploaded",
+		"completed":   isCompleted,
+		"chunk_index": chunkIndex,
+		"path":        filepath.ToSlash(targetFilePath),
+	})
 }
 
 // RAZDesktopConfig mendefinisikan skema data konfigurasi desktop lintas perangkat

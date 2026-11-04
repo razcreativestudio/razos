@@ -225,6 +225,22 @@ const uploadTotalCount = ref(0)
 const uploadCompletedCount = ref(0)
 const showUploadModal = ref(false)
 const uploadType = ref('file') // 'file' | 'folder' | 'zip'
+const uploadTransferredBytes = ref(0)
+const uploadTotalBytes = ref(0)
+const uploadSpeedText = ref('')
+const uploadErrorMsg = ref('')
+let isUploadCancelled = false
+
+// Batalkan proses unggah yang sedang berjalan
+function cancelUpload() {
+  isUploadCancelled = true
+  isUploading.value = false
+  uploadErrorMsg.value = 'Unggahan dibatalkan oleh pengguna'
+  setTimeout(() => {
+    showUploadModal.value = false
+    fetchFiles()
+  }, 1200)
+}
 
 // Buka Jendela Mandiri Info & Properti Berkas (v2.6.0)
 function openInfoModal(item = selectedItem.value) {
@@ -812,49 +828,143 @@ function triggerUpload(type) {
   }
 }
 
-// Helper Upload Single File ke API raw-stream
+// Konstanta ukuran slice per-chunk: 4 MB (optimal untuk bypass batas proxy Cloudflare 100MB & memori hemat STB)
+const UPLOAD_CHUNK_SIZE = 4 * 1024 * 1024
+
+// Helper Upload Single File ke API raw-stream dengan Chunked Slicing & Real-time Byte Progress
 async function uploadSingleFileRaw(file, relativePath = '', autoExtract = false) {
   const destDir = currentPath.value
-  const res = await fetch('/api/v1/files/upload-raw', {
-    method: 'POST',
-    headers: {
-      'x-dest-dir': encodeURIComponent(destDir),
-      'x-filename': encodeURIComponent(file.name),
-      'x-relative-path': relativePath ? encodeURIComponent(relativePath) : '',
-      'x-auto-extract': autoExtract ? 'true' : 'false'
-    },
-    body: file
-  })
-  return await res.json()
+  const totalSize = file.size
+  const totalChunks = Math.max(1, Math.ceil(totalSize / UPLOAD_CHUNK_SIZE))
+
+  uploadCurrentFileName.value = file.name
+  uploadTotalBytes.value = totalSize
+  uploadTransferredBytes.value = 0
+  uploadSpeedText.value = 'Memulai unggahan...'
+
+  let lastTime = Date.now()
+  let lastLoaded = 0
+
+  for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
+    if (isUploadCancelled) {
+      throw new Error('Unggahan dibatalkan oleh pengguna.')
+    }
+
+    const start = chunkIdx * UPLOAD_CHUNK_SIZE
+    const end = Math.min(totalSize, start + UPLOAD_CHUNK_SIZE)
+    const chunkBlob = file.slice(start, end)
+
+    // Retry hingga 3 kali jika terjadi network glitch / timeout
+    let success = false
+    let lastErr = null
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (isUploadCancelled) break
+
+      try {
+        const res = await fetch('/api/v1/files/upload-raw', {
+          method: 'POST',
+          headers: {
+            'x-dest-dir': encodeURIComponent(destDir),
+            'x-filename': encodeURIComponent(file.name),
+            'x-relative-path': relativePath ? encodeURIComponent(relativePath) : '',
+            'x-auto-extract': autoExtract ? 'true' : 'false',
+            'x-chunk-index': String(chunkIdx),
+            'x-total-chunks': String(totalChunks),
+            'x-file-size': String(totalSize),
+          },
+          body: chunkBlob
+        })
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}))
+          throw new Error(errData.error || `Server HTTP ${res.status}: ${res.statusText}`)
+        }
+
+        const data = await res.json()
+        if (data.error) {
+          throw new Error(data.error)
+        }
+
+        success = true
+        break
+      } catch (err) {
+        lastErr = err
+        await new Promise(r => setTimeout(r, 600))
+      }
+    }
+
+    if (!success) {
+      throw lastErr || new Error(`Gagal mengunggah bagian ${chunkIdx + 1} dari ${totalChunks}`)
+    }
+
+    // Perbarui progres byte dan hitung kecepatan transfer riil
+    uploadTransferredBytes.value = end
+    const now = Date.now()
+    const timeDiff = (now - lastTime) / 1000
+    if (timeDiff >= 0.5) {
+      const bytesDiff = end - lastLoaded
+      const speed = bytesDiff / timeDiff
+      uploadSpeedText.value = `${formatBytes(speed)}/s`
+      lastTime = now
+      lastLoaded = end
+    }
+
+    // Jika upload berkas tunggal, perbarui persentase progres per-chunk
+    if (uploadTotalCount.value <= 1) {
+      uploadProgress.value = Math.min(100, Math.round((end / totalSize) * 100))
+    }
+  }
+
+  return { status: 'uploaded' }
 }
 
-// Handler Upload Berkas Biasa (Multi-file)
+// Handler Upload Berkas Biasa (Multi-file / Single Large File)
 async function handleFileUploadChange(e) {
   const selectedFiles = Array.from(e.target.files || [])
   if (selectedFiles.length === 0) return
 
+  // Reset input agar dapat memilih kembali berkas yang sama
+  if (fileUploadInputRef.value) fileUploadInputRef.value.value = ''
+
+  isUploadCancelled = false
+  uploadType.value = 'file'
   uploadTotalCount.value = selectedFiles.length
   uploadCompletedCount.value = 0
   uploadProgress.value = 0
+  uploadErrorMsg.value = ''
   isUploading.value = true
   showUploadModal.value = true
 
+  const overallTotalBytes = selectedFiles.reduce((acc, f) => acc + f.size, 0)
+  let overallTransferredBytes = 0
+
   for (let i = 0; i < selectedFiles.length; i++) {
+    if (isUploadCancelled) break
+
     const file = selectedFiles[i]
     uploadCurrentFileName.value = file.name
+
     try {
       await uploadSingleFileRaw(file, '', false)
       uploadCompletedCount.value++
-      uploadProgress.value = Math.round((uploadCompletedCount.value / uploadTotalCount.value) * 100)
+      overallTransferredBytes += file.size
+      uploadProgress.value = Math.round((overallTransferredBytes / overallTotalBytes) * 100)
     } catch (err) {
       console.error('Gagal upload berkas:', file.name, err)
+      uploadErrorMsg.value = `Gagal: ${err.message}`
+      systemStore.showNotification('Upload Terganggu', `Gagal mengunggah ${file.name}: ${err.message}`, 'error')
+      break
     }
   }
 
   isUploading.value = false
-  systemStore.showNotification('Upload Selesai', `${uploadCompletedCount.value} berkas berhasil diunggah`, 'success')
+  if (!uploadErrorMsg.value && !isUploadCancelled) {
+    uploadProgress.value = 100
+    systemStore.showNotification('Upload Selesai', `${uploadCompletedCount.value} berkas berhasil diunggah`, 'success')
+    setTimeout(() => { showUploadModal.value = false }, 1800)
+  }
   fetchFiles()
-  setTimeout(() => { showUploadModal.value = false }, 1800)
 }
 
 // Handler Upload Seluruh Folder (Recursive WebkitDirectory)
@@ -862,28 +972,46 @@ async function handleFolderUploadChange(e) {
   const selectedFiles = Array.from(e.target.files || [])
   if (selectedFiles.length === 0) return
 
+  if (folderUploadInputRef.value) folderUploadInputRef.value.value = ''
+
+  isUploadCancelled = false
+  uploadType.value = 'folder'
   uploadTotalCount.value = selectedFiles.length
   uploadCompletedCount.value = 0
   uploadProgress.value = 0
+  uploadErrorMsg.value = ''
   isUploading.value = true
   showUploadModal.value = true
 
+  const overallTotalBytes = selectedFiles.reduce((acc, f) => acc + f.size, 0)
+  let overallTransferredBytes = 0
+
   for (let i = 0; i < selectedFiles.length; i++) {
+    if (isUploadCancelled) break
+
     const file = selectedFiles[i]
     uploadCurrentFileName.value = file.webkitRelativePath || file.name
+
     try {
       await uploadSingleFileRaw(file, file.webkitRelativePath || '', false)
       uploadCompletedCount.value++
-      uploadProgress.value = Math.round((uploadCompletedCount.value / uploadTotalCount.value) * 100)
+      overallTransferredBytes += file.size
+      uploadProgress.value = Math.round((overallTransferredBytes / overallTotalBytes) * 100)
     } catch (err) {
       console.error('Gagal upload folder item:', file.name, err)
+      uploadErrorMsg.value = `Gagal: ${err.message}`
+      systemStore.showNotification('Upload Terganggu', `Gagal: ${err.message}`, 'error')
+      break
     }
   }
 
   isUploading.value = false
-  systemStore.showNotification('Folder Diunggah', `Folder beserta ${uploadCompletedCount.value} berkas berhasil diunggah`, 'success')
+  if (!uploadErrorMsg.value && !isUploadCancelled) {
+    uploadProgress.value = 100
+    systemStore.showNotification('Folder Diunggah', `Folder beserta ${uploadCompletedCount.value} berkas berhasil diunggah`, 'success')
+    setTimeout(() => { showUploadModal.value = false }, 1800)
+  }
   fetchFiles()
-  setTimeout(() => { showUploadModal.value = false }, 1800)
 }
 
 // Handler Upload ZIP dengan Auto-Extract Otomatis
@@ -891,11 +1019,16 @@ async function handleZipUploadChange(e) {
   const selectedFiles = Array.from(e.target.files || [])
   if (selectedFiles.length === 0) return
 
+  if (zipUploadInputRef.value) zipUploadInputRef.value.value = ''
+
   const zipFile = selectedFiles[0]
+  isUploadCancelled = false
+  uploadType.value = 'zip'
   uploadTotalCount.value = 1
   uploadCompletedCount.value = 0
-  uploadProgress.value = 30
+  uploadProgress.value = 0
   uploadCurrentFileName.value = zipFile.name
+  uploadErrorMsg.value = ''
   isUploading.value = true
   showUploadModal.value = true
 
@@ -904,12 +1037,13 @@ async function handleZipUploadChange(e) {
     uploadProgress.value = 100
     uploadCompletedCount.value = 1
     systemStore.showNotification('Ekstraksi Sukses', res.message || `Arsip "${zipFile.name}" berhasil diekstrak`, 'success')
+    setTimeout(() => { showUploadModal.value = false }, 1800)
   } catch (err) {
+    uploadErrorMsg.value = `Gagal mengekstrak ZIP: ${err.message}`
     systemStore.showNotification('Gagal', `Gagal mengekstrak ZIP: ${err.message}`, 'error')
   } finally {
     isUploading.value = false
     fetchFiles()
-    setTimeout(() => { showUploadModal.value = false }, 1800)
   }
 }
 
@@ -2299,35 +2433,61 @@ onMounted(async () => {
               {{ uploadType === 'zip' ? 'Mengekstrak Arsip ZIP' : 'Mengunggah Berkas' }}
             </h4>
           </div>
-          <button v-if="!isUploading" @click="showUploadModal = false" class="w-6 h-6 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95">
+          <button v-if="!isUploading" @click="showUploadModal = false" class="w-6 h-6 rounded-lg bg-slate-800/80 hover:bg-rose-500 text-slate-400 hover:text-white transition flex items-center justify-center border border-slate-700/60 active:scale-95" title="Tutup">
             <X class="w-3.5 h-3.5" />
           </button>
         </div>
 
-        <div class="p-4 space-y-3">
+        <div class="p-4 space-y-3 font-sans">
           <div class="flex items-center justify-between text-xs font-mono">
-            <span class="text-slate-300 truncate max-w-[220px]">{{ uploadCurrentFileName || 'Memproses berkas...' }}</span>
+            <span class="text-slate-300 truncate max-w-[200px]" :title="uploadCurrentFileName">
+              {{ uploadCurrentFileName || 'Memproses berkas...' }}
+            </span>
             <span class="text-sky-400 font-bold">{{ uploadProgress }}%</span>
           </div>
 
-          <!-- Progress Bar -->
-          <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+          <!-- Progress Bar Beranimasi Halus -->
+          <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-700/60">
             <div
-              class="h-full bg-gradient-to-r from-sky-500 to-emerald-400 transition-all duration-300"
+              class="h-full bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-400 transition-all duration-300 rounded-full"
               :style="{ width: `${uploadProgress}%` }"
             ></div>
           </div>
 
-          <div class="flex items-center justify-between text-[11px] text-slate-400">
+          <!-- Rincian Ukuran Byte & Kecepatan Transfer -->
+          <div class="flex items-center justify-between text-[11px] font-mono text-slate-400">
+            <span>{{ formatBytes(uploadTransferredBytes) }} / {{ formatBytes(uploadTotalBytes) }}</span>
+            <span v-if="isUploading && uploadSpeedText" class="text-sky-300 font-semibold">{{ uploadSpeedText }}</span>
+          </div>
+
+          <!-- Pesan Error / Peringatan jika Terjadi Gangguan -->
+          <div v-if="uploadErrorMsg" class="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-[11px] flex items-center gap-2">
+            <AlertTriangle class="w-4 h-4 text-rose-400 shrink-0" />
+            <span class="truncate">{{ uploadErrorMsg }}</span>
+          </div>
+
+          <!-- Status Bawah & Tombol Aksi -->
+          <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800/60">
             <span>{{ uploadCompletedCount }} dari {{ uploadTotalCount }} item selesai</span>
-            <span v-if="isUploading" class="flex items-center gap-1 text-sky-400">
-              <RefreshCw class="w-3 h-3 animate-spin" />
-              <span>Mengunggah...</span>
-            </span>
-            <span v-else class="text-emerald-400 flex items-center gap-1 font-semibold">
-              <Check class="w-3.5 h-3.5" />
-              <span>Selesai</span>
-            </span>
+
+            <div class="flex items-center gap-2">
+              <button
+                v-if="isUploading"
+                type="button"
+                @click="cancelUpload"
+                class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-slate-700 transition text-[10px] active:scale-95"
+              >
+                Batal
+              </button>
+              <span v-if="isUploading" class="flex items-center gap-1 text-sky-400 font-medium">
+                <RefreshCw class="w-3 h-3 animate-spin" />
+                <span>Mengunggah...</span>
+              </span>
+              <span v-else-if="!uploadErrorMsg" class="text-emerald-400 flex items-center gap-1 font-semibold">
+                <Check class="w-3.5 h-3.5" />
+                <span>Selesai</span>
+              </span>
+            </div>
           </div>
         </div>
       </div>
