@@ -68,9 +68,62 @@ const isPasting = ref(false)
 const showMoveToModal = ref(false)
 const moveToTargetItems = ref([])
 const pickerPath = ref('/DATA')
+const selectedPickerFolder = ref(null) // Subfolder yang dipilih di daftar
 const pickerFolders = ref([])
 const isPickerLoading = ref(false)
 const isMoving = ref(false)
+
+// Lokasi tujuan efektif untuk operasi pemindahan
+const effectiveDestinationPath = computed(() => {
+  return selectedPickerFolder.value?.path || pickerPath.value || '/DATA'
+})
+
+// Shortcut roots storage tanpa duplikasi
+const pickerRoots = computed(() => {
+  const roots = [
+    { name: 'My Storage (/DATA)', path: '/DATA' },
+    { name: 'System Root (/)', path: '/' }
+  ]
+  for (const d of storageDevices.value) {
+    const mp = normalizePath(d.mountpoint)
+    if (mp !== '/DATA' && mp !== '/' && !roots.some(r => r.path === mp)) {
+      roots.push({ name: d.name || mp, path: mp })
+    }
+  }
+  return roots
+})
+
+// Breadcrumbs interaktif dialog Move To
+const pickerBreadcrumbs = computed(() => {
+  const norm = normalizePath(pickerPath.value)
+  const result = []
+
+  const winMatch = norm.match(/^([a-zA-Z]:)(\/.*)?$/)
+  if (winMatch) {
+    const driveLetter = winMatch[1]
+    const rest = winMatch[2] || ''
+    result.push({ name: `${driveLetter}`, path: `${driveLetter}/` })
+
+    const segments = rest.split('/').filter(s => s.length > 0)
+    let accumulated = `${driveLetter}`
+    segments.forEach((seg) => {
+      accumulated += '/' + seg
+      const label = (accumulated.toUpperCase() === 'C:/DATA') ? 'My Storage (/DATA)' : seg
+      result.push({ name: label, path: accumulated })
+    })
+    return result
+  }
+
+  result.push({ name: 'Root (/)', path: '/' })
+  const segments = norm.split('/').filter(s => s.length > 0)
+  let accumulated = ''
+  segments.forEach((seg) => {
+    accumulated += '/' + seg
+    const label = (accumulated === '/DATA') ? 'My Storage (/DATA)' : seg
+    result.push({ name: label, path: accumulated })
+  })
+  return result
+})
 
 // State Modal Konfirmasi Hapus Kustom (Zero Browser Native Alerts / Confirms)
 const showDeleteConfirmModal = ref(false)
@@ -787,6 +840,7 @@ function openMoveToDialog(items = null) {
   const targets = getActiveTargetItems(items)
   if (targets.length === 0) return
   moveToTargetItems.value = targets
+  selectedPickerFolder.value = null
   pickerPath.value = currentPath.value || '/DATA'
   showMoveToModal.value = true
   fetchPickerFolders(pickerPath.value)
@@ -796,32 +850,53 @@ function openMoveToDialog(items = null) {
  * Mengambil daftar subdirektori untuk dialog pemilih folder Move To
  */
 async function fetchPickerFolders(path) {
+  const clean = normalizePath(path)
   isPickerLoading.value = true
+  selectedPickerFolder.value = null
   try {
-    const res = await fetch(`/api/v1/files/list?path=${encodeURIComponent(path)}`, {
+    const res = await fetch(`/api/v1/files/list?path=${encodeURIComponent(clean)}`, {
       headers: {
         'Authorization': `Bearer ${authStore.token}`
       }
     })
     const data = await res.json()
-    if (res.ok && data.success) {
-      pickerFolders.value = (data.data || []).filter(item => item.is_dir)
-      pickerPath.value = path
-    } else {
-      pickerFolders.value = []
-    }
+    // Server mengembalikan array langsung [...] dari daftar berkas
+    const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
+    pickerFolders.value = list.filter(item => item.is_dir)
+    pickerPath.value = clean
   } catch (err) {
+    console.error('fetchPickerFolders error:', err)
     pickerFolders.value = []
+    pickerPath.value = clean
   } finally {
     isPickerLoading.value = false
   }
 }
 
+/**
+ * Memilih folder pada daftar (single-click)
+ */
+function selectPickerFolder(folder) {
+  if (!folder) return
+  if (selectedPickerFolder.value?.path === folder.path) {
+    // Jika sudah terpilih dan diklik lagi, masuk ke dalam subfolder tersebut
+    navigatePickerFolder(folder)
+  } else {
+    selectedPickerFolder.value = folder
+  }
+}
+
+/**
+ * Masuk ke dalam folder tujuan (double-click / klik tombol Buka)
+ */
 function navigatePickerFolder(folder) {
   if (!folder || !folder.path) return
   fetchPickerFolders(folder.path)
 }
 
+/**
+ * Navigasi naik satu tingkat direktori pada pemilih folder Move To
+ */
 function navigatePickerUp() {
   const norm = normalizePath(pickerPath.value)
   if (norm === '/' || norm === 'C:/') return
@@ -843,7 +918,7 @@ async function executeMoveTo() {
   }
   if (moveToTargetItems.value.length === 0) return
 
-  const dest = pickerPath.value
+  const dest = effectiveDestinationPath.value
   const sourcePaths = moveToTargetItems.value.map(it => it.path)
 
   isMoving.value = true
@@ -862,13 +937,14 @@ async function executeMoveTo() {
     })
 
     const data = await res.json()
-    if (!res.ok || !data.success) {
-      throw new Error(data.message || 'Gagal memindahkan berkas')
+    if (!res.ok || (!data.success && data.status !== 'moved')) {
+      throw new Error(data.message || data.error || 'Gagal memindahkan berkas')
     }
 
-    const count = data.data ? data.data.length : sourcePaths.length
+    const count = data.success_count || (data.data ? data.data.length : sourcePaths.length)
     systemStore.showNotification('Berhasil Dipindahkan', `${count} item dipindahkan ke "${dest}"`, 'success')
     showMoveToModal.value = false
+    selectedPickerFolder.value = null
     clearSelection()
     await fetchFiles(currentPath.value)
   } catch (err) {
@@ -3135,44 +3211,56 @@ onUnmounted(() => {
 
           <!-- Quick Storage Roots & Navigation Breadcrumb -->
           <div class="p-3 bg-slate-950/40 border-b border-slate-800 flex flex-col gap-2 font-mono text-xs">
-            <!-- Quick Root Shortcuts -->
+            <!-- Quick Root Shortcuts (Tanpa Duplikasi) -->
             <div class="flex items-center gap-1.5 overflow-x-auto pb-1" style="scrollbar-width: none;">
               <button
-                @click="fetchPickerFolders('/DATA')"
-                class="px-2 py-0.5 rounded-lg border text-[11px] shrink-0 transition"
-                :class="pickerPath.startsWith('/DATA') ? 'bg-sky-500/20 border-sky-500/40 text-sky-300 font-bold' : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-slate-200'"
+                v-for="r in pickerRoots"
+                :key="r.path"
+                type="button"
+                @click="fetchPickerFolders(r.path)"
+                class="px-2.5 py-1 rounded-lg border text-[11px] shrink-0 transition flex items-center gap-1.5"
+                :class="pickerPath === r.path || (r.path === '/DATA' && pickerPath.startsWith('/DATA')) ? 'bg-sky-500/20 border-sky-500/40 text-sky-300 font-bold' : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-slate-200'"
               >
-                /DATA
-              </button>
-              <button
-                v-for="d in storageDevices"
-                :key="d.mountpoint"
-                @click="fetchPickerFolders(d.mountpoint)"
-                class="px-2 py-0.5 rounded-lg border text-[11px] shrink-0 transition"
-                :class="pickerPath === d.mountpoint ? 'bg-sky-500/20 border-sky-500/40 text-sky-300 font-bold' : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-slate-200'"
-              >
-                {{ d.mountpoint }}
+                <Folder v-if="r.path === '/DATA'" class="w-3.5 h-3.5 text-sky-400 fill-sky-400/20" />
+                <HardDrive v-else class="w-3.5 h-3.5 text-slate-400" />
+                <span>{{ r.name }}</span>
               </button>
             </div>
 
-            <!-- Path Bar with Up button -->
-            <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 rounded-xl px-2 py-1 text-slate-300">
+            <!-- Path Bar with Up button & Clickable Breadcrumbs -->
+            <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 rounded-xl px-2 py-1.5 text-slate-300 overflow-x-auto" style="scrollbar-width: none;">
               <button
                 type="button"
                 @click="navigatePickerUp"
-                class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-sky-400 transition"
-                title="Naik satu tingkat (Up)"
+                class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-sky-400 transition shrink-0"
+                title="Naik satu tingkat direktori (Up)"
               >
                 <ArrowUp class="w-3.5 h-3.5" />
               </button>
-              <span class="text-slate-500 text-xs">/</span>
-              <span class="truncate flex-1 text-xs text-sky-300 font-medium" :title="pickerPath">
-                {{ pickerPath }}
-              </span>
+              <div class="h-3 w-[1px] bg-slate-800 shrink-0 mx-0.5"></div>
+              <div class="flex items-center gap-1 overflow-x-auto py-0.5 min-w-0 flex-1" style="scrollbar-width: none;">
+                <template v-for="(crumb, idx) in pickerBreadcrumbs" :key="crumb.path">
+                  <button
+                    type="button"
+                    @click="fetchPickerFolders(crumb.path)"
+                    class="px-1.5 py-0.5 rounded hover:bg-slate-800 text-xs shrink-0 transition font-medium"
+                    :class="idx === pickerBreadcrumbs.length - 1 && !selectedPickerFolder ? 'text-sky-300 font-bold' : 'text-slate-400 hover:text-slate-200'"
+                  >
+                    {{ crumb.name }}
+                  </button>
+                  <ChevronRight v-if="idx < pickerBreadcrumbs.length - 1" class="w-3 h-3 text-slate-600 shrink-0" />
+                </template>
+                <template v-if="selectedPickerFolder">
+                  <ChevronRight class="w-3 h-3 text-slate-600 shrink-0" />
+                  <span class="px-1.5 py-0.5 text-xs text-emerald-400 font-bold shrink-0 truncate">
+                    {{ selectedPickerFolder.name }}
+                  </span>
+                </template>
+              </div>
               <button
                 type="button"
                 @click="fetchPickerFolders(pickerPath)"
-                class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
+                class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition shrink-0"
                 title="Muat ulang folder"
               >
                 <RefreshCw class="w-3 h-3" :class="isPickerLoading ? 'animate-spin' : ''" />
@@ -3197,31 +3285,47 @@ onUnmounted(() => {
               <div
                 v-for="folder in pickerFolders"
                 :key="folder.path"
+                @click="selectPickerFolder(folder)"
                 @dblclick="navigatePickerFolder(folder)"
-                @click="pickerPath = folder.path"
-                class="flex items-center justify-between p-2 rounded-xl transition cursor-pointer select-none group"
-                :class="pickerPath === folder.path ? 'bg-sky-500/20 text-sky-200 font-semibold border border-sky-500/30' : 'hover:bg-slate-800/60 text-slate-300'"
+                class="flex items-center justify-between p-2.5 rounded-xl transition cursor-pointer select-none group border"
+                :class="selectedPickerFolder?.path === folder.path
+                  ? 'bg-sky-500/20 text-sky-100 font-semibold border-sky-400/60 ring-1 ring-sky-400/40 shadow-sm'
+                  : 'border-transparent hover:bg-slate-800/60 text-slate-300'"
               >
                 <div class="flex items-center gap-2.5 min-w-0">
-                  <Folder class="w-4 h-4 text-sky-400 fill-sky-400/20 shrink-0" />
+                  <Folder
+                    class="w-4 h-4 shrink-0"
+                    :class="selectedPickerFolder?.path === folder.path ? 'text-sky-300 fill-sky-400/30' : 'text-sky-400 fill-sky-400/10'"
+                  />
                   <span class="text-xs truncate font-mono">{{ folder.name }}</span>
                 </div>
-                <button
-                  type="button"
-                  @click.stop="navigatePickerFolder(folder)"
-                  class="text-[10px] px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition flex items-center gap-1 opacity-0 group-hover:opacity-100"
-                >
-                  <span>Buka</span>
-                  <ChevronRight class="w-3 h-3" />
-                </button>
+                <div class="flex items-center gap-1.5">
+                  <span v-if="selectedPickerFolder?.path === folder.path" class="text-[10px] text-sky-400 font-medium px-2 py-0.5 rounded-md bg-sky-500/10 border border-sky-500/20">
+                    Terpilih
+                  </span>
+                  <button
+                    type="button"
+                    @click.stop="navigatePickerFolder(folder)"
+                    class="text-[10px] px-2 py-1 rounded-lg bg-slate-800 hover:bg-sky-600 text-slate-300 hover:text-white transition flex items-center gap-1 shadow-sm"
+                    title="Buka & jelajahi isi folder ini"
+                  >
+                    <span>Buka</span>
+                    <ChevronRight class="w-3 h-3" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
           <!-- Destination Target Summary -->
-          <div class="px-4 py-2 bg-slate-950/80 border-t border-slate-800 flex items-center gap-2 text-xs font-mono text-slate-400">
-            <span class="text-slate-500">Tujuan:</span>
-            <span class="text-emerald-400 font-semibold truncate">{{ pickerPath }}</span>
+          <div class="px-4 py-2.5 bg-slate-950/80 border-t border-slate-800 flex items-center justify-between text-xs font-mono text-slate-400">
+            <div class="flex items-center gap-2 min-w-0 flex-1">
+              <span class="text-slate-500 shrink-0">Tujuan:</span>
+              <span class="text-emerald-400 font-semibold truncate">{{ effectiveDestinationPath }}</span>
+            </div>
+            <span v-if="selectedPickerFolder" class="text-[11px] text-sky-400 shrink-0 ml-2">
+              (ke folder {{ selectedPickerFolder.name }})
+            </span>
           </div>
 
           <!-- Modal Footer -->

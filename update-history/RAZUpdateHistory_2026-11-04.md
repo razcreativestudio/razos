@@ -109,3 +109,32 @@ Dokumen riwayat pembaruan harian ekosistem RAZ Operating System (RAZOS).
 4. **Verifikasi & Build Produksi:**
    - Build frontend Vite sukses 100% tanpa error dalam 4.85 detik.
    - Telah dibackup ke `backup/RAZFileManagerView_backup_20261104_copymove.vue`.
+
+---
+
+### Versi: 4.5.6-file-manager-move-picker-fix (Perbaikan Respon Payload Folder Picker & Navigasi Breadcrumbs)
+**Waktu Eksekusi:** 2026-11-04 12:25 WIB  
+**Pelaksana:** Antigravity AI Senior Systems Engineer  
+
+#### 1. Masalah Pengguna
+- Pengguna melaporkan bahwa saat menggunakan modal "Pindahkan ke Direktori", folder tidak dapat dipilih dan lokasi tetap tertahan di folder awal (`/DATA/Downloads`), meskipun sudah mengklik shortcut folder lain (`/DATA`, `/`, dll).
+
+#### 2. Root Cause Analysis
+- Endpoint `/api/v1/files/list` pada backend Go mengembalikan format JSON array langsung (`[...]`), bukan object berformat `{ success: true, data: [...] }`.
+- Fungsi `fetchPickerFolders` sebelumnya mengecek `if (res.ok && data.success)`. Karena `data` adalah array, nilai `data.success` bernilai `undefined` (falsy), sehingga blok pembacaan folder gagal mengeksekusi `pickerPath.value = clean` dan mengosongkan `pickerFolders.value = []`. Akibatnya path tujuan tidak pernah berpindah dari lokasi awal.
+- Terdapat duplikasi pill shortcut `/DATA` di bar navigasi atas.
+
+#### 3. Solusi & Rekayasa UI/UX
+1. **Normalisasi Payload List Berkas (`fetchPickerFolders`):**
+   - Mengambil array berkas langsung: `const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])`.
+   - Mengupdate `pickerPath.value = clean` dan memfilter hanya item bertipe direktori (`item.is_dir`).
+2. **Dukungan Interaksi Multi-Aksi:**
+   - Single-click pada baris folder: memilih folder tersebut sebagai tujuan (`selectedPickerFolder`), ditandai dengan badge "Terpilih" dan highlight border sky-400.
+   - Double-click atau klik tombol "Buka ➔": masuk dan menjelajahi subfolder di dalamnya.
+3. **Penyempurnaan Navigasi Breadcrumb:**
+   - Menambahkan breadcrumb interaktif per-segmen direktori (`Root (/)` > `DATA` > `Folder`). Setiap segmen dapat diklik untuk melompat langsung ke folder induk.
+   - Membersihkan duplikasi root shortcuts melalui computed `pickerRoots`.
+4. **Target Efektif Pemindahan:**
+   - `effectiveDestinationPath` secara cerdas mengarahkan ke subfolder yang dipilih di list jika ada, atau ke folder aktif yang sedang dibuka.
+5. **Kompilasi Ulang:**
+   - Build produksi Vite (`index-oI1GaxDJ.js` & `index-B6zVvfli.css`) sukses 100% tanpa error dalam 5.19 detik.
