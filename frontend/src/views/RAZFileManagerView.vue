@@ -1,7 +1,7 @@
 <script setup>
 /**
  * RAZOS Google Drive-Style Storage & Windows File Explorer Hybrid File Manager
- * Updated: 2026-11-04 11:35:00 (v3.8.0 - Added Windows 11 Ribbon & Context Cut, Copy, Paste, and Move To Suite with Interactive Folder Picker Modal)
+ * Updated: 2026-11-07 10:55:00 (v3.9.0 - Standalone RAZ Text Editor Universal Integration)
  * Deskripsi: Antarmuka File Manager tingkat lanjut memadukan arsitektur Windows File Explorer dan Google Drive:
  * - Windows Multi-Selection Engine: Pemilihan multi-berkas dengan Ctrl/Cmd+Click (toggle) dan Shift+Click (range selection).
  * - Full Clipboard Suite: Potong (Cut), Salin (Copy), Tempel (Paste) via Ribbon Toolbar, Context Menu, dan Shortcuts (Ctrl+C, Ctrl+X, Ctrl+V).
@@ -12,7 +12,7 @@
  * - Windows 11 Sort Suite: Dropdown toolbar Sort by & context submenu pengurutan berkas.
  * - Custom Modal Konfirmasi Hapus: Konfirmasi hapus berdesain Glassmorphism Slate-900 (Zero Native Browser Confirm/Alert).
  * - Main New Action Suite: Pembuatan folder baru, file baru, upload file/folder/ZIP auto-extract di sidebar kiri & menu klik kanan.
- * - Deep RAZ Studio Code Integration: Membuka berkas kode/teks langsung di Sublime/Notepad++ complex editor.
+ * - Deep RAZ Text Editor Integration: Membuka berkas kode/teks langsung di aplikasi mandiri RAZ Text Editor.
  * - Fluid Responsive Grid & List View: Auto-fill layout yang tidak pernah gepeng dengan status bar lengkap.
  */
 import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
@@ -1019,7 +1019,7 @@ function handleItemDoubleClick(item) {
     }
     fetchFiles(normalizePath(item.path))
   } else {
-    // Jika berkas adalah kode, teks, markdown, script, atau konfigurasi, buka di RAZ Studio Code
+    // Jika berkas adalah kode, teks, markdown, script, atau konfigurasi, buka di aplikasi mandiri RAZ Text Editor
     if (isCodeFile(item.extension) || isDocFile(item.extension) || isMarkdownFile(item.extension) || !item.extension) {
       openInTextEditor(item)
     } else if (typeof windowStore.openFileViewer === 'function') {
@@ -1162,7 +1162,7 @@ async function confirmCreateFile(openInEditor = true) {
   }
 }
 
-// Buka Berkas Langsung di RAZ Studio Code (Sublime Text / Notepad++ Style)
+// Buka Berkas Langsung di RAZ Text Editor Mandiri (Sublime Text / Notepad++ Style)
 function openInTextEditor(item) {
   if (!item || item.is_dir) return
   windowStore.openTextEditor(item)
@@ -1690,10 +1690,10 @@ function handleFileItemContextMenu(e, item) {
     }
   ]
 
-  // Jika berupa berkas teks, kode, config, atau markdown, tambahkan opsi buka di Editor Teks
+  // Jika berupa berkas teks, kode, config, atau markdown, tambahkan opsi buka di RAZ Text Editor
   if (isCodeFile(item.extension) || isDocFile(item.extension) || isMarkdownFile(item.extension) || !item.extension) {
     fileMenu.push({
-      label: 'Edit di Editor Teks (Code)',
+      label: 'Buka di RAZ Text Editor',
       icon: Code2,
       action: () => openInTextEditor(item)
     })
@@ -2601,7 +2601,7 @@ onUnmounted(() => {
                       <button @click="openInfoModal(item)" class="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-sky-400" title="Detail & Properti">
                         <Info class="w-3.5 h-3.5" />
                       </button>
-                      <button v-if="!item.is_dir" @click="openInTextEditor(item)" class="p-1 rounded hover:bg-slate-700 text-emerald-400" title="Edit Berkas di Editor Teks">
+                      <button v-if="!item.is_dir" @click="openInTextEditor(item)" class="p-1 rounded hover:bg-slate-700 text-emerald-400" title="Buka di RAZ Text Editor">
                         <Code2 class="w-3.5 h-3.5" />
                       </button>
                       <button v-if="!item.is_dir" @click="handleItemDoubleClick(item)" class="p-1 rounded hover:bg-slate-700 text-sky-400" title="Buka Viewer / Player">
@@ -2713,10 +2713,10 @@ onUnmounted(() => {
               v-if="!selectedItem.is_dir"
               @click="openInTextEditor(selectedItem)"
               class="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[11px] font-medium flex items-center gap-1 transition"
-              title="Edit Berkas di Editor Teks"
+              title="Buka di RAZ Text Editor"
             >
               <Code2 class="w-3.5 h-3.5" />
-              <span class="hidden sm:inline">Edit Berkas</span>
+              <span class="hidden sm:inline">RAZ Text Editor</span>
             </button>
             <button
               v-if="!selectedItem.is_dir"

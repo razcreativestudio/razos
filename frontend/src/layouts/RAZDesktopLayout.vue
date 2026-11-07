@@ -1377,8 +1377,8 @@ function handleDesktopDrop(e) {
             <!-- Standalone Storage Manager Window (CasaOS Style) -->
             <RAZStorageManagerView v-else-if="win.id === 'storage-manager'" :win="win" />
 
-            <!-- Sublime & Notepad++ Advanced Code/Text Editor Terintegrasi File Manager -->
-            <RAZTextEditorView v-else-if="win.id === 'file-manager-editor' || win.id === 'text-editor' || win.id.startsWith('editor-')" :initial-file="win.fileData" :win="win" />
+            <!-- RAZ Text Editor Mandiri (Standalone Desktop Application & Universal File Opener) -->
+            <RAZTextEditorView v-else-if="win.id === 'text-editor' || win.id === 'file-manager-editor' || win.id.startsWith('editor-')" :initial-file="win.fileData" :win="win" />
 
             <!-- Aplikasi Utama Berdasarkan ID -->
             <component v-else :is="viewMap[win.id]" />

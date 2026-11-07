@@ -572,6 +572,7 @@ async function submitSwitchUser() {
               <label
                 v-for="app in [
                   { id: 'file-manager', label: 'File Manager' },
+                  { id: 'text-editor', label: 'RAZ Text Editor' },
                   { id: 'task-manager', label: 'Task Manager' },
                   { id: 'terminal', label: 'Web Terminal' },
                   { id: 'app-store', label: 'App Store' },
@@ -714,6 +715,7 @@ async function submitSwitchUser() {
               <label
                 v-for="app in [
                   { id: 'file-manager', label: 'File Manager' },
+                  { id: 'text-editor', label: 'RAZ Text Editor' },
                   { id: 'task-manager', label: 'Task Manager' },
                   { id: 'terminal', label: 'Web Terminal' },
                   { id: 'app-store', label: 'App Store' },

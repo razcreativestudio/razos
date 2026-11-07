@@ -1,8 +1,8 @@
 /**
  * RAZOS Window Manager Store (Pinia)
- * Updated: 2026-10-14 (v3.0.0: CasaOS App Settings & Container Logs window integration)
+ * Updated: 2026-11-07 (v3.1.0: Standalone RAZ Text Editor desktop app integration & universal file opener)
  * Deskripsi: State manager untuk window multi-tasking desktop OS (buka, tutup, minimize, maximize,
- * fokus Z-Index, dynamic standalone file viewers, website editors, serta CasaOS app settings & logs).
+ * fokus Z-Index, dynamic standalone file viewers, website editors, RAZ Text Editor mandiri, serta CasaOS app settings & logs).
  */
 
 import { defineStore, acceptHMRUpdate } from 'pinia'
@@ -18,6 +18,15 @@ export const useWindowStore = defineStore('window', () => {
       icon: '/assets/icons/RAZIconFileManager.svg',
       width: 820,
       height: 520,
+      minWidth: 480,
+      minHeight: 340,
+    },
+    {
+      id: 'text-editor',
+      title: 'RAZ Text Editor',
+      icon: '/assets/icons/RAZIconCodeEditor.svg',
+      width: 920,
+      height: 600,
       minWidth: 480,
       minHeight: 340,
     },
@@ -185,6 +194,12 @@ export const useWindowStore = defineStore('window', () => {
 
   // Buka window aplikasi dengan memulihkan ukuran, posisi, dan status maximize terakhir
   function openApp(appId) {
+    // Jika membuka RAZ Text Editor, delegasikan ke openTextEditor agar inisialisasi dokumen & tab berjalan sinkron
+    if (appId === 'text-editor') {
+      openTextEditor()
+      return
+    }
+
     const existing = openWindows.value.find(w => w.id === appId)
     if (existing) {
       if (existing.isMinimized) {
@@ -287,6 +302,21 @@ export const useWindowStore = defineStore('window', () => {
   // Buka window universal file viewer (gambar, video, audio, pdf, code/text)
   function openFileViewer(fileItem) {
     if (!fileItem || !fileItem.path) return
+
+    const ext = (fileItem.extension || '').toLowerCase()
+
+    // Jika berkas adalah teks, kode, script, markdown, config, atau tanpa ekstensi: arahkan langsung ke RAZ Text Editor
+    const textCodeExts = [
+      '.txt', '.log', '.env', '.conf', '.ini', '.cfg', '.json', '.xml', '.yaml', '.yml',
+      '.js', '.mjs', '.cjs', '.ts', '.vue', '.html', '.css', '.scss', '.sass', '.less',
+      '.go', '.py', '.php', '.sql', '.sh', '.bash', '.c', '.cpp', '.h', '.hpp', '.java',
+      '.rs', '.lua', '.rb', '.md', '.markdown', '.mdown', '.mkd'
+    ]
+    if (textCodeExts.includes(ext) || !ext) {
+      openTextEditor(fileItem)
+      return
+    }
+
     const winId = 'viewer-' + btoa(unescape(encodeURIComponent(fileItem.path))).replace(/=/g, '')
     
     // Cek apakah window untuk file ini sudah terbuka
@@ -297,7 +327,6 @@ export const useWindowStore = defineStore('window', () => {
       return
     }
 
-    const ext = (fileItem.extension || '').toLowerCase()
     let icon = '/assets/icons/RAZIconCodeEditor.svg'
     let width = 740
     let height = 520
@@ -633,12 +662,12 @@ export const useWindowStore = defineStore('window', () => {
     })
   }
 
-  // Sublime Text & Notepad++ Enterprise Complex Code & Text Editor (Satu Kesatuan dengan File Manager)
+  // RAZ Text Editor - Aplikasi Mandiri Desktop Sublime Text & Notepad++ Enterprise Complex Code & Text Editor
   function openTextEditor(fileItem = null) {
-    const winId = 'file-manager-editor'
-    const existing = openWindows.value.find(w => w.id === winId || w.id === 'text-editor')
+    const winId = 'text-editor'
+    const existing = openWindows.value.find(w => w.id === winId || w.id === 'file-manager-editor')
     const itemData = fileItem ? { ...fileItem, _ts: Date.now() } : null
-    const title = fileItem ? `${fileItem.name} - Editor Berkas (File Manager)` : 'Editor Berkas (File Manager)'
+    const title = fileItem ? `${fileItem.name} - RAZ Text Editor` : 'RAZ Text Editor'
 
     if (existing) {
       existing.isMinimized = false
@@ -654,9 +683,9 @@ export const useWindowStore = defineStore('window', () => {
     openCustomWindow({
       id: winId,
       title: title,
-      icon: '/assets/icons/RAZIconFileManager.svg',
-      width: 900,
-      height: 580,
+      icon: '/assets/icons/RAZIconCodeEditor.svg',
+      width: 920,
+      height: 600,
       minWidth: 480,
       minHeight: 340,
       type: 'text-editor',

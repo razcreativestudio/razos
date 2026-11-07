@@ -1,10 +1,13 @@
 <script setup>
 /**
- * RAZOS Sublime Text & Notepad++ Enterprise Complex Code & Text Editor
- * Created: 2026-10-15 (v3.6.0 - Advanced Multi-Tab IDE Architecture)
- * Deskripsi: Text & Code Editor tingkat lanjut berarsitektur desktop profesional:
+ * RAZ Text Editor - Sublime Text & Notepad++ Enterprise Complex Code & Text Editor
+ * Updated: 2026-11-07 (v3.8.0 - Standalone RAZ Text Editor Desktop Application & Universal File Opener)
+ * Deskripsi: Text & Code Editor mandiri berarsitektur desktop profesional terpisah dari File Manager:
+ * - Standalone Desktop App: Berdiri sendiri sebagai aplikasi mandiri di desktop, taskbar, dan mobile launcher.
+ * - Universal File Opener: Membuka berkas kode/teks dari File Manager, desktop, atau storage explorer secara instan.
  * - Multi-Tab Workspace: Membuka banyak berkas sekaligus dengan tab switching, dirty indicator, dan shortcut tab.
  * - Collapsible Project File Tree: Sidebar penjelajah berkas parent directory untuk navigasi cepat file satu folder.
+ * - Quick Open File Dialog (Ctrl+O): Membuka berkas langsung dari storage sistem tanpa membuka File Manager.
  * - Synchronized Line Numbers Gutter: Nomor baris responsif dengan penanda baris aktif kursor.
  * - Sublime Floating Find & Replace (Ctrl+F / Ctrl+H): Pencarian real-time, pencocokan teks, match counter, dan Replace All.
  * - Go to Line Dialog (Ctrl+G): Lompat instan ke nomor baris yang dituju.
@@ -21,6 +24,7 @@ import {
   CornerLeftUp, HardDrive
 } from 'lucide-vue-next'
 import { useSystemStore } from '../stores/RAZSystemStore'
+import { useAuthStore } from '../stores/RAZAuthStore'
 
 const props = defineProps({
   // Berkas awal yang dibuka (opsional, jika dibuka dari File Manager)
@@ -36,6 +40,7 @@ const props = defineProps({
 })
 
 const systemStore = useSystemStore()
+const authStore = useAuthStore()
 
 // State Custom Modals (Zero Native Dialogs: No alert/confirm/prompt)
 const showSaveAsModal = ref(false)
@@ -44,6 +49,12 @@ const showCloseTabConfirmModal = ref(false)
 const pendingCloseTabId = ref('')
 const pendingCloseTabName = ref('')
 const showCloseAllConfirmModal = ref(false)
+
+// State Modal Buka Berkas dari Storage (Ctrl+O)
+const showOpenFileModal = ref(false)
+const openFilePickerPath = ref('/DATA')
+const openFilePickerItems = ref([])
+const isOpenFilePickerLoading = ref(false)
 
 // Storage Keys untuk Persistensi Sesi Tab & Direktori
 const STORAGE_KEY_TABS = 'razos_text_editor_tabs_session'
@@ -547,6 +558,60 @@ function navigateSidebarHome() {
   loadSidebarDirectory(home)
 }
 
+// ==============================================================
+// 6. MODAL BUKA BERKAS DARI STORAGE (Ctrl+O)
+// ==============================================================
+function openStorageFilePicker() {
+  openFilePickerPath.value = sidebarCurrentDir.value || '/DATA'
+  showOpenFileModal.value = true
+  fetchOpenFilePickerItems(openFilePickerPath.value)
+}
+
+async function fetchOpenFilePickerItems(path) {
+  isOpenFilePickerLoading.value = true
+  let clean = path ? path.replace(/\\/g, '/').replace(/\/+$/, '') || '/' : '/DATA'
+  if (/^[a-zA-Z]:$/.test(clean)) clean += '/'
+  openFilePickerPath.value = clean
+  try {
+    const res = await fetch(`/api/v1/files/list?path=${encodeURIComponent(clean)}`)
+    const data = await res.json()
+    const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
+    openFilePickerItems.value = [...list].sort((a, b) => {
+      if (a.is_dir && !b.is_dir) return -1
+      if (!a.is_dir && b.is_dir) return 1
+      return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+    })
+  } catch (err) {
+    openFilePickerItems.value = []
+  } finally {
+    isOpenFilePickerLoading.value = false
+  }
+}
+
+function handleOpenFilePickerItemClick(item) {
+  if (item.is_dir) {
+    fetchOpenFilePickerItems(item.path)
+  } else {
+    openFileInTab(item)
+    showOpenFileModal.value = false
+  }
+}
+
+function navigateOpenFilePickerUp() {
+  const clean = openFilePickerPath.value.replace(/\\/g, '/').replace(/\/+$/, '')
+  if (clean === '' || clean === '/' || /^[a-zA-Z]:$/.test(clean) || /^[a-zA-Z]:\/$/.test(clean)) {
+    return
+  }
+  const lastSlash = clean.lastIndexOf('/')
+  let parent = '/'
+  if (lastSlash > 0) {
+    parent = clean.substring(0, lastSlash)
+  } else if (/^[a-zA-Z]:/.test(clean)) {
+    parent = clean.substring(0, 2) + '/'
+  }
+  fetchOpenFilePickerItems(parent)
+}
+
 // Simpan Sesi Tab ke localStorage
 function saveSession() {
   try {
@@ -673,6 +738,13 @@ function onKeyDown(e) {
     } else {
       saveActiveFile()
     }
+    return
+  }
+
+  // 1.5. Ctrl + O (Buka Berkas dari Storage)
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {
+    e.preventDefault()
+    openStorageFilePicker()
     return
   }
 
@@ -1008,17 +1080,16 @@ watch(() => props.win?.customData, (newData) => {
     <!-- 1. TOP MENU BAR (Sublime Text / Notepad++ Style) -->
     <div class="h-8 border-b border-white/10 px-3 flex items-center justify-between shrink-0 bg-black/30 backdrop-blur text-[11px] font-sans">
       <div class="flex items-center gap-4">
-        <!-- Brand Label (Satu Kesatuan dengan File Manager) -->
+        <!-- Brand Label (RAZ Text Editor Mandiri) -->
         <div class="flex items-center gap-1.5 font-bold tracking-wide" :class="activeTheme === 'monokai' ? 'text-amber-400' : 'text-sky-400'">
-          <Folder class="w-3.5 h-3.5" />
-          <span>File Manager</span>
-          <span class="text-white/40 font-normal">/</span>
-          <span class="text-slate-300 font-medium">Editor Berkas</span>
+          <FileCode class="w-3.5 h-3.5" />
+          <span>RAZ Text Editor</span>
         </div>
 
         <!-- Menu Action Dropdowns -->
         <div class="flex items-center gap-1 text-slate-300">
           <button @click="createNewUntitledTab" class="px-2 py-0.5 rounded hover:bg-white/10 transition" title="Berkas Baru (Ctrl+N)">Berkas Baru</button>
+          <button @click="openStorageFilePicker" class="px-2 py-0.5 rounded hover:bg-white/10 transition text-sky-300 font-medium" title="Buka Berkas dari Storage (Ctrl+O)">Buka Berkas</button>
           <button @click="saveActiveFile" class="px-2 py-0.5 rounded hover:bg-white/10 transition" title="Simpan Berkas (Ctrl+S)">Simpan</button>
           <button @click="saveAllFiles" class="px-2 py-0.5 rounded hover:bg-white/10 transition" title="Simpan Semua (Ctrl+Shift+S)">Simpan Semua</button>
           <button @click="() => { showFindBar = !showFindBar; showReplace = false; }" class="px-2 py-0.5 rounded hover:bg-white/10 transition" title="Cari (Ctrl+F)">Cari</button>
@@ -1477,6 +1548,85 @@ watch(() => props.win?.customData, (newData) => {
           </button>
           <button @click="forceCloseAllTabs" class="px-4 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-white font-bold text-xs shadow-md">
             Tutup Semua
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Buka Berkas dari Storage (Ctrl+O) -->
+    <div
+      v-if="showOpenFileModal"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-sm p-4 animate-in fade-in"
+      @click.self="showOpenFileModal = false"
+    >
+      <div class="w-full max-w-lg bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-5 text-slate-100 flex flex-col gap-3 font-sans max-h-[85vh]">
+        <!-- Title bar -->
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2 font-bold text-sm text-sky-400">
+            <FolderOpen class="w-4 h-4" />
+            <span>Buka Berkas dari Storage</span>
+          </div>
+          <button @click="showOpenFileModal = false" class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200">
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+
+        <!-- Path navigation & Up button -->
+        <div class="flex items-center gap-2 bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800 text-xs font-mono">
+          <button
+            type="button"
+            @click="navigateOpenFilePickerUp"
+            class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-sky-300 transition"
+            title="Naik ke Folder Induk (..)"
+          >
+            <ArrowUp class="w-3.5 h-3.5" />
+          </button>
+          <span class="text-slate-500">/</span>
+          <span class="truncate flex-1 text-sky-300 font-medium" :title="openFilePickerPath">{{ openFilePickerPath }}</span>
+          <button
+            type="button"
+            @click="fetchOpenFilePickerItems(openFilePickerPath)"
+            class="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200"
+            title="Muat Ulang"
+          >
+            <RefreshCw class="w-3 h-3" :class="isOpenFilePickerLoading ? 'animate-spin' : ''" />
+          </button>
+        </div>
+
+        <!-- File List Body -->
+        <div class="flex-1 overflow-y-auto min-h-[220px] max-h-[340px] divide-y divide-slate-800/40" style="scrollbar-width: thin;">
+          <div v-if="isOpenFilePickerLoading" class="p-8 flex flex-col items-center justify-center gap-2 text-slate-500">
+            <RefreshCw class="w-5 h-5 animate-spin text-sky-400" />
+            <span class="text-xs">Memuat berkas...</span>
+          </div>
+          <div v-else-if="openFilePickerItems.length === 0" class="p-8 text-center text-slate-500 text-xs">
+            Direktori ini kosong
+          </div>
+          <div v-else class="space-y-0.5 p-1">
+            <div
+              v-for="item in openFilePickerItems"
+              :key="item.path"
+              @click="handleOpenFilePickerItemClick(item)"
+              class="flex items-center justify-between p-2 rounded-xl transition cursor-pointer select-none hover:bg-slate-800/60"
+            >
+              <div class="flex items-center gap-2.5 min-w-0">
+                <Folder v-if="item.is_dir" class="w-4 h-4 text-amber-400 shrink-0" />
+                <component v-else :is="getFileIconComponent(item.name)" class="w-4 h-4 shrink-0" :class="getFileIconColor(item.name)" />
+                <span class="text-xs truncate font-mono" :class="item.is_dir ? 'text-slate-200 font-semibold' : 'text-slate-300'">
+                  {{ item.name }}
+                </span>
+              </div>
+              <span class="text-[10px] text-slate-500 font-mono shrink-0">
+                {{ item.is_dir ? 'Folder' : formatBytes(item.size) }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="flex items-center justify-end pt-2 border-t border-slate-800">
+          <button @click="showOpenFileModal = false" class="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 transition">
+            Tutup
           </button>
         </div>
       </div>
